@@ -9,42 +9,43 @@ const SALT_ROUNDS = 10;
  */
 const getAllUsers = async () => {
     const result = await pool.query(`
-    SELECT 
-      u.id, u.username, u.role, u.can_view_all, u.created_at, u.updated_at,
-      COALESCE(
-        json_agg(
-          json_build_object('id', d.id, 'name', d.name)
-        ) FILTER (WHERE d.id IS NOT NULL),
-        '[]'
-      ) AS departments
-    FROM users u
-    LEFT JOIN user_departments ud ON u.id = ud.user_id
-    LEFT JOIN departments d ON ud.department_id = d.id
-    GROUP BY u.id
-    ORDER BY u.created_at DESC
-  `);
+        SELECT
+            u.id, u.username, u.role, u.can_view_all, u.is_blocked,
+            u.created_at, u.updated_at,
+            COALESCE(
+                    json_agg(
+                            json_build_object('id', d.id, 'name', d.name)
+                    ) FILTER (WHERE d.id IS NOT NULL),
+                    '[]'
+            ) AS departments
+        FROM users u
+                 LEFT JOIN user_departments ud ON u.id = ud.user_id
+                 LEFT JOIN departments d ON ud.department_id = d.id
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
+    `);
     return result.rows;
 };
-
 /**
  * Найти пользователя по ID (с подразделениями)
  */
 const getUserById = async (id) => {
     const result = await pool.query(`
-    SELECT 
-      u.id, u.username, u.role, u.can_view_all, u.created_at, u.updated_at,
-      COALESCE(
-        json_agg(
-          json_build_object('id', d.id, 'name', d.name)
-        ) FILTER (WHERE d.id IS NOT NULL),
-        '[]'
-      ) AS departments
-    FROM users u
-    LEFT JOIN user_departments ud ON u.id = ud.user_id
-    LEFT JOIN departments d ON ud.department_id = d.id
-    WHERE u.id = $1
-    GROUP BY u.id
-  `, [id]);
+        SELECT
+            u.id, u.username, u.role, u.can_view_all, u.is_blocked,
+            u.created_at, u.updated_at,
+            COALESCE(
+                    json_agg(
+                            json_build_object('id', d.id, 'name', d.name)
+                    ) FILTER (WHERE d.id IS NOT NULL),
+                    '[]'
+            ) AS departments
+        FROM users u
+                 LEFT JOIN user_departments ud ON u.id = ud.user_id
+                 LEFT JOIN departments d ON ud.department_id = d.id
+        WHERE u.id = $1
+        GROUP BY u.id
+    `, [id]);
     return result.rows[0] || null;
 };
 
@@ -94,7 +95,7 @@ const createUser = async ({ username, password, role, can_view_all = false, depa
 /**
  * Обновить пользователя (пароль обновляется только если передан)
  */
-const updateUser = async (id, { username, password, role, can_view_all, departmentIds }) => {
+const updateUser = async (id, { username, password, role, can_view_all, departmentIds, is_blocked }) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -120,6 +121,10 @@ const updateUser = async (id, { username, password, role, can_view_all, departme
         if (can_view_all !== undefined) {
             updates.push(`can_view_all = $${paramIndex++}`);
             values.push(can_view_all);
+        }
+        if (is_blocked !== undefined) {
+            updates.push(`is_blocked = $${paramIndex++}`);
+            values.push(is_blocked);
         }
         // Всегда обновляем updated_at
         updates.push(`updated_at = NOW()`);
@@ -162,7 +167,11 @@ const updateUser = async (id, { username, password, role, can_view_all, departme
             }
         }
 
+        if (is_blocked === true) {
+            await client.query('DELETE FROM sessions WHERE user_id = $1', [id]);
+        }
         await client.query('COMMIT');
+
         return updatedUser;
     } catch (err) {
         await client.query('ROLLBACK');
@@ -183,10 +192,52 @@ const deleteUser = async (id) => {
     return result.rows.length > 0;
 };
 
+const blockUser = async (id) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const result = await client.query(
+            `UPDATE users SET is_blocked = true, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, username, is_blocked`,
+            [id]
+        );
+
+        if (!result.rows.length) {
+            await client.query('ROLLBACK');
+            return null;
+        }
+
+        // Удаляем все активные сессии пользователя
+        await client.query('DELETE FROM sessions WHERE user_id = $1', [id]);
+
+        await client.query('COMMIT');
+        return result.rows[0];
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+};
+
+const unblockUser = async (id) => {
+    const result = await pool.query(
+        `UPDATE users SET is_blocked = false, updated_at = NOW()
+     WHERE id = $1
+     RETURNING id, username, is_blocked`,
+        [id]
+    );
+    return result.rows[0] || null;
+};
+
 module.exports = {
     getAllUsers,
     getUserById,
     createUser,
     updateUser,
     deleteUser,
+    blockUser,
+    unblockUser,
 };

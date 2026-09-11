@@ -8,7 +8,15 @@ const SALT_ROUNDS = 10;
  * Находит пользователя по username
  */
 const findUserByUsername = async (username) => {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const result = await pool.query(`
+    SELECT 
+      u.*,
+      r.name AS role_name,
+      r.permissions
+    FROM users u
+    LEFT JOIN roles r ON u.role = r.code
+    WHERE u.username = $1
+  `, [username]);
     return result.rows[0] || null;
 };
 
@@ -32,10 +40,17 @@ const createUser = async ({ username, password, role, can_view_all = false }) =>
 const authenticateUser = async (username, password) => {
     const user = await findUserByUsername(username);
     if (!user) return null;
+
+    if (user.is_blocked) {
+        const err = new Error('Пользователь заблокирован');
+        err.code = 'USER_BLOCKED';
+        throw err;
+    }
+
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return null;
-    // Возвращаем пользователя без хеша пароля
-    const { password_hash, ...userWithoutHash } = user;
+
+    const {  ...userWithoutHash } = user;
     return userWithoutHash;
 };
 

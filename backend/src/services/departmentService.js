@@ -7,11 +7,54 @@ const { v4: uuidv4 } = require('uuid');
  */
 const getAllDepartments = async () => {
     const result = await pool.query(`
-    SELECT id, name, parent_id, created_at, updated_at
-    FROM departments
-    ORDER BY name
-  `);
+        SELECT id, name, parent_id, sort_order, created_at, updated_at
+        FROM departments
+        ORDER BY parent_id NULLS FIRST, sort_order ASC, name ASC
+    `);
     return result.rows;
+};
+
+/**
+ * Массово обновляет позиции и родителей
+ * @param {Array<{id, parent_id, sort_order}>} updates
+ */
+const reorderDepartments = async (updates) => {
+    // Проверяем все перемещения на циклы ДО транзакции
+    for (const u of updates) {
+        if (u.parent_id) {
+            // Перемещаем элемент u.id в u.parent_id. Проверяем, что u.parent_id
+            // не является потомком u.id (иначе будет цикл)
+            const wouldCycle = await isDescendantOf(u.parent_id, u.id);
+            if (wouldCycle) {
+                const err = new Error(
+                    'Нельзя переместить подразделение внутрь собственного потомка'
+                );
+                err.status = 400;
+                throw err;
+            }
+        }
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const u of updates) {
+            await client.query(
+                `UPDATE departments
+                 SET parent_id = $1, sort_order = $2, updated_at = NOW()
+                 WHERE id = $3`,
+                [u.parent_id, u.sort_order, u.id]
+            );
+        }
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
 };
 
 /**
@@ -141,11 +184,35 @@ const deleteDepartment = async (id) => {
     );
     return result.rows.length > 0;
 };
+/**
+ * Проверяет, является ли potentialChild потомком ancestorId (рекурсивно вверх)
+ * @returns true, если potentialChild находится внутри ветки ancestorId
+ */
+const isDescendantOf = async (potentialChildId, ancestorId) => {
+    let currentId = potentialChildId;
+    const visited = new Set(); // защита от зацикливания в уже сломанных данных
 
+    while (currentId) {
+        if (visited.has(currentId)) return false; // цикл уже есть — не рискуем
+        visited.add(currentId);
+
+        if (currentId === ancestorId) return true;
+
+        const result = await pool.query(
+            'SELECT parent_id FROM departments WHERE id = $1',
+            [currentId]
+        );
+        if (!result.rows.length) return false;
+        currentId = result.rows[0].parent_id;
+    }
+    return false;
+};
 module.exports = {
     getAllDepartments,
     getDepartmentById,
     createDepartment,
     updateDepartment,
     deleteDepartment,
+    reorderDepartments,
+    isDescendantOf
 };

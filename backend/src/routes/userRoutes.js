@@ -1,23 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middlewares/auth');
-const { requireRole } = require('../middlewares/roleGuard');
+const { requirePermission } = require('../middlewares/permissionGuard');
 const {
     getAllUsers,
     getUserById,
     createUser,
     updateUser,
     deleteUser,
+    blockUser,
+    unblockUser,
 } = require('../controllers/userController');
 
-// Все маршруты требуют аутентификации и роли admin (или developer, но уточним позже)
+// Все маршруты требуют аутентификации
 router.use(authenticate);
-router.use(requireRole(['admin', 'developer'])); // Можно разрешить и developer
 
-router.get('/', getAllUsers);
-router.get('/:id', getUserById);
-router.post('/', createUser);
-router.put('/:id', updateUser);
-router.delete('/:id', deleteUser);
+// Просмотр
+router.get('/', requirePermission('users.view'), getAllUsers);
+router.get('/:id', requirePermission('users.view'), getUserById);
+
+// Создание
+router.post('/', requirePermission('users.create'), createUser);
+
+// Редактирование
+router.put('/:id', requirePermission('users.update'), updateUser);
+
+// Удаление
+router.delete('/:id', requirePermission('users.delete'), deleteUser);
+
+// Блокировка и разблокировка — одно общее право
+router.post('/:id/block', requirePermission('users.block'), blockUser);
+router.post('/:id/unblock', requirePermission('users.block'), unblockUser);
 
 module.exports = router;

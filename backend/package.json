@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon --ignore logs/ src/index.js",
     "migrate:create": "node-pg-migrate create --config migrate.config.js",
     "migrate:up": "node-pg-migrate up --config migrate.config.js",
     "migrate:down": "node-pg-migrate down --config migrate.config.js",
@@ -15,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@minoru/react-dnd-treeview": "^3.5.4",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

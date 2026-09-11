@@ -1,4 +1,7 @@
 const fireService = require('../services/fireService');
+const asyncHandler = require('../utils/asyncHandler');
+const logger = require('../utils/logger');
+const { emitForceRefresh } = require('../utils/socketEvents');
 const Joi = require('joi');
 
 // Схема для создания
@@ -23,18 +26,23 @@ const updateFireSchema = Joi.object({
     department_id: Joi.string().uuid(),
 });
 
-const getFires = async (req, res) => {
+// ---------- Получение всех пожаров ----------
+const getFires = asyncHandler(async (req, res) => {
     try {
         const user = req.user;
         const fires = await fireService.getFires(user.id, user.can_view_all);
         res.json(fires);
     } catch (err) {
-        console.error(err);
+        logger.error('Ошибка получения пожаров: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
         res.status(500).json({ error: 'Ошибка получения пожаров' });
     }
-};
+});
 
-const getFireById = async (req, res) => {
+// ---------- Получение пожара по ID ----------
+const getFireById = asyncHandler(async (req, res) => {
     try {
         const { id } = req.params;
         const user = req.user;
@@ -44,72 +52,106 @@ const getFireById = async (req, res) => {
         }
         res.json(fire);
     } catch (err) {
+        logger.error(`Ошибка получения пожара ${req.params.id}: ` + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
         res.status(500).json({ error: 'Ошибка получения пожара' });
     }
-};
+});
 
-const createFire = async (req, res) => {
+// ---------- Создание пожара ----------
+const createFire = asyncHandler(async (req, res) => {
+    const { error, value } = createFireSchema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+
     try {
-        const { error, value } = createFireSchema.validate(req.body);
-        if (error) {
-            return res.status(400).json({ error: error.details[0].message });
-        }
         const user = req.user;
-        // Проверяем, что пользователь имеет доступ к department_id (если не can_view_all)
+
+        // Проверяем доступ к указанному подразделению (если не can_view_all)
         if (!user.can_view_all) {
             const userDeps = await fireService.getUserDepartments(user.id, false);
             if (!userDeps.includes(value.department_id)) {
                 return res.status(403).json({ error: 'Нет доступа к данному подразделению' });
             }
         }
+
         const newFire = await fireService.createFire(value, user.id);
         const io = req.app.get('io');
         emitForceRefresh(io);
+
         res.status(201).json(newFire);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Ошибка создания пожара' });
+        logger.error('Ошибка создания пожара: ' + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка создания пожара' });
     }
-};
+});
 
-const updateFire = async (req, res) => {
+// ---------- Обновление пожара ----------
+const updateFire = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { error, value } = updateFireSchema.validate(req.body);
+
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+
     try {
-        const { id } = req.params;
-        const { error, value } = updateFireSchema.validate(req.body);
-        if (error) {
-            return res.status(400).json({ error: error.details[0].message });
-        }
         const user = req.user;
         const updated = await fireService.updateFire(id, value, user.id, user.can_view_all);
-        const io = req.app.get('io');
-        emitForceRefresh(io);
+
         if (!updated) {
             return res.status(404).json({ error: 'Пожар не найден или нет доступа' });
         }
+
+        const io = req.app.get('io');
+        emitForceRefresh(io);
+
         res.json(updated);
     } catch (err) {
+        logger.error(`Ошибка обновления пожара ${id}: ` + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+
         if (err.message === 'Нет доступа к указанному подразделению') {
             return res.status(403).json({ error: err.message });
         }
-        res.status(500).json({ error: 'Ошибка обновления пожара' });
+        res.status(500).json({ error: err.message || 'Ошибка обновления пожара' });
     }
-};
+});
 
-const deleteFire = async (req, res) => {
+// ---------- Удаление пожара ----------
+const deleteFire = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
     try {
-        const { id } = req.params;
         const user = req.user;
         const deleted = await fireService.deleteFire(id, user.id, user.can_view_all);
-        const io = req.app.get('io');
-        emitForceRefresh(io);
+
         if (!deleted) {
             return res.status(404).json({ error: 'Пожар не найден или нет доступа' });
         }
+
+        const io = req.app.get('io');
+        emitForceRefresh(io);
+
         res.json({ message: 'Пожар удалён' });
     } catch (err) {
-        res.status(500).json({ error: 'Ошибка удаления пожара' });
+        logger.error(`Ошибка удаления пожара ${id}: ` + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка удаления пожара' });
     }
-};
+});
 
 module.exports = {
     getFires,

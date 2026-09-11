@@ -2,44 +2,53 @@ const { verifyToken } = require('../utils/jwt');
 const { touchSession } = require('../services/authService');
 const pool = require('../db/pool');
 
-/**
- * Middleware: проверяет наличие и валидность JWT, обновляет last_active_at
- */
 const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Missing or invalid token' });
+        return res.status(401).json({ error: 'Отсутствует или неверный токен' });
     }
 
     const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
-    if (!decoded) {
-        return res.status(401).json({ error: 'Invalid token' });
-    }
+    if (!decoded) return res.status(401).json({ error: 'Недействительный токен' });
 
-    // Проверяем, существует ли сессия с таким токеном в БД
     const session = await pool.query(
-        'SELECT user_id, last_active_at FROM sessions WHERE token = $1',
+        'SELECT user_id FROM sessions WHERE token = $1',
         [token]
     );
     if (!session.rows.length) {
-        return res.status(401).json({ error: 'Session expired or not found' });
+        return res.status(401).json({ error: 'Сессия истекла или не найдена' });
     }
 
-    // Обновляем время последней активности
     await touchSession(token);
-
-    // Загружаем пользователя
     const userId = session.rows[0].user_id;
-    const userResult = await pool.query(
-        'SELECT id, username, role, can_view_all FROM users WHERE id = $1',
-        [userId]
-    );
+
+    const userResult = await pool.query(`
+    SELECT 
+      u.id, u.username, u.role, u.can_view_all, u.is_blocked,
+      r.name AS role_name, r.permissions
+    FROM users u
+    LEFT JOIN roles r ON u.role = r.code
+    WHERE u.id = $1
+  `, [userId]);
+
     if (!userResult.rows.length) {
-        return res.status(401).json({ error: 'User not found' });
+        return res.status(401).json({ error: 'Пользователь не найден' });
+    }
+    const u = userResult.rows[0];
+
+    if (u.is_blocked) {
+        return res.status(403).json({ error: 'Пользователь заблокирован' });
     }
 
-    req.user = userResult.rows[0];
+    req.user = {
+        id: u.id,
+        username: u.username,
+        role: u.role,                 // string code — для обратной совместимости
+        role_name: u.role_name,       // читаемое имя
+        can_view_all: u.can_view_all,
+        permissions: u.permissions || [],
+    };
     req.token = token;
     next();
 };

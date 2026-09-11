@@ -1,10 +1,12 @@
-/**
- * Отправляет событие force_refresh всем клиентам через Socket.IO
- * @param {object} io - экземпляр Socket.IO
- */
 const emitForceRefresh = (io) => {
-    if (io) {
-        io.emit('force_refresh');
+    try {
+        if (io && typeof io.emit === 'function') {
+            io.emit('force_refresh');
+        } else {
+            console.warn('emitForceRefresh: io не инициализирован');
+        }
+    } catch (err) {
+        console.error('Ошибка отправки force_refresh:', err.message);
     }
 };
 
