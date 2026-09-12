@@ -7,6 +7,10 @@ import {
     playNotificationSound,
     isSoundEnabled,
 } from '../lib/notificationSound';
+import {
+    playUnitStatusSound,
+    isUnitSoundEnabled,
+} from '../lib/unitNotificationSound';
 
 const SOCKET_URL =
     import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -30,7 +34,11 @@ export const useSocket = () => {
         );
 
         // ----- Общие -----
-        socket.on('force_refresh', () => queryClient.invalidateQueries());
+        socket.on('force_refresh', () => {
+            queryClient.invalidateQueries({
+                predicate: (query) => query.queryKey[0] !== 'attachment-blob',
+            });
+        });
         socket.on('online_users', (users) =>
             queryClient.setQueryData(['onlineUsers'], users)
         );
@@ -54,6 +62,23 @@ export const useSocket = () => {
             queryClient.invalidateQueries(['publicSettings'])
         );
 
+// ============================================================
+// Техника: смена статуса — реальное время + звук
+// ============================================================
+        socket.on('unit:status_changed', (payload) => {
+            // Звук — если включён
+            if (isUnitSoundEnabled()) {
+                playUnitStatusSound();
+            }
+
+            // Инвалидация кешей
+            queryClient.invalidateQueries(['units-grid']);
+            queryClient.invalidateQueries(['units']);
+            queryClient.invalidateQueries(['units-history-global']);
+            if (payload?.unit_id) {
+                queryClient.invalidateQueries(['unit-history', payload.unit_id]);
+            }
+        });
         // ----- Чат: профиль -----
         socket.on('chat:profile_updated', () => {
             queryClient.invalidateQueries(['chat', 'profile']);

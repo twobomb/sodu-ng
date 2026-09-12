@@ -37,6 +37,22 @@ const PERMISSIONS_CATALOG = [
             { key: 'units.create', name: 'Создание', description: 'Добавлять технику' },
             { key: 'units.update', name: 'Редактирование', description: 'Изменять технику' },
             { key: 'units.delete', name: 'Удаление', description: 'Удалять технику' },
+            // ↓ новые правила
+            {
+                key: 'units.update_status',
+                name: 'Изменение статуса',
+                description: 'Менять текущий статус техники',
+            },
+            {
+                key: 'units.view_history',
+                name: 'История статусов',
+                description: 'Просматривать историю изменений статусов',
+            },
+            {
+                key: 'units.manage_dictionaries',
+                name: 'Справочники техники',
+                description: 'Управление типами техники и статусами',
+            },
         ],
     },
     {

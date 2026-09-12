@@ -4,7 +4,7 @@ import {
     createDepartment,
     updateDepartment,
     deleteDepartment,
-    reorderDepartments
+    reorderDepartments,
 } from '../api/departments';
 
 export const useDepartments = () => {

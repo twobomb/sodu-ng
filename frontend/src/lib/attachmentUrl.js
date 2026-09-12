@@ -20,16 +20,15 @@ export const useAttachmentBlob = (attachmentId, kind = 'download') => {
                 `/chat/attachments/${attachmentId}/${kind}`,
                 { responseType: 'blob' }
             );
-            // Blob-url остаётся в памяти, пока открыта вкладка.
-            // Утечки нет — GC заберёт при перезагрузке страницы.
             return URL.createObjectURL(res.data);
         },
         enabled: !!attachmentId,
-        staleTime: Infinity,   // данные не меняются — держим вечно
-        gcTime: Infinity,      // не удаляем из кеша (React Query v5)
-        // В React Query v4 было cacheTime вместо gcTime
-        // Если у тебя v4 — замени gcTime на cacheTime
-        retry: 1,
+        staleTime: Infinity,
+        gcTime: Infinity,
+        retry: false,               // 410 — постоянная ошибка, ретраить бессмысленно
+        retryOnMount: false,        // не пытаться снова при монтировании
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
     });
 
     return data || null;

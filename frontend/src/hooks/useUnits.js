@@ -1,20 +1,29 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUnits, createUnit, updateUnit, deleteUnit } from '../api/units';
+import { useQuery, useMutation, useQueryClient ,
+    useInfiniteQuery} from '@tanstack/react-query';
+import * as api from '../api/units';
 
-export const useUnits = () => {
-    return useQuery({
+// ============================================================
+// ТЕХНИКА
+// ============================================================
+export const useUnits = () =>
+    useQuery({
         queryKey: ['units'],
-        queryFn: getUnits,
-        refetchOnWindowFocus: true,
+        queryFn: () => api.getUnits().then((r) => r.data),   // ← уже .data
     });
-};
-
+export const useUnit = (unitId, options = {}) =>
+    useQuery({
+        queryKey: ['unit', unitId],
+        queryFn: () => api.getUnit(unitId).then((r) => r.data),
+        enabled: !!unitId && options.enabled !== false,
+        staleTime: 30 * 1000,
+    });
 export const useCreateUnit = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: createUnit,
+        mutationFn: api.createUnit,
         onSuccess: () => {
             queryClient.invalidateQueries(['units']);
+            queryClient.invalidateQueries(['units-grid']);
         },
     });
 };
@@ -22,9 +31,10 @@ export const useCreateUnit = () => {
 export const useUpdateUnit = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, data }) => updateUnit(id, data),
+        mutationFn: ({ id, data }) => api.updateUnit(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries(['units']);
+            queryClient.invalidateQueries(['units-grid']);
         },
     });
 };
@@ -32,9 +42,153 @@ export const useUpdateUnit = () => {
 export const useDeleteUnit = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: deleteUnit,
+        mutationFn: api.deleteUnit,
         onSuccess: () => {
             queryClient.invalidateQueries(['units']);
+            queryClient.invalidateQueries(['units-grid']);
         },
     });
 };
+
+// ============================================================
+// ТИПЫ ТЕХНИКИ
+// ============================================================
+export const useUnitTypes = () =>
+    useQuery({
+        queryKey: ['unit-types'],
+        queryFn: () => api.getUnitTypes().then((r) => r.data),
+        staleTime: 5 * 60 * 1000,
+    });
+
+export const useCreateUnitType = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: api.createUnitType,
+        onSuccess: () => qc.invalidateQueries(['unit-types']),
+    });
+};
+
+export const useUpdateUnitType = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }) => api.updateUnitType(id, data),
+        onSuccess: () => {
+            qc.invalidateQueries(['unit-types']);
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+        },
+    });
+};
+
+export const useDeleteUnitType = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: api.deleteUnitType,
+        onSuccess: () => {
+            qc.invalidateQueries(['unit-types']);
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+        },
+    });
+};
+
+// ============================================================
+// СТАТУСЫ ТЕХНИКИ
+// ============================================================
+export const useUnitStatuses = () =>
+    useQuery({
+        queryKey: ['unit-statuses'],
+        queryFn: () => api.getUnitStatuses().then((r) => r.data),
+        staleTime: 5 * 60 * 1000,
+    });
+
+export const useCreateUnitStatus = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: api.createUnitStatus,
+        onSuccess: () => qc.invalidateQueries(['unit-statuses']),
+    });
+};
+
+export const useUpdateUnitStatus = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }) => api.updateUnitStatus(id, data),
+        onSuccess: () => {
+            qc.invalidateQueries(['unit-statuses']);
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+        },
+    });
+};
+
+export const useDeleteUnitStatus = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: api.deleteUnitStatus,
+        onSuccess: () => {
+            qc.invalidateQueries(['unit-statuses']);
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+        },
+    });
+};
+
+// ============================================================
+// СМЕНА СТАТУСА ТЕХНИКИ
+// ============================================================
+export const useChangeUnitStatus = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }) => api.changeUnitStatus(id, data),
+        onSuccess: () => {
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+            qc.invalidateQueries(['unit-history']);
+            qc.invalidateQueries(['units-history-global']);
+        },
+    });
+};
+
+// ============================================================
+// СЕТКА ВСЕЙ ТЕХНИКИ
+// ============================================================
+export const useUnitsGrid = (sort = 'default') =>
+    useQuery({
+        queryKey: ['units-grid', sort],
+        queryFn: () => api.getUnitsGrid(sort).then((r) => r.data),
+        staleTime: 30 * 1000,
+        refetchInterval: 30 * 1000,
+        refetchIntervalInBackground: false,
+    });
+
+// ============================================================
+// ГЛОБАЛЬНЫЙ ЛОГ ИЗМЕНЕНИЙ
+// ============================================================
+export const useGlobalHistory = (limit = 50) =>
+    useQuery({
+        queryKey: ['units-history-global', limit],
+        queryFn: () => api.getGlobalHistory({ limit }).then((r) => r.data),
+        staleTime: 20 * 1000,
+    });
+
+
+// ============================================================
+// ИСТОРИЯ КОНКРЕТНОЙ ТЕХНИКИ — бесконечная пагинация
+// ============================================================
+export const useUnitHistory = (unitId, limit = 50) =>
+    useInfiniteQuery({
+        queryKey: ['unit-history', unitId],
+        queryFn: ({ pageParam }) =>
+            api
+                .getUnitHistory(unitId, {
+                    limit,
+                    before_changed_at: pageParam?.changed_at,
+                    before_id: pageParam?.id,
+                })
+                .then((r) => r.data),
+        initialPageParam: null,
+        getNextPageParam: (lastPage) => lastPage?.nextCursor || undefined,
+        enabled: !!unitId,
+        staleTime: 20 * 1000,
+    });

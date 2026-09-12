@@ -18,6 +18,9 @@ const roleRoutes = require('./routes/roleRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const unitTypeRoutes = require('./routes/unitTypeRoutes');
+const unitStatusRoutes = require('./routes/unitStatusRoutes');
+
 
 const { verifyToken } = require('./utils/jwt');
 const { touchSession } = require('./services/authService');
@@ -42,6 +45,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/fires', fireRoutes);
 app.use('/api/units', unitRoutes);
+app.use('/api/unit-types', unitTypeRoutes);
+app.use('/api/unit-statuses', unitStatusRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/online', onlineRoutes);
 app.use('/api/roles', roleRoutes);

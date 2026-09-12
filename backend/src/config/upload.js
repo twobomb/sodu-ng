@@ -11,61 +11,63 @@ const UPLOAD_DIR = path.resolve(
     process.env.UPLOAD_DIR || './uploads'
 );
 
-// Создаём папку при старте
+const AVATARS_DIR = path.resolve(
+    process.cwd(),
+    process.env.AVATARS_DIR || './uploads_avatars'
+);
+
+// Создаём папки при старте
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
+if (!fs.existsSync(AVATARS_DIR)) {
+    fs.mkdirSync(AVATARS_DIR, { recursive: true });
+}
+
+// ============================================================
+// Куда сохранять файл — зависит от purpose в query/body.
+// purpose=avatar → uploads_avatars, иначе → uploads.
+// ============================================================
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+    destination: (req, file, cb) => {
+        const purpose = req.query?.purpose || req.body?.purpose;
+        const dir = purpose === 'avatar' ? AVATARS_DIR : UPLOAD_DIR;
+        cb(null, dir);
+    },
     filename: (req, file, cb) => {
-        // Сохраняем как <uuid>.<ext>, оригинальное имя — только в БД
         const ext = path.extname(file.originalname).slice(0, 10);
-        const name = `${uuidv4()}${ext}`;
-        cb(null, name);
+        cb(null, `${uuidv4()}${ext}`);
     },
 });
 
 // ============================================================
 // ФИКС КОДИРОВКИ ИМЕНИ ФАЙЛА
-// multer/busboy парсит Content-Disposition как latin1,
-// из-за чего UTF-8 (кириллица) превращается в кракозябры.
-// Перекодируем originalname: latin1 -> Buffer -> UTF-8.
+// multer/busboy парсит Content-Disposition как latin1.
+// Перекодируем originalname: latin1 → UTF-8.
 // ============================================================
 const fixFilenameEncoding = (file) => {
     try {
         const original = file.originalname;
-        // Проверяем, есть ли признаки неправильной кодировки:
-        // если Buffer.from(str, 'latin1').toString('utf8') даёт валидный
-        // результат — значит исходное имя было испорчено.
         const fixed = Buffer.from(original, 'latin1').toString('utf8');
-
-        // Простая эвристика: если в исходной строке есть символы
-        // с кодами > 127 (то есть не ASCII), и после перекодирования
-        // получается более "читаемая" строка — используем её.
-        if (/[^\x00-\x7F]/.test(original)) {
-            // Проверяем, что результат не содержит "замещающих" символов
-            if (!fixed.includes('\uFFFD')) {
-                file.originalname = fixed;
-            }
+        if (/[^\x00-\x7F]/.test(original) && !fixed.includes('\uFFFD')) {
+            file.originalname = fixed;
         }
-    } catch (err) {
-        // Если что-то пошло не так — оставляем как есть
+    } catch (_) {
+        // ignore
     }
     return file;
 };
 
-// Возвращает middleware с динамическим лимитом
 const buildUploadMiddleware = (maxSizeBytes) => {
     const upload = multer({
         storage,
         limits: { fileSize: maxSizeBytes },
+        defParamCharset: 'utf8', // для новых версий multer
     });
 
-    // Оборачиваем, чтобы после загрузки пройтись по файлам и починить кодировку
     return (req, res, next) => {
         upload.array('files', 10)(req, res, (err) => {
             if (err) return next(err);
-
             if (req.files && req.files.length) {
                 req.files.forEach(fixFilenameEncoding);
             }
@@ -76,5 +78,6 @@ const buildUploadMiddleware = (maxSizeBytes) => {
 
 module.exports = {
     UPLOAD_DIR,
+    AVATARS_DIR,
     buildUploadMiddleware,
 };

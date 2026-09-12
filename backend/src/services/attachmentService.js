@@ -1,7 +1,7 @@
 const pool = require('../db/pool');
 const fs = require('fs/promises');
 const path = require('path');
-const { UPLOAD_DIR } = require('../config/upload');
+const { UPLOAD_DIR, AVATARS_DIR } = require('../config/upload');
 
 // Опциональный sharp — если не установлен, работаем без превью
 let sharp = null;
@@ -99,8 +99,34 @@ const canAccessAttachment = async (attachmentId, userId) => {
     return res.rows.length > 0;
 };
 
-const getFilePath = (attachment) => path.join(UPLOAD_DIR, attachment.stored_name);
+// ============================================================
+// Путь, куда ДОЛЖЕН быть записан файл (используем при загрузке)
+// ============================================================
+const getFilePath = (attachment) => {
+    const baseDir = attachment.is_public ? AVATARS_DIR : UPLOAD_DIR;
+    return path.join(baseDir, attachment.stored_name);
+};
 
+// ============================================================
+// Путь для ЧТЕНИЯ — с обратной совместимостью.
+// Если аватар помечен is_public, но файла в uploads_avatars нет,
+// пробуем найти его в uploads (старое место хранения).
+// ============================================================
+const getFilePathRead = (attachment) => {
+    const primary = attachment.is_public
+        ? path.join(AVATARS_DIR, attachment.stored_name)
+        : path.join(UPLOAD_DIR, attachment.stored_name);
+
+    if (fs.existsSync(primary)) return primary;
+
+    // Fallback для старых аватаров из uploads/
+    if (attachment.is_public) {
+        const legacy = path.join(UPLOAD_DIR, attachment.stored_name);
+        if (fs.existsSync(legacy)) return legacy;
+    }
+
+    return primary; // вернём «правильный» путь для логов
+};
 // Генерация превью (jpg 400px по ширине)
 const getThumbnailPath = async (attachment) => {
     if (!sharp || !IMAGE_MIMES.has(attachment.mime_type)) return null;
@@ -140,6 +166,7 @@ module.exports = {
     getAttachmentById,
     canAccessAttachment,
     getFilePath,
+    getFilePathRead,
     getThumbnailPath,
     deleteFileFromDisk,
     IMAGE_MIMES,

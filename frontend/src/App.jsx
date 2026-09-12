@@ -18,6 +18,9 @@ import PermissionRoute from './components/PermissionRoute';
 import DeveloperRoute from './components/DeveloperRoute';
 import HomeRedirect from './components/HomeRedirect';
 import MaintenanceGuard from './components/MaintenanceGuard';
+import UnitTypesList from './components/units/UnitTypesList';
+import UnitStatusesList from './components/units/UnitStatusesList';
+import UnitsGrid from './pages/units/UnitsGrid';
 
 const queryClient = new QueryClient();
 
@@ -53,6 +56,14 @@ function App() {
                                     </PrivateRoute>
                                 }
                             >
+                                <Route
+                                    path="units-grid"
+                                    element={
+                                        <PermissionRoute permission="units.view">
+                                            <UnitsGrid />
+                                        </PermissionRoute>
+                                    }
+                                />
                                 {/* Главная — редирект на первый доступный раздел */}
                                 <Route index element={<HomeRedirect />} />
 
@@ -70,6 +81,22 @@ function App() {
                                     element={
                                         <PermissionRoute permission="units.view">
                                             <UnitsList />
+                                        </PermissionRoute>
+                                    }
+                                />
+                                <Route
+                                    path="unit-types"
+                                    element={
+                                        <PermissionRoute permission="units.view">
+                                            <UnitTypesList />
+                                        </PermissionRoute>
+                                    }
+                                />
+                                <Route
+                                    path="unit-statuses"
+                                    element={
+                                        <PermissionRoute permission="units.view">
+                                            <UnitStatusesList />
                                         </PermissionRoute>
                                     }
                                 />
