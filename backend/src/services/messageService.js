@@ -74,13 +74,16 @@ const getMessages = async (conversationId, { before = null, limit = 30 } = {}) =
 // ============================================================
 // СОЗДАНИЕ СООБЩЕНИЯ
 // ============================================================
+// ============================================================
+// СОЗДАНИЕ СООБЩЕНИЯ
+// ============================================================
 const createMessage = async ({
                                  conversationId,
                                  userId,
                                  content,
                                  contentType = 'text',
                                  replyToId = null,
-                                 attachmentIds = [], // уже вставленные в attachments, привяжем к message
+                                 attachmentIds = [],
                              }) => {
     const client = await pool.connect();
     try {
@@ -88,26 +91,28 @@ const createMessage = async ({
 
         const res = await client.query(
             `INSERT INTO messages
-        (conversation_id, user_id, content, content_type, reply_to_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
+                 (conversation_id, user_id, content, content_type, reply_to_id)
+             VALUES ($1, $2, $3, $4, $5)
+                 RETURNING *`,
             [conversationId, userId, content, contentType, replyToId]
         );
         const message = res.rows[0];
 
-        // Привязка файлов, если передали
+        // Привязка файлов
         if (attachmentIds.length) {
             await client.query(
-                `UPDATE attachments SET message_id = $1
-         WHERE id = ANY($2::uuid[]) AND message_id = $3`,
-                [message.id, attachmentIds, message.id]
+                `UPDATE attachments
+                 SET message_id = $1
+                 WHERE id = ANY($2::uuid[])
+                   AND message_id IS NULL
+                   AND conversation_id = $3`,
+                [message.id, attachmentIds, conversationId]
             );
         }
 
-        // Обновляем last_message_at у разговора
         await client.query(
             `UPDATE conversations SET last_message_at = $2, updated_at = NOW()
-       WHERE id = $1`,
+             WHERE id = $1`,
             [conversationId, message.created_at]
         );
 
@@ -120,7 +125,6 @@ const createMessage = async ({
         client.release();
     }
 };
-
 // ============================================================
 // ПОЛУЧЕНИЕ ОДНОГО СООБЩЕНИЯ С ДОП. ДАННЫМИ
 // ============================================================
