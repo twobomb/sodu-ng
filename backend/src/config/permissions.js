@@ -62,6 +62,20 @@ const PERMISSIONS_CATALOG = [
             { key: 'roles.delete', name: 'Удаление', description: 'Удалять роли' },
         ],
     },
+    {
+        key: 'chat',
+        name: 'Чат',
+        description: 'Модуль обмена сообщениями',
+        permissions: [
+            { key: 'chat.use', name: 'Использование чата', description: 'Видеть кнопку чата и открывать его' },
+            { key: 'chat.create_channel', name: 'Создание каналов', description: 'Создавать группы/каналы' },
+            { key: 'chat.update_channel', name: 'Редактирование каналов', description: 'Переименование, описание, аватар, режим только-чтение' },
+            { key: 'chat.delete_channel', name: 'Удаление каналов', description: 'Удалять каналы и группы' },
+            { key: 'chat.manage_members', name: 'Управление участниками', description: 'Добавлять и удалять участников каналов' },
+            { key: 'chat.moderate', name: 'Модерация сообщений', description: 'Удалять любые сообщения, а не только свои' },
+            { key: 'chat.manage_profiles', name: 'Управление профилями чата', description: 'Изменять имя и аватар других пользователей в чате' },
+        ],
+    },
 ];
 
 // Плоский список ключей — для валидации

@@ -12,6 +12,7 @@ import OnlineUsers from './pages/users/OnlineUsers';
 import RolesList from './pages/roles/RolesList';
 import DepartmentsList from './pages/departments/DepartmentsList.jsx';
 import SettingsPage from './pages/settings/SettingsPage';
+import { ChatProvider } from './context/ChatContext';
 
 import PermissionRoute from './components/PermissionRoute';
 import DeveloperRoute from './components/DeveloperRoute';
@@ -38,6 +39,8 @@ function App() {
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
                 <MaintenanceGuard>
+                    <AuthProvider>
+                        <ChatProvider>
                     <BrowserRouter>
                         <Routes>
                             <Route path="/login" element={<LoginPage />} />
@@ -122,6 +125,8 @@ function App() {
                             </Route>
                         </Routes>
                     </BrowserRouter>
+                        </ChatProvider>
+                    </AuthProvider>
                 </MaintenanceGuard>
             </AuthProvider>
         </QueryClientProvider>

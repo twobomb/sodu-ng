@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Flame, Truck, Users, ChevronDown, LogOut, List, Activity, Shield,Building2,SettingsIcon } from 'lucide-react';
+import { Flame, Truck, Users, ChevronDown, LogOut, List, Activity, Shield,Building2,SettingsIcon,MessageCircle  } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,13 @@ import {
     DropdownMenuItem,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-
+import { useChatUnreadCounts } from '../hooks/useChat';
 const NavBar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const { has } = usePermissions();
+    const unread = useChatUnreadCounts();
     const isActive = (path) =>
         location.pathname === path || location.pathname.startsWith(path + '/');
 
@@ -136,6 +137,21 @@ const NavBar = () => {
                             <p className="text-sm font-semibold text-slate-700">{user?.username}</p>
                             <p className="text-xs text-slate-400">{user?.role_name || user?.role}</p>
                         </div>
+                        {has('chat.use') && (
+                            <Button
+                                variant="outline"
+                                onClick={() => window.dispatchEvent(new CustomEvent('chat:toggle'))}
+                                className="rounded-lg border-slate-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 relative"
+                                title="Чат"
+                            >
+                                <MessageCircle className="h-4 w-4" />
+                                {unread.total > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+        {unread.total > 99 ? '99+' : unread.total}
+      </span>
+                                )}
+                            </Button>
+                        )}
                         <Button
                             variant="outline"
                             onClick={logout}

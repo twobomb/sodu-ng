@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { initAudio } from '../lib/notificationSound';
 import {
   Card,
   CardContent,
@@ -60,6 +61,11 @@ const LoginPage = () => {
     setError('');
     setNotice('');
     setLoading(true);
+    initAudio();
+    // Инициализация AudioContext прямо в обработчике клика —
+    // это даёт браузеру понять, что пользователь взаимодействовал
+    initAudio();
+
     try {
       await login(username, password);
       // На всякий случай очищаем причину перед редиректом

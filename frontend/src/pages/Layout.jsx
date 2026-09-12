@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import NavBar from '../components/NavBar';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
+import ChatWidget from '../components/chat/ChatWidget';
 
 const Layout = () => {
     const { user } = useAuth();
@@ -18,6 +19,7 @@ const Layout = () => {
             <div className="px-8 py-6 max-w-full">
                 <Outlet />
             </div>
+            {user && <ChatWidget />}
         </div>
     );
 };
