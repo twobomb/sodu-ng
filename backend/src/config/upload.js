@@ -15,16 +15,44 @@ const UPLOAD_DIR = path.resolve(
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
-
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOAD_DIR),
     filename: (req, file, cb) => {
         // Сохраняем как <uuid>.<ext>, оригинальное имя — только в БД
-        const ext = path.extname(file.originalname).slice(0, 10); // .jpg, .tar.gz и т.п.
+        const ext = path.extname(file.originalname).slice(0, 10);
         const name = `${uuidv4()}${ext}`;
         cb(null, name);
     },
 });
+
+// ============================================================
+// ФИКС КОДИРОВКИ ИМЕНИ ФАЙЛА
+// multer/busboy парсит Content-Disposition как latin1,
+// из-за чего UTF-8 (кириллица) превращается в кракозябры.
+// Перекодируем originalname: latin1 -> Buffer -> UTF-8.
+// ============================================================
+const fixFilenameEncoding = (file) => {
+    try {
+        const original = file.originalname;
+        // Проверяем, есть ли признаки неправильной кодировки:
+        // если Buffer.from(str, 'latin1').toString('utf8') даёт валидный
+        // результат — значит исходное имя было испорчено.
+        const fixed = Buffer.from(original, 'latin1').toString('utf8');
+
+        // Простая эвристика: если в исходной строке есть символы
+        // с кодами > 127 (то есть не ASCII), и после перекодирования
+        // получается более "читаемая" строка — используем её.
+        if (/[^\x00-\x7F]/.test(original)) {
+            // Проверяем, что результат не содержит "замещающих" символов
+            if (!fixed.includes('\uFFFD')) {
+                file.originalname = fixed;
+            }
+        }
+    } catch (err) {
+        // Если что-то пошло не так — оставляем как есть
+    }
+    return file;
+};
 
 // Возвращает middleware с динамическим лимитом
 const buildUploadMiddleware = (maxSizeBytes) => {
@@ -32,7 +60,18 @@ const buildUploadMiddleware = (maxSizeBytes) => {
         storage,
         limits: { fileSize: maxSizeBytes },
     });
-    return upload.array('files', 10); // до 10 файлов за раз
+
+    // Оборачиваем, чтобы после загрузки пройтись по файлам и починить кодировку
+    return (req, res, next) => {
+        upload.array('files', 10)(req, res, (err) => {
+            if (err) return next(err);
+
+            if (req.files && req.files.length) {
+                req.files.forEach(fixFilenameEncoding);
+            }
+            next();
+        });
+    };
 };
 
 module.exports = {

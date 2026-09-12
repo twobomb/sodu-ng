@@ -14,7 +14,6 @@ import {
     CheckCheck,
     MoreVertical,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import MessageReadersDialog from './MessageReadersDialog';
 import {
     DropdownMenu,
@@ -44,6 +43,7 @@ import {
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import ImageViewer from './ImageViewer';
+import AvatarView from './AvatarView';
 
 const EDIT_WINDOW_MIN = 10;
 
@@ -105,12 +105,11 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
         message.display_name || message.username || 'Удалённый пользователь';
     const time = format(new Date(message.created_at), 'HH:mm', { locale: ru });
 
-    const isChannel = conversation?.type === 'channel';
     const isGroupOrChannel =
         conversation?.type === 'channel' || conversation?.type === 'group';
 
     // ============================================================
-    // Галочки: считаем, сколько участников (кроме автора) прочитали
+    // Галочки: сколько участников (кроме автора) прочитали
     // ============================================================
     const readInfo = (() => {
         if (!isOwn || isDeleted) return null;
@@ -151,48 +150,62 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
     const images = attachments.filter((a) => a.mime_type?.startsWith('image/'));
     const files = attachments.filter((a) => !a.mime_type?.startsWith('image/'));
 
+    // Аватар показываем только для чужих в группе/канале
+    const showAvatar = !isOwn && isGroupOrChannel;
+
+    // Кнопка "⋮"
+    const actionButton = (
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 self-start mt-1">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-200"
+                    >
+                        <MoreVertical className="h-3.5 w-3.5 text-slate-500" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
+                    <DropdownMenuItem icon={Reply} onClick={() => onReply(message)}>
+                        Ответить
+                    </DropdownMenuItem>
+                    {canEditThis && (
+                        <DropdownMenuItem icon={Edit3} onClick={() => onEdit(message)}>
+                            Редактировать
+                        </DropdownMenuItem>
+                    )}
+                    {canDeleteThis && (
+                        <DropdownMenuItem
+                            icon={Trash2}
+                            danger
+                            onClick={() => setConfirmDelete(true)}
+                        >
+                            Удалить
+                        </DropdownMenuItem>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    );
+
     return (
         <>
             <div
                 className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-1.5 group`}
             >
-                <div
-                    className={`flex items-end gap-1 max-w-[80%] ${
-                        isOwn ? 'flex-row-reverse' : 'flex-row'
-                    }`}
-                >
-                    {/* Меню (показывается при hover) */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <button
-                                    type="button"
-                                    className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-200"
-                                >
-                                    <MoreVertical className="h-3.5 w-3.5 text-slate-500" />
-                                </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
-                                <DropdownMenuItem icon={Reply} onClick={() => onReply(message)}>
-                                    Ответить
-                                </DropdownMenuItem>
-                                {canEditThis && (
-                                    <DropdownMenuItem icon={Edit3} onClick={() => onEdit(message)}>
-                                        Редактировать
-                                    </DropdownMenuItem>
-                                )}
-                                {canDeleteThis && (
-                                    <DropdownMenuItem
-                                        icon={Trash2}
-                                        danger
-                                        onClick={() => setConfirmDelete(true)}
-                                    >
-                                        Удалить
-                                    </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                <div className="flex items-start gap-2 max-w-[85%]">
+                    {/* Аватар — только чужие в группе/канале */}
+                    {showAvatar && (
+                        <AvatarView
+                            avatar={message.avatar_url}
+                            name={displayName}
+                            size={32}
+                            className="mt-0.5"
+                        />
+                    )}
+
+                    {/* Кнопка ⋮ слева от пузыря — только для своих */}
+                    {isOwn && actionButton}
 
                     {/* Пузырь */}
                     <div
@@ -202,7 +215,7 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
                                 : 'bg-white text-slate-800 rounded-bl-sm shadow-sm'
                         }`}
                     >
-                        {/* Автор (в группах и каналах, не свои) */}
+                        {/* Автор */}
                         {!isOwn && isGroupOrChannel && (
                             <div className="text-xs font-semibold text-orange-600 mb-0.5">
                                 {displayName}
@@ -308,6 +321,9 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
                             )}
                         </div>
                     </div>
+
+                    {/* Кнопка ⋮ справа от пузыря — только для чужих */}
+                    {!isOwn && actionButton}
                 </div>
             </div>
 
@@ -395,9 +411,12 @@ const FileRow = ({ attachment, isOwn }) => {
         <button
             type="button"
             onClick={handleDownload}
-            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left min-w-[200px] ${
-                isOwn ? 'bg-white/15 hover:bg-white/25' : 'bg-slate-100 hover:bg-slate-200'
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left min-w-0 max-w-[250px] ${
+                isOwn
+                    ? 'bg-white/15 hover:bg-white/25'
+                    : 'bg-slate-100 hover:bg-slate-200'
             }`}
+            title={attachment.original_name}
         >
             <div
                 className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}

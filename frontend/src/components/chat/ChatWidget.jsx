@@ -10,6 +10,10 @@ import { Button } from '@/components/ui/button.tsx';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useChatState } from '../../context/ChatContext';
 import { useChatUnreadCounts } from '../../hooks/useChat';
+import {
+    isFloatingButtonEnabled,
+    subscribeToUiPrefs,
+} from '../../lib/chatUiPrefs';
 import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 import ChatSettings from './ChatSettings.jsx';
@@ -23,12 +27,10 @@ const TABS = [
 
 const Badge = ({ count, size = 'md' }) => {
     if (!count || count <= 0) return null;
-
     const sizeCls =
         size === 'sm'
             ? 'h-4 min-w-4 px-0.5 text-[9px] ring-2'
             : 'h-5 min-w-5 px-1 text-[10px] ring-2';
-
     return (
         <span
             className={`absolute -top-1.5 -right-1.5 rounded-full bg-red-500 text-white font-bold flex items-center justify-center ring-white ${sizeCls}`}
@@ -48,7 +50,15 @@ const ChatWidget = () => {
     } = useChatState();
 
     const [tab, setTab] = useState('all');
+    const [showFloating, setShowFloating] = useState(isFloatingButtonEnabled());
+
     const unread = useChatUnreadCounts();
+
+    // Подписка на изменение настроек UI
+    useEffect(() => {
+        const update = () => setShowFloating(isFloatingButtonEnabled());
+        return subscribeToUiPrefs(update);
+    }, []);
 
     useEffect(() => {
         const handler = () => setIsOpen((v) => !v);
@@ -67,7 +77,8 @@ const ChatWidget = () => {
 
     return (
         <>
-            {!isOpen && (
+            {/* Плавающая кнопка — только если включена в настройках и панель закрыта */}
+            {!isOpen && showFloating && (
                 <button
                     onClick={() => setIsOpen(true)}
                     className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center"

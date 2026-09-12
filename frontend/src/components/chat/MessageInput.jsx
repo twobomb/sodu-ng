@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Smile, X, Loader2, Image as ImageIcon } from 'lucide-react';
+import {
+    Send,
+    Paperclip,
+    Smile,
+    X,
+    Loader2,
+    Image as ImageIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSendMessage, useEditMessage } from '../../hooks/useChat';
 import { uploadFiles } from '../../api/chat';
@@ -17,10 +24,13 @@ const MessageInput = ({
     const [files, setFiles] = useState([]); // { file, preview }
     const [showEmoji, setShowEmoji] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [isSending, setIsSending] = useState(false);
     const [uploadError, setUploadError] = useState('');
 
     const textareaRef = useRef(null);
     const fileInputRef = useRef(null);
+    // Синхронный флаг — защита от двойного Enter до того, как setState применится
+    const sendingRef = useRef(false);
 
     const send = useSendMessage(conversationId);
     const edit = useEditMessage(conversationId);
@@ -64,76 +74,126 @@ const MessageInput = ({
     };
 
     const handleSubmit = async () => {
+        // Синхронная защита от двойного клика/Enter
+        if (sendingRef.current || uploading) return;
+        if (send.isPending) return;
+
         const trimmed = text.trim();
         if (!trimmed && files.length === 0) return;
+
         setUploadError('');
 
-        // Режим редактирования
+        // ---------- Режим редактирования ----------
         if (editingMessage) {
+            sendingRef.current = true;
+            setIsSending(true);
+            const content = trimmed;
+
             edit.mutate(
-                { messageId: editingMessage.id, content: trimmed },
+                { messageId: editingMessage.id, content },
                 {
                     onSuccess: () => {
                         setText('');
                         onCancelEdit();
+                    },
+                    onSettled: () => {
+                        sendingRef.current = false;
+                        setIsSending(false);
                     },
                 }
             );
             return;
         }
 
+        // ---------- Обычная отправка ----------
+        // Забираем снимок состояния и СРАЗУ очищаем поля,
+        // чтобы повторный Enter не отправил дубль.
+        const textToSend = trimmed;
+        const filesToSend = files;
+
+        sendingRef.current = true;
+        setIsSending(true);
+        setText('');
+        setFiles([]);
+
         let attachmentIds = [];
 
-        // Загружаем файлы
-        if (files.length) {
-            setUploading(true);
-            try {
-                const res = await uploadFiles(
-                    conversationId,
-                    files.map((f) => f.file)
-                );
-                attachmentIds = res.data.map((a) => a.id);
-            } catch (err) {
-                setUploadError(
-                    err.response?.data?.error || 'Ошибка загрузки файлов'
-                );
-                setUploading(false);
-                return;
-            } finally {
-                setUploading(false);
+        try {
+            // Загрузка файлов
+            if (filesToSend.length) {
+                setUploading(true);
+                try {
+                    const res = await uploadFiles(
+                        conversationId,
+                        filesToSend.map((f) => f.file)
+                    );
+                    attachmentIds = res.data.map((a) => a.id);
+                } catch (err) {
+                    setUploadError(
+                        err.response?.data?.error || 'Ошибка загрузки файлов'
+                    );
+                    // Возвращаем контент в поле, чтобы не потерять
+                    setText(textToSend);
+                    setFiles(filesToSend);
+                    return;
+                } finally {
+                    setUploading(false);
+                }
             }
+
+            const contentType = filesToSend.some((f) =>
+                f.file.type.startsWith('image/')
+            )
+                ? 'image'
+                : filesToSend.length
+                    ? 'file'
+                    : 'text';
+
+            await new Promise((resolve) => {
+                send.mutate(
+                    {
+                        content: textToSend || null,
+                        content_type: contentType,
+                        reply_to_id: replyTo?.id || null,
+                        attachment_ids: attachmentIds,
+                    },
+                    {
+                        onSuccess: () => {
+                            filesToSend.forEach(
+                                (f) => f.preview && URL.revokeObjectURL(f.preview)
+                            );
+                            onCancelReply?.();
+                            textareaRef.current?.focus();
+                            resolve();
+                        },
+                        onError: (err) => {
+                            // Возвращаем текст и файлы в поле
+                            setUploadError(
+                                err?.response?.data?.error ||
+                                'Не удалось отправить сообщение'
+                            );
+                            setText(textToSend);
+                            setFiles(filesToSend);
+                            resolve();
+                        },
+                    }
+                );
+            });
+        } finally {
+            sendingRef.current = false;
+            setIsSending(false);
+            // Возвращаем фокус в поле ввода
+            requestAnimationFrame(() => {
+                textareaRef.current?.focus();
+            });
         }
-
-        const contentType = files.some((f) =>
-            f.file.type.startsWith('image/')
-        )
-            ? 'image'
-            : files.length
-                ? 'file'
-                : 'text';
-
-        send.mutate(
-            {
-                content: trimmed || null,
-                content_type: contentType,
-                reply_to_id: replyTo?.id || null,
-                attachment_ids: attachmentIds,
-            },
-            {
-                onSuccess: () => {
-                    setText('');
-                    files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
-                    setFiles([]);
-                    onCancelReply?.();
-                    textareaRef.current?.focus();
-                },
-            }
-        );
     };
 
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            // Дополнительная защита — если уже идёт отправка, ничего не делаем
+            if (sendingRef.current || uploading || send.isPending) return;
             handleSubmit();
         }
         if (e.key === 'Escape') {
@@ -148,6 +208,7 @@ const MessageInput = ({
     };
 
     const hasContent = text.trim() || files.length > 0;
+    const busy = isSending || uploading || send.isPending;
 
     return (
         <div className="border-t border-slate-200 bg-white flex-shrink-0">
@@ -167,6 +228,7 @@ const MessageInput = ({
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onCancelReply}
                         className="h-6 w-6 rounded hover:bg-slate-200 flex items-center justify-center"
                     >
@@ -187,6 +249,7 @@ const MessageInput = ({
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onCancelEdit}
                         className="h-6 w-6 rounded hover:bg-amber-100 flex items-center justify-center"
                     >
@@ -201,7 +264,8 @@ const MessageInput = ({
                     {files.map((f, idx) => (
                         <div
                             key={idx}
-                            className="relative group/file bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex items-center gap-2 max-w-[200px]"
+                            className="relative group/file bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex items-center gap-2 w-[200px] min-w-0"
+                            title={f.file.name}
                         >
                             {f.preview ? (
                                 <img
@@ -223,6 +287,7 @@ const MessageInput = ({
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => removeFile(idx)}
                                 className="h-5 w-5 rounded-full bg-slate-300 hover:bg-red-500 text-white flex items-center justify-center flex-shrink-0"
                             >
@@ -258,7 +323,7 @@ const MessageInput = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || !!editingMessage}
+                    disabled={busy || !!editingMessage}
                     className="h-9 w-9 p-0 flex-shrink-0"
                     title="Прикрепить файлы"
                 >
@@ -272,6 +337,7 @@ const MessageInput = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowEmoji((v) => !v)}
+                        disabled={busy}
                         className="h-9 w-9 p-0"
                         title="Смайлики"
                     >
@@ -300,10 +366,10 @@ const MessageInput = ({
                 <Button
                     type="button"
                     onClick={handleSubmit}
-                    disabled={!hasContent || send.isPending || uploading}
+                    disabled={!hasContent || busy}
                     className="h-9 w-9 p-0 flex-shrink-0 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 rounded-lg"
                 >
-                    {uploading || send.isPending ? (
+                    {busy ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                         <Send className="h-4 w-4" />

@@ -1,34 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/api/client';
 
+// ============================================================
+// Храним blob-URL в кеше React Query.
+// Ключ — attachmentId + тип (preview/download).
+// Один и тот же файл грузится ОДИН раз за сессию.
+// ============================================================
+
+/**
+ * Грузит бинарник и возвращает blob-url.
+ * Кешируется через React Query: повторные вызовы с тем же
+ * attachmentId не делают запрос.
+ */
 export const useAttachmentBlob = (attachmentId, kind = 'download') => {
-    const [url, setUrl] = useState(null);
+    const { data } = useQuery({
+        queryKey: ['attachment-blob', attachmentId, kind],
+        queryFn: async () => {
+            const res = await apiClient.get(
+                `/chat/attachments/${attachmentId}/${kind}`,
+                { responseType: 'blob' }
+            );
+            // Blob-url остаётся в памяти, пока открыта вкладка.
+            // Утечки нет — GC заберёт при перезагрузке страницы.
+            return URL.createObjectURL(res.data);
+        },
+        enabled: !!attachmentId,
+        staleTime: Infinity,   // данные не меняются — держим вечно
+        gcTime: Infinity,      // не удаляем из кеша (React Query v5)
+        // В React Query v4 было cacheTime вместо gcTime
+        // Если у тебя v4 — замени gcTime на cacheTime
+        retry: 1,
+    });
 
-    useEffect(() => {
-        if (!attachmentId) return;
-        let objectUrl = null;
-        let cancelled = false;
-
-        apiClient
-            .get(`/chat/attachments/${attachmentId}/${kind}`, {
-                responseType: 'blob',
-            })
-            .then((res) => {
-                if (cancelled) return;
-                objectUrl = URL.createObjectURL(res.data);
-                setUrl(objectUrl);
-            })
-            .catch(() => setUrl(null));
-
-        return () => {
-            cancelled = true;
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
-        };
-    }, [attachmentId, kind]);
-
-    return url;
+    return data || null;
 };
 
+// ============================================================
+// Скачивание (не кешируется — разовое действие)
+// ============================================================
 export const downloadAttachment = async (attachmentId, filename) => {
     const res = await apiClient.get(
         `/chat/attachments/${attachmentId}/download`,
@@ -44,6 +53,9 @@ export const downloadAttachment = async (attachmentId, filename) => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
+// ============================================================
+// Парсинг attachment-id из разных форм
+// ============================================================
 export const parseAttachmentId = (value) => {
     if (!value || typeof value !== 'string') return null;
     if (value.startsWith('http://') || value.startsWith('https://')) return null;
@@ -53,6 +65,9 @@ export const parseAttachmentId = (value) => {
     return null;
 };
 
+// ============================================================
+// Иконка по mime/расширению
+// ============================================================
 export const getFileIcon = (mimeType = '', originalName = '') => {
     const ext = (originalName.split('.').pop() || '').toLowerCase();
     if (mimeType.startsWith('image/')) return 'image';
@@ -80,6 +95,9 @@ export const getFileIcon = (mimeType = '', originalName = '') => {
     return 'file';
 };
 
+// ============================================================
+// Форматирование размера
+// ============================================================
 export const formatFileSize = (bytes) => {
     if (!bytes || bytes < 0) return '0 Б';
     if (bytes < 1024) return `${bytes} Б`;

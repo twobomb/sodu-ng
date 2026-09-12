@@ -3,13 +3,25 @@ import { useChatProfile, useUpdateChatProfile } from '../../hooks/useChat';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User as UserIcon, Camera, Check, AlertTriangle,Volume2, VolumeX  } from 'lucide-react';
+import { Loader2, User as UserIcon,MessageCircle, Camera, Check, AlertTriangle,Volume2, VolumeX  } from 'lucide-react';
 import { uploadChatAvatar } from '../../api/chat';
 import { getConversations } from '../../api/chat';
 import { useAuth } from '../../context/AuthContext';
 import AvatarView from './AvatarView';
+import {
+    isFloatingButtonEnabled,
+    setFloatingButtonEnabled,
+} from '../../lib/chatUiPrefs';
+
 import { isSoundEnabled, setSoundEnabled, playNotificationSound } from '../../lib/notificationSound';
 const ChatSettings = () => {
+    const [floatingButton, setFloatingButton] = useState(isFloatingButtonEnabled());
+
+    const handleFloatingToggle = () => {
+        const next = !floatingButton;
+        setFloatingButton(next);
+        setFloatingButtonEnabled(next);
+    };
     const { user } = useAuth();
     const [soundOn, setSoundOn] = useState(isSoundEnabled());
 
@@ -173,6 +185,42 @@ const ChatSettings = () => {
                     {success}
                 </div>
             )}
+            {/* Плавающая кнопка чата */}
+            <div className="rounded-lg border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-1">
+                        <MessageCircle
+                            className={`h-4 w-4 flex-shrink-0 ${
+                                floatingButton ? 'text-orange-500' : 'text-slate-400'
+                            }`}
+                        />
+                        <div>
+                            <div className="text-sm font-medium text-slate-800">
+                                Кнопка чата в углу
+                            </div>
+                            <div className="text-xs text-slate-500">
+                                Плавающая кнопка в правом нижнем углу. Кнопка в верхнем меню
+                                остаётся всегда.
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleFloatingToggle}
+                        role="switch"
+                        aria-checked={floatingButton}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                            floatingButton ? 'bg-orange-500' : 'bg-slate-300'
+                        }`}
+                    >
+      <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              floatingButton ? 'translate-x-6' : 'translate-x-1'
+          }`}
+      />
+                    </button>
+                </div>
+            </div>
             {/* Звук уведомлений */}
             <div className="rounded-lg border border-slate-200 p-3">
                 <div className="flex items-center justify-between gap-3">

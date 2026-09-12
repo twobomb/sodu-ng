@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { login as apiLogin, logout as apiLogout, getCurrentUser } from '../api/auth';
+import { useQueryClient } from '@tanstack/react-query';
 
 const AuthContext = createContext();
+
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -37,6 +40,15 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       // ignore
     }
+    // Освобождаем все blob-url
+    queryClient.getQueryCache().findAll({ queryKey: ['attachment-blob'] })
+        .forEach((q) => {
+          const url = q.state.data;
+          if (typeof url === 'string' && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        });
+
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
