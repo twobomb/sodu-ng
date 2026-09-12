@@ -23,6 +23,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import CreateChannelDialog from './CreateChannelDialog';
 import AvatarView from './AvatarView';
+import DisplayName from './DisplayName';
 
 const ChatList = ({ filter = 'all', onSelect }) => {
     const { has } = usePermissions();
@@ -33,7 +34,6 @@ const ChatList = ({ filter = 'all', onSelect }) => {
         filter === 'channels' ? 'channels' : filter === 'chats' ? 'chats' : 'all';
 
     const { data: conversations, isLoading } = useConversations(serverFilter);
-    // Пользователей грузим только в табе "Чаты" и "Все чаты"
     const showUsers = filter === 'chats' || filter === 'all';
     const { data: usersData, isLoading: usersLoading } = useChattableUsers(
         showUsers ? search : ''
@@ -48,8 +48,6 @@ const ChatList = ({ filter = 'all', onSelect }) => {
         return list.filter((c) => (c.name || '').toLowerCase().includes(q));
     }, [conversations, search]);
 
-    // Пользователей фильтруем: исключаем тех, с кем уже есть direct-чат
-    // (они уже в списке conversations)
     const usersToStartChat = useMemo(() => {
         if (!showUsers || !usersData) return [];
         return usersData.filter((u) => !u.direct_conversation_id);
@@ -173,6 +171,7 @@ const ChatList = ({ filter = 'all', onSelect }) => {
 const ConversationRow = ({ conv, onClick, onPin, canPin }) => {
     const isChannel = conv.type === 'channel';
     const isSaved = conv.type === 'saved';
+    const isDirect = conv.type === 'direct';
     const Icon = isSaved ? Bookmark : isChannel ? Hash : MessageSquare;
 
     const lastMsgPreview = (() => {
@@ -224,12 +223,27 @@ const ConversationRow = ({ conv, onClick, onPin, canPin }) => {
 
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                    {conv.is_pinned && <Pin className="h-3 w-3 text-orange-500 flex-shrink-0" />}
-                    <span className="font-medium text-sm text-slate-800 truncate">
-            {conv.name || 'Без названия'}
-          </span>
+                    {conv.is_pinned && (
+                        <Pin className="h-3 w-3 text-orange-500 flex-shrink-0" />
+                    )}
+                    {/* Для direct-чата выделяем имя собеседника, если он developer */}
+                    {isDirect ? (
+                        <span className="font-medium text-sm text-slate-800 truncate">
+              <DisplayName
+                  name={conv.name || 'Без названия'}
+                  role={conv.peer_user_role}
+                  size="md"
+              />
+            </span>
+                    ) : (
+                        <span className="font-medium text-sm text-slate-800 truncate">
+              {conv.name || 'Без названия'}
+            </span>
+                    )}
                     {conv.is_readonly && (
-                        <span className="text-[10px] text-slate-400">(только чтение)</span>
+                        <span className="text-[10px] text-slate-400">
+              (только чтение)
+            </span>
                     )}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
@@ -292,7 +306,7 @@ const UserRow = ({ user, onClick, loading }) => {
 
             <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm text-slate-800 truncate">
-                    {name}
+                    <DisplayName name={name} role={user.user_role} size="md" />
                 </div>
                 <div className="text-xs text-slate-400 truncate">
                     @{user.username}

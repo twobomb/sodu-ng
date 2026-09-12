@@ -423,7 +423,9 @@ const getMembers = async (conversationId) => {
         `
             SELECT
                 cm.user_id, cm.role, cm.joined_at, cm.last_read_at,
-                u.username, p.display_name, p.avatar_url
+                u.username,
+                u.role AS user_role,
+                p.display_name, p.avatar_url
             FROM conversation_members cm
                      JOIN users u ON u.id = cm.user_id
                      LEFT JOIN user_chat_profiles p ON p.user_id = cm.user_id

@@ -71,6 +71,7 @@ const getReaders = async (messageId) => {
         `
     SELECT
       cm.user_id, u.username,
+      u.role AS user_role,
       p.display_name, p.avatar_url,
       CASE
         WHEN mr.last_read_at IS NOT NULL AND mr.last_read_at >= $2 THEN true

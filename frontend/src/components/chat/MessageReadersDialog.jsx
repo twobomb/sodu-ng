@@ -7,6 +7,7 @@ import {
 import { Loader2, Check, Clock } from 'lucide-react';
 import { useMessageReaders } from '../../hooks/useChat';
 import AvatarView from './AvatarView';
+import DisplayName from './DisplayName';
 
 const MessageReadersDialog = ({ open, onOpenChange, messageId }) => {
     const { data: readers, isLoading } = useMessageReaders(messageId, open);
@@ -29,45 +30,56 @@ const MessageReadersDialog = ({ open, onOpenChange, messageId }) => {
                         </div>
                     ) : (
                         <div className="divide-y divide-slate-100">
-                            {readers.map((r) => (
-                                <div
-                                    key={r.user_id}
-                                    className="flex items-center gap-3 py-2.5"
-                                >
-                                    <AvatarView
-                                        avatar={r.avatar_url}
-                                        name={r.display_name || r.username}
-                                        size={36}
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium text-slate-800 truncate">
-                                            {r.display_name || r.username}
-                                        </div>
-                                        {r.display_name && (
-                                            <div className="text-xs text-slate-400 truncate">
-                                                @{r.username}
-                                            </div>
-                                        )}
-                                    </div>
+                            {readers.map((r) => {
+                                // Показываем @username только если есть отдельное display_name,
+                                // отличное от username — иначе получается дубль
+                                const hasSeparateName =
+                                    r.display_name && r.display_name !== r.username;
+
+                                return (
                                     <div
-                                        className={`flex items-center gap-1 text-xs ${
-                                            r.has_read ? 'text-green-600' : 'text-slate-400'
-                                        }`}
+                                        key={r.user_id}
+                                        className="flex items-center gap-3 py-2.5"
                                     >
-                                        {r.has_read ? (
-                                            <>
-                                                <Check className="h-3.5 w-3.5" />
-                                                Прочитано
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Clock className="h-3.5 w-3.5" />
-                                                Не прочитано
-                                            </>
-                                        )}
+                                        <AvatarView
+                                            avatar={r.avatar_url}
+                                            name={r.display_name || r.username}
+                                            size={36}
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium text-slate-800 truncate">
+                                                <DisplayName
+                                                    name={r.display_name || r.username}
+                                                    role={r.user_role}
+                                                    size="md"
+                                                />
+                                            </div>
+                                            {hasSeparateName && (
+                                                <div className="text-xs text-slate-400 truncate">
+                                                    @{r.username}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div
+                                            className={`flex items-center gap-1 text-xs ${
+                                                r.has_read ? 'text-green-600' : 'text-slate-400'
+                                            }`}
+                                        >
+                                            {r.has_read ? (
+                                                <>
+                                                    <Check className="h-3.5 w-3.5" />
+                                                    Прочитано
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Clock className="h-3.5 w-3.5" />
+                                                    Не прочитано
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

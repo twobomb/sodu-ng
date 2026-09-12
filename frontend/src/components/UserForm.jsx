@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useRoles } from '../hooks/useRoles';
+import { useAuth } from '../context/AuthContext';
 
 import {
     Dialog,
@@ -47,7 +48,9 @@ const UserForm = ({
         departmentIds: [],
         is_blocked: false,
     });
-
+    const { user: currentUser } = useAuth();   // ← вот эта строка
+    const isSelf = initialData?.id === currentUser?.id;
+    const isSelfDeveloper = isSelf && initialData?.role === 'developer';
     const { data: rolesData } = useRoles();
     const roles = (rolesData?.data || []).filter((r) => r.code !== 'developer');
 
@@ -244,7 +247,10 @@ const UserForm = ({
                             <Label htmlFor="role">Роль</Label>
                             <Select
                                 value={formData.role}
-                                onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value }))}
+                                onValueChange={(value) =>
+                                    setFormData((prev) => ({ ...prev, role: value }))
+                                }
+                                disabled={isSelfDeveloper}
                             >
                                 <SelectTrigger className="rounded-lg">
                                     <SelectValue placeholder="Выберите роль" />
@@ -257,6 +263,11 @@ const UserForm = ({
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {isSelfDeveloper && (
+                                <p className="text-xs text-amber-600">
+                                    Вы не можете изменить свою роль «Разработчик»
+                                </p>
+                            )}
                         </div>
 
                         {/* can_view_all */}

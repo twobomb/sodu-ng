@@ -27,7 +27,7 @@ import {
 } from '../../hooks/useChat';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
-
+import DisplayName from './DisplayName';
 const ChatMembersPanel = ({ open, onOpenChange, conversationId }) => {
     const { user } = useAuth();
     const { has } = usePermissions();
@@ -188,9 +188,19 @@ const ChatMembersPanel = ({ open, onOpenChange, conversationId }) => {
 
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium text-slate-800 truncate">
-                              {m.display_name || m.username}
-                            </span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <DisplayName
+                                                                name={m.display_name || m.username}
+                                                                role={m.user_role}
+                                                                size="md"
+                                                            />
+                                                            {isMe && (
+                                                                <span className="text-[10px] text-slate-400">(вы)</span>
+                                                            )}
+                                                            {memberIsAdmin && (
+                                                                <Crown className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                                                            )}
+                                                        </div>
                                                         {isMe && (
                                                             <span className="text-[10px] text-slate-400">
                                 (вы)

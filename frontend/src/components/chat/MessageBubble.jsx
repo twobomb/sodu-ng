@@ -7,6 +7,7 @@ import {
     File as FileIcon,
     Image as ImageIcon,
     Download,
+    Loader2,
     Reply,
     Edit3,
     Trash2,
@@ -15,6 +16,7 @@ import {
     MoreVertical,
 } from 'lucide-react';
 import MessageReadersDialog from './MessageReadersDialog';
+import DisplayName from './DisplayName';
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -217,8 +219,12 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
                     >
                         {/* Автор */}
                         {!isOwn && isGroupOrChannel && (
-                            <div className="text-xs font-semibold text-orange-600 mb-0.5">
-                                {displayName}
+                            <div className="mb-0.5">
+                                <DisplayName
+                                    name={displayName}
+                                    role={message.user_role}
+                                    size="md"
+                                />
                             </div>
                         )}
 
@@ -232,9 +238,16 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
                                 }`}
                             >
                                 <div className="font-medium">
-                                    {message.reply_display_name ||
-                                        message.reply_username ||
-                                        'Удалено'}
+                                    <DisplayName
+                                        name={
+                                            message.reply_display_name ||
+                                            message.reply_username ||
+                                            'Удалено'
+                                        }
+                                        role={message.reply_user_role}
+                                        isOwn={isOwn}
+                                        size="sm"
+                                    />
                                 </div>
                                 <div className="truncate max-w-[200px]">
                                     {message.reply_deleted_at
@@ -401,22 +414,32 @@ const FileRow = ({ attachment, isOwn }) => {
     const kind = getFileIcon(attachment.mime_type, attachment.original_name);
     const Icon = ICONS[kind] || FileIcon;
     const colorClass = ICON_COLORS[kind] || ICON_COLORS.file;
+    const [downloading, setDownloading] = useState(false);
 
-    const handleDownload = (e) => {
+    const handleDownload = async (e) => {
         e.stopPropagation();
-        downloadAttachment(attachment.id, attachment.original_name);
+        if (downloading) return;
+        setDownloading(true);
+        try {
+            await downloadAttachment(attachment.id, attachment.original_name);
+        } catch (err) {
+            alert(err.message || 'Не удалось скачать файл');
+        } finally {
+            setDownloading(false);
+        }
     };
 
     return (
         <button
             type="button"
             onClick={handleDownload}
-            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left min-w-0 max-w-[250px] ${
+            disabled={downloading}
+            title={attachment.original_name}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left min-w-0 max-w-[280px] ${
                 isOwn
                     ? 'bg-white/15 hover:bg-white/25'
                     : 'bg-slate-100 hover:bg-slate-200'
-            }`}
-            title={attachment.original_name}
+            } ${downloading ? 'opacity-60' : ''}`}
         >
             <div
                 className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}
@@ -435,13 +458,20 @@ const FileRow = ({ attachment, isOwn }) => {
                     {formatFileSize(attachment.size)}
                 </div>
             </div>
-            <Download
-                className={`h-3.5 w-3.5 flex-shrink-0 ${
-                    isOwn ? 'text-white/70' : 'text-slate-400'
-                }`}
-            />
+            {downloading ? (
+                <Loader2
+                    className={`h-3.5 w-3.5 flex-shrink-0 animate-spin ${
+                        isOwn ? 'text-white/70' : 'text-slate-400'
+                    }`}
+                />
+            ) : (
+                <Download
+                    className={`h-3.5 w-3.5 flex-shrink-0 ${
+                        isOwn ? 'text-white/70' : 'text-slate-400'
+                    }`}
+                />
+            )}
         </button>
     );
 };
-
 export default MessageBubble;

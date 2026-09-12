@@ -39,20 +39,48 @@ export const useAttachmentBlob = (attachmentId, kind = 'download') => {
 // Скачивание (не кешируется — разовое действие)
 // ============================================================
 export const downloadAttachment = async (attachmentId, filename) => {
-    const res = await apiClient.get(
-        `/chat/attachments/${attachmentId}/download`,
-        { responseType: 'blob' }
-    );
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename || 'file';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
+    try {
+        const res = await apiClient.get(
+            `/chat/attachments/${attachmentId}/download`,
+            { responseType: 'blob' }
+        );
+        const url = URL.createObjectURL(res.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'file';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return { ok: true };
+    } catch (err) {
+        // Пытаемся прочитать сообщение об ошибке из blob-ответа
+        let message = 'Не удалось скачать файл';
+        const status = err.response?.status;
+        const data = err.response?.data;
 
+        if (data instanceof Blob) {
+            try {
+                const text = await data.text();
+                const json = JSON.parse(text);
+                if (json?.error) message = json.error;
+            } catch (_) {
+                // ignore
+            }
+        } else if (data?.error) {
+            message = data.error;
+        }
+
+        if (status === 410) {
+            // Файл удалён с сервера
+            throw new Error(message || 'Файл был удалён с сервера');
+        }
+        if (status === 403) {
+            throw new Error('Нет доступа к файлу');
+        }
+        throw new Error(message);
+    }
+};
 // ============================================================
 // Парсинг attachment-id из разных форм
 // ============================================================

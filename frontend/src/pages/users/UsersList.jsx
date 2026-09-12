@@ -44,7 +44,7 @@ import {
 import UserForm from '../../components/UserForm';
 
 import { useRoles } from '../../hooks/useRoles';
-
+import { useAuth } from '../../context/AuthContext';
 
 
 
@@ -58,6 +58,7 @@ const UsersList = () => {
     const blockUser = useBlockUser();
     const unblockUser = useUnblockUser();
 
+    const { user: currentUser } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [selectedUser, setSelectedUser] = useState(null);
@@ -281,6 +282,12 @@ const UsersList = () => {
                                         )}
                                     </TableCell>
                                     <TableCell>
+                                        {user.role === 'developer' && (
+                                            <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                                                <Lock className="h-3 w-3 mr-1" />
+                                                Защищён
+                                            </Badge>
+                                        )}
                                         {user.is_blocked ? (
                                             <Badge className="bg-red-100 text-red-700 border-red-200">
                                                 <Lock className="h-3 w-3 mr-1" />
@@ -294,47 +301,117 @@ const UsersList = () => {
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {has('users.update') && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleEdit(user)}
-                                            className="h-8 w-8 p-0"
-                                            title="Редактировать"
-                                        >
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                            )}
-                                        {has('users.block') && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleBlockClick(user)}
-                                            className={`h-8 w-8 p-0 ${
-                                                user.is_blocked
-                                                    ? 'text-green-600 hover:text-green-700'
-                                                    : 'text-orange-500 hover:text-orange-700'
-                                            }`}
-                                            title={user.is_blocked ? 'Разблокировать' : 'Заблокировать'}
-                                        >
-                                            {user.is_blocked ? (
-                                                <CheckCircle2 className="h-4 w-4" />
-                                            ) : (
-                                                <Ban className="h-4 w-4" />
-                                            )}
-                                        </Button>
-                                            )}
-                                        {has('users.delete') && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleDelete(user.id)}
-                                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                            title="Удалить"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                            )}
+                                        {(() => {
+                                            const isTargetDeveloper = user.role === 'developer';
+                                            const isSelf = user.id === currentUser?.id;
+                                            const protectedDev = isTargetDeveloper && !isSelf;
+
+                                            // Редактировать
+                                            const canEdit = has('users.update') && !protectedDev;
+                                            // Блокировать
+                                            const canBlock = has('users.block') && !protectedDev && !isSelf;
+                                            // Удалять
+                                            const canDelete =
+                                                has('users.delete') && !isTargetDeveloper && !isSelf;
+
+                                            return (
+                                                <>
+                                                    {canEdit ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleEdit(user)}
+                                                            className="h-8 w-8 p-0"
+                                                            title="Редактировать"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            disabled
+                                                            className="h-8 w-8 p-0 opacity-30 cursor-not-allowed"
+                                                            title={
+                                                                protectedDev
+                                                                    ? 'Разработчика может изменить только он сам'
+                                                                    : 'Нет прав'
+                                                            }
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+
+                                                    {canBlock ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleBlockClick(user)}
+                                                            className={`h-8 w-8 p-0 ${
+                                                                user.is_blocked
+                                                                    ? 'text-green-600 hover:text-green-700'
+                                                                    : 'text-orange-500 hover:text-orange-700'
+                                                            }`}
+                                                            title={user.is_blocked ? 'Разблокировать' : 'Заблокировать'}
+                                                        >
+                                                            {user.is_blocked ? (
+                                                                <CheckCircle2 className="h-4 w-4" />
+                                                            ) : (
+                                                                <Ban className="h-4 w-4" />
+                                                            )}
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            disabled
+                                                            className="h-8 w-8 p-0 opacity-30 cursor-not-allowed"
+                                                            title={
+                                                                isTargetDeveloper
+                                                                    ? 'Разработчика нельзя заблокировать'
+                                                                    : isSelf
+                                                                        ? 'Нельзя заблокировать самого себя'
+                                                                        : 'Нет прав'
+                                                            }
+                                                        >
+                                                            {user.is_blocked ? (
+                                                                <CheckCircle2 className="h-4 w-4" />
+                                                            ) : (
+                                                                <Ban className="h-4 w-4" />
+                                                            )}
+                                                        </Button>
+                                                    )}
+
+                                                    {canDelete ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(user.id)}
+                                                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                                                            title="Удалить"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            disabled
+                                                            className="h-8 w-8 p-0 opacity-30 cursor-not-allowed"
+                                                            title={
+                                                                isTargetDeveloper
+                                                                    ? 'Разработчика нельзя удалить'
+                                                                    : isSelf
+                                                                        ? 'Нельзя удалить самого себя'
+                                                                        : 'Нет прав'
+                                                            }
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </TableCell>
                                 </TableRow>
                             ))}

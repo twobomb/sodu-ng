@@ -81,7 +81,6 @@ const uploadFiles = asyncHandler(async (req, res) => {
         res.status(500).json({ error: err.message || 'Ошибка загрузки' });
     }
 });
-
 // ============================================================
 // GET /api/chat/attachments/:id/download
 // ============================================================
@@ -102,14 +101,21 @@ const downloadAttachment = asyncHandler(async (req, res) => {
 
         const filePath = attachmentService.getFilePath(attachment);
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'Файл не найден на диске' });
+            // Файл удалён с диска вручную — не 500, а понятная ошибка
+            logger.warn(
+                `Файл отсутствует на диске: ${attachment.id} (${attachment.original_name})`
+            );
+            return res.status(410).json({
+                error: 'Файл был удалён с сервера',
+                code: 'FILE_MISSING',
+            });
         }
 
-        // inline для картинок, attachment для остальных — но фронт сам решает,
-        // через атрибут download у <a>. Отдаём как attachment для безопасности.
-        res.setHeader('Content-Type', attachment.mime_type || 'application/octet-stream');
+        res.setHeader(
+            'Content-Type',
+            attachment.mime_type || 'application/octet-stream'
+        );
         res.setHeader('Content-Length', attachment.size);
-        // RFC 5987 — безопасная передача unicode имени
         const safeName = encodeURIComponent(attachment.original_name);
         res.setHeader(
             'Content-Disposition',
@@ -126,10 +132,8 @@ const downloadAttachment = asyncHandler(async (req, res) => {
         res.status(500).json({ error: 'Ошибка скачивания' });
     }
 });
-
 // ============================================================
 // GET /api/chat/attachments/:id/preview
-// Отдаёт превью (jpg) для картинок, оригинал для остальных или 404
 // ============================================================
 const previewAttachment = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -146,6 +150,7 @@ const previewAttachment = asyncHandler(async (req, res) => {
             return res.status(404).json({ error: 'Файл не найден' });
         }
 
+        // Пытаемся отдать превью (jpg-миниатюра)
         const thumbPath = await attachmentService.getThumbnailPath(attachment);
         if (thumbPath && fs.existsSync(thumbPath)) {
             res.setHeader('Content-Type', 'image/jpeg');
@@ -153,7 +158,7 @@ const previewAttachment = asyncHandler(async (req, res) => {
             return fs.createReadStream(thumbPath).pipe(res);
         }
 
-        // Нет превью — отдаём оригинал, если это картинка
+        // Оригинал, если это картинка
         if (attachmentService.IMAGE_MIMES.has(attachment.mime_type)) {
             const originalPath = attachmentService.getFilePath(attachment);
             if (fs.existsSync(originalPath)) {
@@ -163,7 +168,14 @@ const previewAttachment = asyncHandler(async (req, res) => {
             }
         }
 
-        res.status(404).json({ error: 'Превью недоступно' });
+        // Ни превью, ни оригинала нет
+        logger.warn(
+            `Превью недоступно (файл отсутствует): ${attachment.id} (${attachment.original_name})`
+        );
+        return res.status(410).json({
+            error: 'Файл был удалён с сервера',
+            code: 'FILE_MISSING',
+        });
     } catch (err) {
         logger.error('Ошибка получения превью: ' + err.message, {
             stack: err.stack,
