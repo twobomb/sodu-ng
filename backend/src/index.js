@@ -20,7 +20,7 @@ const messageRoutes = require('./routes/messageRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const unitTypeRoutes = require('./routes/unitTypeRoutes');
 const unitStatusRoutes = require('./routes/unitStatusRoutes');
-
+const onlineService = require('./services/onlineService');
 
 const { verifyToken } = require('./utils/jwt');
 const { touchSession } = require('./services/authService');
@@ -64,11 +64,8 @@ app.get('/api/health', async (req, res, next) => {
 });
 
 // ============================================================
-// Socket.IO
+// Socket.IO: авторизация
 // ============================================================
-// Реестр активных socket-соединений: userId -> Set<socketId>
-const onlineSockets = new Map();
-
 io.use(async (socket, next) => {
     try {
         const token = socket.handshake.auth.token;
@@ -87,13 +84,15 @@ io.use(async (socket, next) => {
 
         const userResult = await pool.query(
             `SELECT u.id, u.username, u.role, u.can_view_all,
-                    r.permissions, r.name AS role_name
-             FROM users u
-                      LEFT JOIN roles r ON u.role = r.code
-             WHERE u.id = $1`,
+              r.permissions, r.name AS role_name
+       FROM users u
+       LEFT JOIN roles r ON u.role = r.code
+       WHERE u.id = $1`,
             [session.rows[0].user_id]
         );
-        if (!userResult.rows.length) return next(new Error('Пользователь не найден'));
+        if (!userResult.rows.length) {
+            return next(new Error('Пользователь не найден'));
+        }
 
         socket.user = userResult.rows[0];
         socket.token = token;
@@ -104,29 +103,27 @@ io.use(async (socket, next) => {
     }
 });
 
+// ============================================================
+// Socket.IO: подключение
+// ============================================================
 io.on('connection', async (socket) => {
     const uid = socket.user.id;
     logger.info(`Socket подключён: ${socket.user.username} (${socket.id})`);
 
     // Регистрация онлайн
-    if (!onlineSockets.has(uid)) onlineSockets.set(uid, new Set());
-    onlineSockets.get(uid).add(socket.id);
+    onlineService.registerSocket(uid, socket.id);
 
     // Личная комната (для force_logout, session_replaced и т.п.)
     socket.join(`user:${uid}`);
 
-    // ============================================================
     // Bootstrap: общий канал + избранное + chat-профиль
-    // ============================================================
     try {
         await chatService.bootstrapUser(uid);
     } catch (err) {
         logger.error('Ошибка bootstrapUser при подключении сокета: ' + err.message);
     }
 
-    // ============================================================
     // Автоматически подписываем на все чаты пользователя
-    // ============================================================
     try {
         const memberRes = await pool.query(
             `SELECT conversation_id FROM conversation_members WHERE user_id = $1`,
@@ -168,18 +165,14 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // ============================================================
     // chat:leave — выйти из комнаты чата
-    // ============================================================
     socket.on('chat:leave', ({ conversationId }) => {
         if (conversationId) {
             socket.leave(`conversation:${conversationId}`);
         }
     });
 
-    // ============================================================
     // chat:typing — кто-то печатает
-    // ============================================================
     socket.on('chat:typing', ({ conversationId, isTyping }) => {
         if (!conversationId) return;
         socket.to(`conversation:${conversationId}`).emit('chat:typing', {
@@ -190,33 +183,31 @@ io.on('connection', async (socket) => {
         });
     });
 
-    // ============================================================
     // chat:read — пометить чат как прочитанный
-    // ============================================================
     socket.on('chat:read', async ({ conversationId, messageId }, ack) => {
         if (!conversationId) return ack?.({ ok: false });
 
         try {
             const member = await pool.query(
                 `SELECT 1 FROM conversation_members
-                 WHERE conversation_id = $1 AND user_id = $2`,
+         WHERE conversation_id = $1 AND user_id = $2`,
                 [conversationId, uid]
             );
             if (!member.rows.length) return ack?.({ ok: false });
 
             await pool.query(
                 `INSERT INTO message_reads (conversation_id, user_id, last_read_message_id, last_read_at)
-                 VALUES ($1, $2, $3, NOW())
-                     ON CONFLICT (conversation_id, user_id) DO UPDATE
-                                                                   SET last_read_message_id = COALESCE($3, message_reads.last_read_message_id),
-                                                                   last_read_at = NOW()`,
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (conversation_id, user_id) DO UPDATE
+         SET last_read_message_id = COALESCE($3, message_reads.last_read_message_id),
+             last_read_at = NOW()`,
                 [conversationId, uid, messageId || null]
             );
 
             await pool.query(
                 `UPDATE conversation_members
-                 SET last_read_at = NOW()
-                 WHERE conversation_id = $1 AND user_id = $2`,
+         SET last_read_at = NOW()
+         WHERE conversation_id = $1 AND user_id = $2`,
                 [conversationId, uid]
             );
 
@@ -240,21 +231,18 @@ io.on('connection', async (socket) => {
     socket.on('disconnect', async () => {
         logger.info(`Socket отключён: ${socket.user.username} (${socket.id})`);
 
-        const set = onlineSockets.get(uid);
-        if (set) {
-            set.delete(socket.id);
-            if (set.size === 0) {
-                onlineSockets.delete(uid);
-                try {
-                    await pool.query(
-                        `UPDATE sessions
-                         SET last_active_at = NOW() - INTERVAL '10 minutes'
-                         WHERE user_id = $1`,
-                        [uid]
-                    );
-                } catch (err) {
-                    logger.error('Ошибка обновления last_active_at: ' + err.message);
-                }
+        const noMoreSockets = onlineService.unregisterSocket(uid, socket.id);
+
+        if (noMoreSockets) {
+            try {
+                await pool.query(
+                    `UPDATE sessions
+           SET last_active_at = NOW() - INTERVAL '10 minutes'
+           WHERE user_id = $1`,
+                    [uid]
+                );
+            } catch (err) {
+                logger.error('Ошибка обновления last_active_at: ' + err.message);
             }
         }
 
@@ -263,30 +251,12 @@ io.on('connection', async (socket) => {
 });
 
 // ============================================================
-// broadcastOnlineUsers
+// broadcastOnlineUsers — на верхнем уровне, доступна всем
 // ============================================================
 async function broadcastOnlineUsers() {
     try {
-        const activeIds = Array.from(onlineSockets.keys());
-        if (activeIds.length === 0) {
-            io.emit('online_users', []);
-            return;
-        }
-
-        const result = await pool.query(
-            `SELECT
-                 u.id, u.username, u.role, r.name AS role_name,
-                 MAX(s.last_active_at) AS last_active_at
-             FROM users u
-                      LEFT JOIN roles r ON u.role = r.code
-                      LEFT JOIN sessions s ON s.user_id = u.id
-             WHERE u.id = ANY($1::uuid[])
-             GROUP BY u.id, u.username, u.role, r.name
-             ORDER BY MAX(s.last_active_at) DESC NULLS LAST`,
-            [activeIds]
-        );
-
-        io.emit('online_users', result.rows);
+        const users = await onlineService.getOnlineUsersWithDetails();
+        io.emit('online_users', users);
     } catch (err) {
         logger.error('Ошибка broadcastOnlineUsers: ' + err.message);
     }

@@ -1,32 +1,20 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { getOnlineUsers } from '../api/online';
-import { useEffect } from 'react';
-import { useSocket } from './useSocket';
 
-export const useOnlineUsers = () => {
-    const queryClient = useQueryClient();
-    const socket = useSocket();
-
-    const query = useQuery({
+/**
+ * Список онлайн-пользователей.
+ *  - REST-запрос каждые 30 сек — гарантия, что счётчик не залипнет.
+ *  - Socket-событие 'online_users' (в useSocket.js) мгновенно перезаписывает
+ *    кеш через queryClient.setQueryData — для реактивности.
+ *  - Никаких своих socket-подключений.
+ */
+export const useOnlineUsers = () =>
+    useQuery({
         queryKey: ['onlineUsers'],
-        queryFn: getOnlineUsers,
-        refetchInterval: 30000, // обновлять каждые 30 секунд на всякий случай
+        queryFn: () => getOnlineUsers().then((r) => r.data),
+        staleTime: 25 * 1000,
+        refetchInterval: 30 * 1000,
+        refetchOnMount: true,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
     });
-
-    // Подписка на обновления через Socket.IO
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleOnlineUsers = (users) => {
-            queryClient.setQueryData(['onlineUsers'], { data: users });
-        };
-
-        socket.on('online_users', handleOnlineUsers);
-
-        return () => {
-            socket.off('online_users', handleOnlineUsers);
-        };
-    }, [socket, queryClient]);
-
-    return query;
-};

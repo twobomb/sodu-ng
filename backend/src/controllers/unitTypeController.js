@@ -3,6 +3,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const { emitForceRefresh } = require('../utils/socketEvents');
 const Joi = require('joi');
+const pool = require('../db/pool');
+
+
 
 const createSchema = Joi.object({
     name: Joi.string().min(2).max(100).required(),
@@ -19,7 +22,19 @@ const updateSchema = Joi.object({
 // GET /api/unit-types
 const getAll = asyncHandler(async (req, res) => {
     try {
-        const types = await unitTypeService.getAll();
+        const user = req.user;
+
+        // Собираем id подразделений, доступных пользователю
+        let deptIds = null; // null = все
+        if (!user.can_view_all) {
+            const result = await pool.query(
+                'SELECT department_id FROM user_departments WHERE user_id = $1',
+                [user.id]
+            );
+            deptIds = result.rows.map((r) => r.department_id);
+        }
+
+        const types = await unitTypeService.getAll(deptIds);
         res.json(types);
     } catch (err) {
         logger.error('Ошибка получения типов техники: ' + err.message, {
@@ -29,7 +44,6 @@ const getAll = asyncHandler(async (req, res) => {
         res.status(500).json({ error: 'Ошибка получения типов' });
     }
 });
-
 // GET /api/unit-types/:id
 const getById = asyncHandler(async (req, res) => {
     try {

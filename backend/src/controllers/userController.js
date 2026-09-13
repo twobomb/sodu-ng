@@ -44,6 +44,16 @@ const PROTECT_MESSAGES = {
     developer_protected:
         'Пользователя с ролью «Разработчик» может изменять только он сам',
 };
+/**
+ * Проверяет, что роль с таким кодом существует в БД.
+ */
+const validateRoleExists = async (roleCode) => {
+    const res = await pool.query(
+        'SELECT code FROM roles WHERE code = $1',
+        [roleCode]
+    );
+    return res.rows.length > 0;
+};
 
 // ============================================================
 // СХЕМЫ ВАЛИДАЦИИ
@@ -51,9 +61,7 @@ const PROTECT_MESSAGES = {
 const createUserSchema = Joi.object({
     username: Joi.string().min(3).max(50).required(),
     password: Joi.string().min(6).required(),
-    role: Joi.string()
-        .valid('developer', 'admin', 'dispatcher', 'viewer')
-        .required(),
+    role: Joi.string().max(50).required(),
     can_view_all: Joi.boolean().default(false),
     departmentIds: Joi.array().items(Joi.string().uuid()).default([]),
 });
@@ -61,7 +69,7 @@ const createUserSchema = Joi.object({
 const updateUserSchema = Joi.object({
     username: Joi.string().min(3).max(50),
     password: Joi.string().min(6),
-    role: Joi.string().valid('developer', 'admin', 'dispatcher', 'viewer'),
+    role: Joi.string().max(50),
     can_view_all: Joi.boolean(),
     departmentIds: Joi.array().items(Joi.string().uuid()),
 });
@@ -114,6 +122,11 @@ const createUser = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: error.details[0].message });
     }
 
+        // Проверяем, что роль существует
+        const roleExists = await validateRoleExists(value.role);
+        if (!roleExists) {
+            return res.status(400).json({ error: 'Указанная роль не найдена' });
+        }
     if (value.role === 'developer') {
         return res.status(403).json({
             error: 'Роль «Разработчик» нельзя назначить через интерфейс',
@@ -168,7 +181,13 @@ const updateUser = asyncHandler(async (req, res) => {
             const status = check.reason === 'not_found' ? 404 : 403;
             return res.status(status).json({ error: PROTECT_MESSAGES[check.reason] });
         }
-
+    // Проверяем роль, если она меняется
+            if (value.role !== undefined) {
+                const roleExists = await validateRoleExists(value.role);
+                if (!roleExists) {
+                    return res.status(400).json({ error: 'Указанная роль не найдена' });
+                }
+            }
         // Нельзя назначить роль developer через API
         if (value.role === 'developer' && target.role !== 'developer') {
             return res.status(403).json({

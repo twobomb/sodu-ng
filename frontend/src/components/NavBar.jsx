@@ -12,12 +12,14 @@ import {
     Settings as SettingsIcon,
     MessageCircle,
     LayoutGrid,
+    Wifi,
     Palette,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '../hooks/usePermissions';
+import { useOnlineUsers } from '../hooks/useOnlineUsers';
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -33,6 +35,9 @@ const NavBar = () => {
     const navigate = useNavigate();
     const { has } = usePermissions();
     const unread = useChatUnreadCounts();
+    const { data: onlineUsers = [] } = useOnlineUsers();
+    const onlineCount = Array.isArray(onlineUsers) ? onlineUsers.length : 0;
+
 
     const isActive = (path) =>
         location.pathname === path || location.pathname.startsWith(path + '/');
@@ -196,6 +201,17 @@ const NavBar = () => {
                         )}
                     </div>
 
+                    <Link to="/online" title="Онлайн-пользователи">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors cursor-pointer">
+    <span className="relative flex h-2.5 w-2.5">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+    </span>
+                            <span className="text-sm font-semibold text-green-700 tabular-nums">
+      {onlineCount}
+    </span>
+                        </div>
+                    </Link>
                     {/* Пользователь и выход */}
                     <div className="flex items-center gap-4">
                         <div className="text-right">
@@ -224,7 +240,6 @@ const NavBar = () => {
                                 )}
                             </Button>
                         )}
-
                         <Button
                             variant="outline"
                             onClick={logout}

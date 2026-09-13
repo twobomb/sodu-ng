@@ -6,14 +6,19 @@ const {
     getSettings,
     getPublicSettings,
     updateSettings,
+    sendBroadcast,
+    getLatestBroadcast,
 } = require('../controllers/settingsController');
 
 // Публичный — без авторизации
 router.get('/public', getPublicSettings);
 
+
 // Всё остальное — только developer
 router.use(authenticate);
 router.use(requireDeveloper);
+
+router.post('/broadcast', sendBroadcast);
 router.get('/', getSettings);
 router.put('/', updateSettings);
 

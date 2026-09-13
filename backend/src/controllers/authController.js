@@ -39,26 +39,31 @@ const login = asyncHandler(async (req, res) => {
 
         // ---- Оповещаем старые сессии о вытеснении ----
         const io = req.app.get('io');
+        const roomName = `user:${user.id}`;
         const existingSessions = await pool.query(
             'SELECT id FROM sessions WHERE user_id = $1',
             [user.id]
         );
 
-        if (existingSessions.rows.length > 0 && io) {
-            // Все сокеты старой сессии получат это событие и разлогинятся
-            io.to(`user:${user.id}`).emit('session_replaced', {
-                username: user.username,
-                message: 'Выполнен вход с другого устройства',
-            });
+        // ВАЖНО: считаем по сокетам, а не по сессиям.
+        // Сокет может остаться в комнате даже после удаления сессии из БД.
+                const socketsInRoom = io?.sockets?.adapter?.rooms?.get(roomName);
+                const socketsCount = socketsInRoom?.size ?? 0;
 
-            logger.info(
-                `Сессия пользователя ${user.username} заменена (вход с другого устройства). Старых сессий: ${existingSessions.rows.length}`,
-                { userId: user.id, ip: req.ip }
-            );
-        }
+                if (socketsCount > 0 && io) {
+                    io.to(roomName).emit('session_replaced', {
+                        username: user.username,
+                        message: 'Выполнен вход с другого устройства',
+                    });
+
+                    logger.info(
+                        `Сессия пользователя ${user.username} заменена. Сокетов в комнате: ${socketsCount}, старых сессий в БД: ${existingSessions.rows.length}`,
+                        { userId: user.id, ip: req.ip }
+                    );
+                }
 
         // createSession удалит старые сессии и создаст новую
-        const session = await createSession(user.id);
+                const session = await createSession(user.id);
 
         logger.info(`Успешный вход: ${user.username} (${user.role})`, {
             userId: user.id,
@@ -73,6 +78,7 @@ const login = asyncHandler(async (req, res) => {
                 role_name: user.role_name,
                 can_view_all: user.can_view_all,
                 permissions: user.permissions,
+                department_ids: user.department_ids || [],
             },
             token: session.token,
         });

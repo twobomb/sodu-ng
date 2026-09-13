@@ -4,18 +4,51 @@ const logger = require('../utils/logger');
 // ============================================================
 // ПОЛУЧЕНИЕ ВСЕХ ТИПОВ
 // ============================================================
-const getAll = async () => {
-    const res = await pool.query(`
-    SELECT
-      t.id, t.name, t.short_name, t.sort_order,
-      t.created_at, t.updated_at,
-      (SELECT COUNT(*) FROM units u WHERE u.type_id = t.id) AS units_count
-    FROM unit_types t
-    ORDER BY t.sort_order ASC, t.name ASC
-  `);
+const getAll = async (departmentIds = null) => {
+    // Если departmentIds === null — считаем всё (can_view_all)
+    // Если массив — считаем только по этим подразделениям
+    const params = [];
+    let filterJoin = '';
+    let filterWhere = '';
+
+    if (Array.isArray(departmentIds)) {
+        if (departmentIds.length === 0) {
+            // Нет доступных подразделений — все счётчики по нулям
+            const res = await pool.query(`
+        SELECT
+          t.id, t.name, t.short_name, t.sort_order,
+          t.created_at, t.updated_at,
+          0 AS units_count
+        FROM unit_types t
+        ORDER BY t.sort_order ASC, t.name ASC
+      `);
+            return res.rows;
+        }
+
+        params.push(departmentIds);
+        filterJoin = `
+      LEFT JOIN units u
+        ON u.type_id = t.id AND u.department_id = ANY($1::uuid[])
+    `;
+    } else {
+        filterJoin = `LEFT JOIN units u ON u.type_id = t.id`;
+    }
+
+    const res = await pool.query(
+        `
+            SELECT
+                t.id, t.name, t.short_name, t.sort_order,
+                t.created_at, t.updated_at,
+                COUNT(u.id)::int AS units_count
+            FROM unit_types t
+                ${filterJoin}
+            GROUP BY t.id
+            ORDER BY t.sort_order ASC, t.name ASC
+        `,
+        params
+    );
     return res.rows;
 };
-
 // ============================================================
 // ПОЛУЧЕНИЕ ОДНОГО
 // ============================================================

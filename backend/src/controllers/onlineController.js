@@ -1,20 +1,11 @@
-const pool = require('../db/pool');
+const onlineService = require('../services/onlineService');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 
-// ---------- Получение списка онлайн-пользователей ----------
 const getOnlineUsers = asyncHandler(async (req, res) => {
     try {
-        const result = await pool.query(`
-      SELECT 
-        u.id, u.username, u.role,
-        s.last_active_at
-      FROM sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.last_active_at > NOW() - INTERVAL '5 minutes'
-      ORDER BY s.last_active_at DESC
-    `);
-        res.json(result.rows);
+        const users = await onlineService.getOnlineUsersWithDetails();
+        res.json(users);
     } catch (err) {
         logger.error('Ошибка получения онлайн-пользователей: ' + err.message, {
             stack: err.stack,

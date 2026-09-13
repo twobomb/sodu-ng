@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useChatState } from '../context/ChatContext';
+import { useLocation } from 'react-router-dom';
 import {
     playNotificationSound,
     isSoundEnabled,
@@ -21,6 +22,14 @@ export const useSocket = () => {
     const queryClient = useQueryClient();
     const socketRef = useRef(null);
 
+    // ----- Ref на текущий путь -----
+    const location = useLocation();
+    const pathnameRef = useRef(location.pathname);
+
+    useEffect(() => {
+        pathnameRef.current = location.pathname;
+    }, [location.pathname]);
+
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (!token || !user) return;
@@ -33,15 +42,35 @@ export const useSocket = () => {
             console.warn('Socket ошибка:', err.message)
         );
 
-        // ----- Общие -----
+        // ============================================================
+        // ОБЩИЕ
+        // ============================================================
+
+        // force_refresh — инвалидируем только HTTP-кеши.
+        // Кеши, которые наполняются ТОЛЬКО через сокет (onlineUsers, broadcast),
+        // и одноразовые blob-ссылки (attachment-blob) — пропускаем,
+        // иначе счётчик онлайна мигает нулём, а broadcast теряется.
         socket.on('force_refresh', () => {
             queryClient.invalidateQueries({
-                predicate: (query) => query.queryKey[0] !== 'attachment-blob',
+                predicate: (query) => {
+                    const key = query.queryKey[0];
+                    return (
+                        key !== 'attachment-blob' &&
+                        key !== 'onlineUsers' &&
+                        key !== 'broadcast'
+                    );
+                },
             });
         });
+
         socket.on('online_users', (users) =>
             queryClient.setQueryData(['onlineUsers'], users)
         );
+
+        socket.on('admin:broadcast', (payload) => {
+            queryClient.setQueryData(['broadcast', 'live'], payload);
+        });
+
         socket.on('force_logout', (payload) => {
             const reason = payload?.reason || 'blocked';
             sessionStorage.setItem('logout_reason', reason);
@@ -49,44 +78,55 @@ export const useSocket = () => {
             localStorage.removeItem('user');
             window.location.href = '/login';
         });
+
         socket.on('session_replaced', () => {
             sessionStorage.setItem('logout_reason', 'session_replaced');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/login';
         });
+
         socket.on('maintenance_mode_on', () =>
             queryClient.invalidateQueries(['publicSettings'])
         );
+
         socket.on('maintenance_mode_off', () =>
             queryClient.invalidateQueries(['publicSettings'])
         );
 
-// ============================================================
-// Техника: смена статуса — реальное время + звук
-// ============================================================
+        // ============================================================
+        // ТЕХНИКА: смена статуса — real-time + звук
+        // ============================================================
         socket.on('unit:status_changed', (payload) => {
-            // Звук — если включён
-            if (isUnitSoundEnabled()) {
+            const path = pathnameRef.current;
+            const onUnitsPage =
+                path === '/units' || path.startsWith('/units-grid');
+
+            if (onUnitsPage && isUnitSoundEnabled()) {
                 playUnitStatusSound();
             }
 
-            // Инвалидация кешей
             queryClient.invalidateQueries(['units-grid']);
             queryClient.invalidateQueries(['units']);
             queryClient.invalidateQueries(['units-history-global']);
             if (payload?.unit_id) {
                 queryClient.invalidateQueries(['unit-history', payload.unit_id]);
+                queryClient.invalidateQueries(['unit', payload.unit_id]);
             }
         });
-        // ----- Чат: профиль -----
+
+        // ============================================================
+        // ЧАТ: ПРОФИЛЬ
+        // ============================================================
         socket.on('chat:profile_updated', () => {
             queryClient.invalidateQueries(['chat', 'profile']);
             queryClient.invalidateQueries(['chat', 'conversations']);
             queryClient.invalidateQueries(['chat', 'messages']);
         });
 
-        // ----- Чат: сообщения -----
+        // ============================================================
+        // ЧАТ: СООБЩЕНИЯ
+        // ============================================================
         socket.on('chat:message', (message) => {
             queryClient.setQueryData(
                 ['chat', 'messages', message.conversation_id],
@@ -107,8 +147,6 @@ export const useSocket = () => {
                 }
             );
 
-            // Звук: только если сообщение не наше, не системное, звук включён
-            // и НЕ идёт в активный открытый чат
             const { activeConversationId, isOpen } = chatStateRef.current;
             const isActiveChatVisible =
                 activeConversationId === message.conversation_id && isOpen;
@@ -168,7 +206,9 @@ export const useSocket = () => {
             queryClient.invalidateQueries(['chat', 'conversations']);
         });
 
-        // ----- Чат: разговоры -----
+        // ============================================================
+        // ЧАТ: РАЗГОВОРЫ
+        // ============================================================
         socket.on('chat:conversation_updated', () => {
             queryClient.invalidateQueries(['chat', 'conversations']);
         });
@@ -213,7 +253,9 @@ export const useSocket = () => {
             queryClient.invalidateQueries(['chat', 'conversation', conversation_id]);
         });
 
-        // ----- Очистка -----
+        // ============================================================
+        // ОЧИСТКА
+        // ============================================================
         return () => {
             socket.disconnect();
             socketRef.current = null;

@@ -8,15 +8,22 @@ const SALT_ROUNDS = 10;
  * Находит пользователя по username
  */
 const findUserByUsername = async (username) => {
-    const result = await pool.query(`
-    SELECT 
-      u.*,
-      r.name AS role_name,
-      r.permissions
-    FROM users u
-    LEFT JOIN roles r ON u.role = r.code
-    WHERE u.username = $1
-  `, [username]);
+    const result = await pool.query(
+        `
+            SELECT
+                u.*,
+                r.name AS role_name,
+                r.permissions,
+                COALESCE(
+                        (SELECT array_agg(department_id) FROM user_departments WHERE user_id = u.id),
+                        '{}'::uuid[]
+                ) AS department_ids
+            FROM users u
+                     LEFT JOIN roles r ON u.role = r.code
+            WHERE u.username = $1
+        `,
+        [username]
+    );
     return result.rows[0] || null;
 };
 

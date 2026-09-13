@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Truck, Loader2 } from 'lucide-react';
 import { useUnitTypes, useUnitStatuses } from '../hooks/useUnits';
+import { useAuth } from '../context/AuthContext';
 
 // ============================================================
 // Нормализация: массив / {data: [...]} / undefined → массив
@@ -42,7 +43,15 @@ const UnitForm = ({
 
     const types = asArray(typesRaw);
     const statuses = asArray(statusesRaw);
-    const depts = asArray(departments);
+
+    const { user } = useAuth();
+
+    const depts = useMemo(() => {
+        const all = asArray(departments);
+        if (user?.can_view_all) return all;
+        const ids = user?.department_ids || [];
+        return all.filter((d) => ids.includes(d.id));
+    }, [departments, user]);
 
     const [formData, setFormData] = useState({
         name: '',

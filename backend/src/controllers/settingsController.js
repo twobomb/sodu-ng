@@ -3,6 +3,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
 const Joi = require('joi');
+const { v4: uuidv4 } = require('uuid');
+
 
 const updateSettingsSchema = Joi.object({
     maintenance_mode: Joi.boolean(),
@@ -113,4 +115,59 @@ const updateSettings = asyncHandler(async (req, res) => {
     }
 });
 
-module.exports = { getSettings, getPublicSettings, updateSettings };
+// ============================================================
+// Схема для broadcast
+// ============================================================
+const broadcastSchema = Joi.object({
+    title: Joi.string().min(2).max(200).required(),
+    message: Joi.string().min(1).max(5000).required(),
+});
+
+// ============================================================
+// POST /api/settings/broadcast
+// Отправка системного сообщения всем пользователям.
+// Только developer.
+// ============================================================
+const sendBroadcast = asyncHandler(async (req, res) => {
+    const { error, value } = broadcastSchema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+
+    try {
+        const broadcast = {
+            id: uuidv4(),
+            title: value.title.trim(),
+            message: value.message.trim(),
+            sent_at: new Date().toISOString(),
+            sent_by: req.user.username,
+        };
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('admin:broadcast', broadcast);
+        }
+
+        logger.info(
+            `Broadcast отправлен: "${broadcast.title}" (id=${broadcast.id})`,
+            { by: req.user.id }
+        );
+
+        res.status(201).json(broadcast);
+    } catch (err) {
+        logger.error('Ошибка отправки broadcast: ' + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка отправки' });
+    }
+});
+
+
+module.exports = {
+    getSettings,
+    getPublicSettings,
+    updateSettings,
+    sendBroadcast,
+};
