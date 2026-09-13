@@ -7,14 +7,20 @@ const Joi = require('joi');
 // Схема валидации создания
 const createDepartmentSchema = Joi.object({
     name: Joi.string().min(2).max(100).required(),
+    full_name: Joi.string().allow('', null).max(300),
+    address: Joi.string().allow('', null).max(500),
+    phone: Joi.string().allow('', null).max(50),
     parent_id: Joi.string().uuid().allow(null).optional(),
 });
 
-// Схема валидации обновления
 const updateDepartmentSchema = Joi.object({
     name: Joi.string().min(2).max(100),
+    full_name: Joi.string().allow('', null).max(300),
+    address: Joi.string().allow('', null).max(500),
+    phone: Joi.string().allow('', null).max(50),
     parent_id: Joi.string().uuid().allow(null).optional(),
 });
+
 // ---------- Массовая перестановка подразделений ----------
 const reorderDepartments = asyncHandler(async (req, res) => {
     const { updates } = req.body;

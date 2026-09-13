@@ -32,10 +32,19 @@ import {
     GripVertical,
     ChevronRight,
     ChevronDown,
+    MapPin,
+    Phone,
 } from 'lucide-react';
 import DepartmentForm from '../../components/DepartmentForm';
 
 const ROOT_ID = 'root';
+
+// Нормализация данных: массив / { data: [...] } / undefined → массив
+const asArray = (v) => {
+    if (Array.isArray(v)) return v;
+    if (v && Array.isArray(v.data)) return v.data;
+    return [];
+};
 
 const DepartmentsList = () => {
     const { data, isLoading, error } = useDepartments();
@@ -59,7 +68,7 @@ const DepartmentsList = () => {
 
     const [treeData, setTreeData] = useState([]);
 
-    const departments = useMemo(() => data?.data || [], [data]);
+    const departments = useMemo(() => asArray(data), [data]);
 
     useEffect(() => {
         const formatted = departments.map((dept) => ({
@@ -74,15 +83,24 @@ const DepartmentsList = () => {
 
     const displayTree = useMemo(() => {
         if (!searchTerm.trim()) return treeData;
+        const q = searchTerm.toLowerCase();
         return treeData
-            .filter((n) => n.text.toLowerCase().includes(searchTerm.toLowerCase()))
+            .filter((n) => {
+                const dept = n.data;
+                return (
+                    n.text.toLowerCase().includes(q) ||
+                    dept?.full_name?.toLowerCase().includes(q) ||
+                    dept?.address?.toLowerCase().includes(q) ||
+                    dept?.phone?.toLowerCase().includes(q)
+                );
+            })
             .map((n) => ({ ...n, parent: ROOT_ID }));
     }, [treeData, searchTerm]);
 
     const isSearching = !!searchTerm.trim();
 
     // ---------- Drag & Drop ----------
-    const handleDrop = (newTree, options) => {
+    const handleDrop = (newTree) => {
         setTreeData(newTree);
 
         const counters = {};
@@ -120,6 +138,14 @@ const DepartmentsList = () => {
         if (dropTargetId === 0 || dropTargetId === ROOT_ID) return true;
         if (dragSource.id === dropTargetId) return false;
 
+        const dropTarget = departments.find((d) => d.id === dropTargetId);
+
+        // 1. Нельзя дропнуть в узел, который сам является ребёнком
+        if (dropTarget?.parent_id) {
+            return false;
+        }
+
+        // 2. Нельзя дропнуть в своего потомка
         const isDescendant = (childId, ancestorId) => {
             let currentId = childId;
             const visited = new Set();
@@ -133,10 +159,18 @@ const DepartmentsList = () => {
             }
             return false;
         };
-
         if (isDescendant(dropTargetId, dragSource.id)) {
             return false;
         }
+
+        // 3. Узел с детьми нельзя перемещать внутрь другого узла
+        const sourceHasChildren = departments.some(
+            (d) => d.parent_id === dragSource.id
+        );
+        if (sourceHasChildren) {
+            return false;
+        }
+
         return true;
     };
 
@@ -185,7 +219,9 @@ const DepartmentsList = () => {
                         setSelectedDepartment(null);
                     },
                     onError: (err) => {
-                        setFormError(err.response?.data?.error || 'Ошибка обновления');
+                        setFormError(
+                            err.response?.data?.error || 'Ошибка обновления'
+                        );
                     },
                 }
             );
@@ -220,10 +256,13 @@ const DepartmentsList = () => {
             <div className="space-y-4">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Подразделения</h2>
+                        <h2 className="text-2xl font-bold text-slate-800">
+                            Подразделения
+                        </h2>
                         <p className="text-sm text-slate-500">
                             Всего: {departments.length}.
-                            {canReorder && ' Перетаскивайте элементы для изменения порядка и иерархии.'}
+                            {canReorder &&
+                                ' Перетаскивайте элементы для изменения порядка и иерархии.'}
                         </p>
                     </div>
                     {canCreate && (
@@ -241,7 +280,7 @@ const DepartmentsList = () => {
                     <div className="relative flex-1 min-w-[200px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
-                            placeholder="Поиск по названию..."
+                            placeholder="Поиск по названию, адресу или телефону..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-10 rounded-lg"
@@ -276,64 +315,104 @@ const DepartmentsList = () => {
                                     style={{ marginLeft: depth * 24 }}
                                 />
                             )}
-                            render={(node, { depth, isOpen, onToggle, hasChild }) => (
-                                <div
-                                    className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-slate-50 group"
-                                    style={{ marginLeft: depth * 24 }}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={onToggle}
-                                        className={`w-4 h-4 flex items-center justify-center transition-transform ${
-                                            hasChild ? 'text-slate-500' : 'opacity-0 pointer-events-none'
-                                        }`}
+                            render={(node, { depth, isOpen, onToggle, hasChild }) => {
+                                const dept = node.data;
+                                return (
+                                    <div
+                                        className="flex items-start gap-2 py-2 px-3 rounded-lg hover:bg-slate-50 group"
+                                        style={{ marginLeft: depth * 24 }}
                                     >
-                                        {isOpen ? (
-                                            <ChevronDown className="h-4 w-4" />
-                                        ) : (
-                                            <ChevronRight className="h-4 w-4" />
-                                        )}
-                                    </button>
-
-                                    {canReorder && !isSearching ? (
-                                        <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-500 cursor-grab" />
-                                    ) : (
-                                        <div className="w-4" />
-                                    )}
-
-                                    <Building2 className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                                    <span className="font-medium text-slate-800 flex-1">
-                    {node.text}
-                  </span>
-
-                                    {(canUpdate || canDelete) && (
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {canUpdate && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleEdit(node)}
-                                                    className="h-8 w-8 p-0"
-                                                    title="Редактировать"
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
+                                        {/* Сворачивание */}
+                                        <button
+                                            type="button"
+                                            onClick={onToggle}
+                                            className={`w-4 h-4 flex items-center justify-center transition-transform mt-1 flex-shrink-0 ${
+                                                hasChild
+                                                    ? 'text-slate-500'
+                                                    : 'opacity-0 pointer-events-none'
+                                            }`}
+                                        >
+                                            {isOpen ? (
+                                                <ChevronDown className="h-4 w-4" />
+                                            ) : (
+                                                <ChevronRight className="h-4 w-4" />
                                             )}
-                                            {canDelete && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDelete(node.id)}
-                                                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                                    title="Удалить"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                        </button>
+
+                                        {/* Ручка */}
+                                        {canReorder && !isSearching ? (
+                                            <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-500 cursor-grab mt-1 flex-shrink-0" />
+                                        ) : (
+                                            <div className="w-4 flex-shrink-0" />
+                                        )}
+
+                                        {/* Иконка */}
+                                        <Building2 className="h-4 w-4 text-orange-500 flex-shrink-0 mt-1" />
+
+                                        {/* Названия и контакты */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-800">
+                          {dept?.name || node.text}
+                        </span>
+                                                {dept?.full_name && (
+                                                    <span className="text-sm text-slate-500 truncate">
+                            — {dept.full_name}
+                          </span>
+                                                )}
+                                            </div>
+
+                                            {/* Адрес и телефон — во вторую строку */}
+                                            {(dept?.address || dept?.phone) && (
+                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-slate-500">
+                                                    {dept.address && (
+                                                        <span className="inline-flex items-center gap-1">
+                              <MapPin className="h-3 w-3 text-slate-400" />
+                              <span className="truncate max-w-[400px]">
+                                {dept.address}
+                              </span>
+                            </span>
+                                                    )}
+                                                    {dept.phone && (
+                                                        <span className="inline-flex items-center gap-1 font-mono">
+                              <Phone className="h-3 w-3 text-slate-400" />
+                                                            {dept.phone}
+                            </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
-                                    )}
-                                </div>
-                            )}
+
+                                        {/* Действия */}
+                                        {(canUpdate || canDelete) && (
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                                {canUpdate && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleEdit(dept || node)}
+                                                        className="h-8 w-8 p-0"
+                                                        title="Редактировать"
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                {canDelete && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDelete(node.id)}
+                                                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                                                        title="Удалить"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            }}
                         />
                     </div>
                 )}
@@ -349,22 +428,29 @@ const DepartmentsList = () => {
                     }}
                     onSubmit={handleFormSubmit}
                     initialData={selectedDepartment}
-                    isLoading={createDepartment.isPending || updateDepartment.isPending}
+                    isLoading={
+                        createDepartment.isPending || updateDepartment.isPending
+                    }
                     error={formError}
                     departments={departments}
                 />
 
-                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialog
+                    open={isDeleteDialogOpen}
+                    onOpenChange={setIsDeleteDialogOpen}
+                >
                     <AlertDialogContent className="rounded-2xl">
                         <AlertDialogHeader>
                             <AlertDialogTitle>Удаление подразделения</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Вы уверены, что хотите удалить это подразделение? Дочерние подразделения
-                                станут корневыми. Это действие нельзя отменить.
+                                Вы уверены, что хотите удалить это подразделение? Дочерние
+                                подразделения станут корневыми. Это действие нельзя отменить.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                            <AlertDialogCancel className="rounded-lg">
+                                Отмена
+                            </AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={confirmDelete}
                                 disabled={deleteDepartment.isPending}

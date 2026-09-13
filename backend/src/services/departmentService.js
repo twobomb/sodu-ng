@@ -1,13 +1,30 @@
 const pool = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
 
+// ============================================================
+// ПРОВЕРКА ГЛУБИНЫ ИЕРАРХИИ
+// Разрешаем максимум 2 уровня: корень (parent_id = NULL) и дети.
+// ============================================================
+
+/**
+ * Возвращает true, если у указанного подразделения есть дети.
+ */
+const hasChildren = async (departmentId) => {
+    const res = await pool.query(
+        'SELECT 1 FROM departments WHERE parent_id = $1 LIMIT 1',
+        [departmentId]
+    );
+    return res.rows.length > 0;
+};
+
 /**
  * Получить все подразделения с построением дерева (опционально)
  * Вернём плоский список с полем parent_id
  */
 const getAllDepartments = async () => {
     const result = await pool.query(`
-        SELECT id, name, parent_id, sort_order, created_at, updated_at
+        SELECT id, name, full_name, address, phone, parent_id, sort_order,
+               created_at, updated_at
         FROM departments
         ORDER BY parent_id NULLS FIRST, sort_order ASC, name ASC
     `);
@@ -19,15 +36,34 @@ const getAllDepartments = async () => {
  * @param {Array<{id, parent_id, sort_order}>} updates
  */
 const reorderDepartments = async (updates) => {
-    // Проверяем все перемещения на циклы ДО транзакции
+    // Проверяем все перемещения ДО транзакции
     for (const u of updates) {
         if (u.parent_id) {
-            // Перемещаем элемент u.id в u.parent_id. Проверяем, что u.parent_id
-            // не является потомком u.id (иначе будет цикл)
+            // 1. Родитель должен быть корневым
+            const check = await validateParentIsRoot(u.parent_id);
+            if (!check.ok) {
+                const err = new Error(
+                    'Вложенность ограничена 2 уровнями. Родителем может быть только корневое подразделение'
+                );
+                err.status = 400;
+                throw err;
+            }
+
+            // 2. Нельзя в своего потомка
             const wouldCycle = await isDescendantOf(u.parent_id, u.id);
             if (wouldCycle) {
                 const err = new Error(
                     'Нельзя переместить подразделение внутрь собственного потомка'
+                );
+                err.status = 400;
+                throw err;
+            }
+
+            // 3. Нельзя перемещать узел с детьми в другого родителя
+            const kids = await hasChildren(u.id);
+            if (kids) {
+                const err = new Error(
+                    'Нельзя переместить подразделение с детьми под другого родителя'
                 );
                 err.status = 400;
                 throw err;
@@ -38,16 +74,14 @@ const reorderDepartments = async (updates) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
         for (const u of updates) {
             await client.query(
                 `UPDATE departments
-                 SET parent_id = $1, sort_order = $2, updated_at = NOW()
-                 WHERE id = $3`,
+         SET parent_id = $1, sort_order = $2, updated_at = NOW()
+         WHERE id = $3`,
                 [u.parent_id, u.sort_order, u.id]
             );
         }
-
         await client.query('COMMIT');
     } catch (err) {
         await client.query('ROLLBACK');
@@ -56,102 +90,109 @@ const reorderDepartments = async (updates) => {
         client.release();
     }
 };
-
 /**
  * Найти подразделение по ID
  */
 const getDepartmentById = async (id) => {
     const result = await pool.query(
-        `SELECT id, name, parent_id, created_at, updated_at
-     FROM departments WHERE id = $1`,
+        `SELECT id, name, full_name, address, phone, parent_id, sort_order,
+                created_at, updated_at
+         FROM departments WHERE id = $1`,
         [id]
     );
     return result.rows[0] || null;
 };
-
 /**
  * Создать новое подразделение
  * @param {Object} data - { name, parent_id }
  */
-const createDepartment = async ({ name, parent_id }) => {
-    const id = uuidv4();
-    // Проверяем, существует ли parent_id (если указан)
-    if (parent_id) {
-        const parent = await pool.query('SELECT id FROM departments WHERE id = $1', [parent_id]);
-        if (!parent.rows.length) {
-            throw new Error('Родительское подразделение не найдено');
+const createDepartment = async ({ name, full_name, address, phone, parent_id }) => {
+    const check = await validateParentIsRoot(parent_id);
+    if (!check.ok) {
+        if (check.reason === 'parent_not_found') {
+            const err = new Error('Родительское подразделение не найдено');
+            err.status = 400;
+            throw err;
+        }
+        if (check.reason === 'parent_not_root') {
+            const err = new Error(
+                'Вложенность ограничена 2 уровнями. Родителем может быть только корневое подразделение'
+            );
+            err.status = 400;
+            throw err;
         }
     }
-    const result = await pool.query(
-        `INSERT INTO departments (id, name, parent_id)
-     VALUES ($1, $2, $3)
-     RETURNING id, name, parent_id, created_at, updated_at`,
-        [id, name, parent_id || null]
-    );
-    return result.rows[0];
-};
 
+    const id = uuidv4();
+    const res = await pool.query(
+        `INSERT INTO departments (id, name, full_name, address, phone, parent_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, name, full_name, address, phone, parent_id, sort_order,
+               created_at, updated_at`,
+        [
+            id,
+            name,
+            full_name || null,
+            address || null,
+            phone || null,
+            parent_id || null,
+        ]
+    );
+    return res.rows[0];
+};
 /**
  * Обновить подразделение (проверка на циклическую ссылку)
  */
-const updateDepartment = async (id, { name, parent_id }) => {
-    // Проверяем существование
-    const existing = await pool.query('SELECT id FROM departments WHERE id = $1', [id]);
-    if (!existing.rows.length) {
-        throw new Error('Подразделение не найдено');
-    }
+const updateDepartment = async (id, data) => {
+    const { name, full_name, address, phone, parent_id } = data;
 
-    // Если меняется parent_id, проверяем, что не создаётся цикл
-    if (parent_id !== undefined) {
-        // Если parent_id == id, запрещаем
-        if (parent_id === id) {
-            throw new Error('Подразделение не может быть родителем самого себя');
-        }
-        // Проверяем, существует ли родитель
-        if (parent_id) {
-            const parent = await pool.query('SELECT id FROM departments WHERE id = $1', [parent_id]);
-            if (!parent.rows.length) {
-                throw new Error('Родительское подразделение не найдено');
-            }
-            // Проверка на циклическую зависимость: parent_id не должен быть потомком текущего
-            const isDescendant = await checkIfDescendant(parent_id, id);
-            if (isDescendant) {
-                throw new Error('Невозможно установить родителя, так как это создаст циклическую зависимость');
-            }
-        }
-    }
+    // ...существующая валидация parent_id без изменений...
 
-    // Формируем запрос на обновление
-    const updates = [];
+    const fields = [];
     const values = [];
-    let paramIndex = 1;
+    let idx = 1;
+
     if (name !== undefined) {
-        updates.push(`name = $${paramIndex++}`);
+        fields.push(`name = $${idx++}`);
         values.push(name);
     }
+    if (full_name !== undefined) {
+        fields.push(`full_name = $${idx++}`);
+        values.push(full_name || null);
+    }
+    if (address !== undefined) {
+        fields.push(`address = $${idx++}`);
+        values.push(address || null);
+    }
+    if (phone !== undefined) {
+        fields.push(`phone = $${idx++}`);
+        values.push(phone || null);
+    }
     if (parent_id !== undefined) {
-        updates.push(`parent_id = $${paramIndex++}`);
+        fields.push(`parent_id = $${idx++}`);
         values.push(parent_id || null);
     }
-    // Всегда updated_at
-    updates.push(`updated_at = NOW()`);
 
-    if (updates.length === 0) {
-        // Если нечего обновлять, возвращаем текущие данные
-        return await getDepartmentById(id);
+    if (!fields.length) {
+        const cur = await pool.query(
+            'SELECT * FROM departments WHERE id = $1',
+            [id]
+        );
+        return cur.rows[0] || null;
     }
 
-    const query = `
-    UPDATE departments 
-    SET ${updates.join(', ')}
-    WHERE id = $${paramIndex}
-    RETURNING id, name, parent_id, created_at, updated_at
-  `;
+    fields.push(`updated_at = NOW()`);
     values.push(id);
-    const result = await pool.query(query, values);
-    return result.rows[0];
-};
 
+    const res = await pool.query(
+        `UPDATE departments SET ${fields.join(', ')}
+         WHERE id = $${idx}
+             RETURNING id, name, full_name, address, phone, parent_id, sort_order,
+               created_at, updated_at`,
+        values
+    );
+    return res.rows[0] || null;
+};
 /**
  * Вспомогательная функция: проверяет, является ли потенциальный родитель потомком данного узла
  */
@@ -185,17 +226,15 @@ const deleteDepartment = async (id) => {
     return result.rows.length > 0;
 };
 /**
- * Проверяет, является ли potentialChild потомком ancestorId (рекурсивно вверх)
- * @returns true, если potentialChild находится внутри ветки ancestorId
+ * Проверяет, является ли potentialChild потомком ancestorId.
  */
 const isDescendantOf = async (potentialChildId, ancestorId) => {
     let currentId = potentialChildId;
-    const visited = new Set(); // защита от зацикливания в уже сломанных данных
+    const visited = new Set();
 
     while (currentId) {
-        if (visited.has(currentId)) return false; // цикл уже есть — не рискуем
+        if (visited.has(currentId)) return false;
         visited.add(currentId);
-
         if (currentId === ancestorId) return true;
 
         const result = await pool.query(
@@ -207,6 +246,29 @@ const isDescendantOf = async (potentialChildId, ancestorId) => {
     }
     return false;
 };
+
+
+/**
+ * Проверяет, что parentId — корневое подразделение (parent_id = NULL).
+ * Возвращает { ok, reason }.
+ */
+const validateParentIsRoot = async (parentId) => {
+    if (!parentId) return { ok: true }; // создаём корневое — ок
+
+    const res = await pool.query(
+        'SELECT id, parent_id FROM departments WHERE id = $1',
+        [parentId]
+    );
+    if (!res.rows.length) {
+        return { ok: false, reason: 'parent_not_found' };
+    }
+    if (res.rows[0].parent_id) {
+        return { ok: false, reason: 'parent_not_root' };
+    }
+    return { ok: true };
+};
+
+
 module.exports = {
     getAllDepartments,
     getDepartmentById,
@@ -214,5 +276,7 @@ module.exports = {
     updateDepartment,
     deleteDepartment,
     reorderDepartments,
-    isDescendantOf
+    isDescendantOf,
+    hasChildren,
+    validateParentIsRoot
 };

@@ -16,7 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Building2 } from 'lucide-react';
+import { Building2, Loader2 } from 'lucide-react';
 
 const DepartmentForm = ({
                             open,
@@ -29,22 +29,46 @@ const DepartmentForm = ({
                         }) => {
     const [formData, setFormData] = useState({
         name: '',
+        full_name: '',
+        address: '',
+        phone: '',
         parent_id: '',
     });
+    const [localError, setLocalError] = useState('');
 
     useEffect(() => {
         if (initialData) {
             setFormData({
                 name: initialData.name || '',
+                full_name: initialData.full_name || '',
+                address: initialData.address || '',
+                phone: initialData.phone || '',
                 parent_id: initialData.parent_id || '',
             });
         } else {
             setFormData({
                 name: '',
+                full_name: '',
+                address: '',
+                phone: '',
                 parent_id: '',
             });
         }
+        setLocalError('');
     }, [initialData, open]);
+
+    const isEdit = !!initialData;
+
+    // Показываем только корневые подразделения, кроме самого себя
+    const availableParents = (departments || []).filter(
+        (d) => !d.parent_id && d.id !== initialData?.id
+    );
+
+    // Если у редактируемого есть дети — запрещаем менять родителя
+    const hasChildren = (departments || []).some(
+        (d) => d.parent_id === initialData?.id
+    );
+    const canChangeParent = !hasChildren;
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -53,42 +77,93 @@ const DepartmentForm = ({
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Преобразуем пустую строку parent_id в null
+        setLocalError('');
+
+        if (!formData.name.trim()) {
+            setLocalError('Укажите сокращённое название');
+            return;
+        }
+
         const payload = {
-            ...formData,
+            name: formData.name.trim(),
+            full_name: formData.full_name.trim() || null,
+            address: formData.address.trim() || null,
+            phone: formData.phone.trim() || null,
             parent_id: formData.parent_id === '' ? null : formData.parent_id,
         };
+
         onSubmit(payload);
     };
 
-    const isEdit = !!initialData;
-
-    // Исключаем из списка родительских подразделений самого себя (чтобы нельзя было сделать себя родителем)
-    const availableParents = departments?.filter((d) => d.id !== initialData?.id) || [];
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
                         <Building2 className="h-5 w-5 text-orange-500" />
                         {isEdit ? 'Редактировать подразделение' : 'Новое подразделение'}
                     </DialogTitle>
                 </DialogHeader>
+
                 <form onSubmit={handleSubmit}>
                     <div className="space-y-4 py-4">
+                        {/* Сокращённое название */}
                         <div className="space-y-2">
-                            <Label htmlFor="name">Название</Label>
+                            <Label htmlFor="name">Сокращённое название</Label>
                             <Input
                                 id="name"
                                 name="name"
-                                placeholder="Введите название подразделения"
+                                placeholder="Например, 1 ПСЧ"
                                 value={formData.name}
                                 onChange={handleChange}
                                 required
                                 className="rounded-lg"
                             />
+                            <p className="text-xs text-slate-400">
+                                Короткое обозначение, используется в списках
+                            </p>
                         </div>
+
+                        {/* Полное название */}
+                        <div className="space-y-2">
+                            <Label htmlFor="full_name">Полное название</Label>
+                            <Input
+                                id="full_name"
+                                name="full_name"
+                                placeholder="Например, 1 Пожарно-спасательная часть"
+                                value={formData.full_name}
+                                onChange={handleChange}
+                                className="rounded-lg"
+                            />
+                        </div>
+
+                        {/* Адрес */}
+                        <div className="space-y-2">
+                            <Label htmlFor="address">Адрес</Label>
+                            <Input
+                                id="address"
+                                name="address"
+                                placeholder="например, г. Луганск, ул. Алексеева, 12"
+                                value={formData.address}
+                                onChange={handleChange}
+                                className="rounded-lg"
+                            />
+                        </div>
+
+                        {/* Телефон */}
+                        <div className="space-y-2">
+                            <Label htmlFor="phone">Телефон</Label>
+                            <Input
+                                id="phone"
+                                name="phone"
+                                placeholder="50-18-00; +7 (959) 123-45-67"
+                                value={formData.phone}
+                                onChange={handleChange}
+                                className="rounded-lg font-mono"
+                            />
+                        </div>
+
+                        {/* Родительское подразделение */}
                         <div className="space-y-2">
                             <Label htmlFor="parent_id">Родительское подразделение</Label>
                             <Select
@@ -99,6 +174,7 @@ const DepartmentForm = ({
                                         parent_id: value === 'none' ? '' : value,
                                     }))
                                 }
+                                disabled={!canChangeParent}
                             >
                                 <SelectTrigger className="rounded-lg">
                                     <SelectValue placeholder="Нет (корневое)" />
@@ -108,23 +184,39 @@ const DepartmentForm = ({
                                     {availableParents.map((dept) => (
                                         <SelectItem key={dept.id} value={dept.id}>
                                             {dept.name}
+                                            {dept.full_name && (
+                                                <span className="text-slate-400 ml-2">
+                          — {dept.full_name}
+                        </span>
+                                            )}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {!canChangeParent && (
+                                <p className="text-xs text-amber-600">
+                                    У этого подразделения есть дети — сначала перенесите их.
+                                </p>
+                            )}
+                            <p className="text-xs text-slate-400">
+                                Максимум 2 уровня: корень и дети.
+                            </p>
                         </div>
+
+                        {(localError || error) && (
+                            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-200">
+                                {localError || error}
+                            </div>
+                        )}
                     </div>
-                    {error && (
-                        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-200">
-                            {error}
-                        </div>
-                    )}
+
                     <DialogFooter>
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => onOpenChange(false)}
                             className="rounded-lg"
+                            disabled={isLoading}
                         >
                             Отмена
                         </Button>
@@ -133,7 +225,16 @@ const DepartmentForm = ({
                             disabled={isLoading}
                             className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
                         >
-                            {isLoading ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Сохранение...
+                                </>
+                            ) : isEdit ? (
+                                'Сохранить'
+                            ) : (
+                                'Создать'
+                            )}
                         </Button>
                     </DialogFooter>
                 </form>
