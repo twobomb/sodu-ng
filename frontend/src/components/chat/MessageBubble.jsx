@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import MessageReadersDialog from './MessageReadersDialog';
 import DisplayName from './DisplayName';
+import { analyzeEmojiContent, getEmojiSizeClass } from '../../lib/emojiHelper';
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -167,7 +168,14 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
                         <MoreVertical className="h-3.5 w-3.5 text-slate-500" />
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align={isOwn ? 'end' : 'start'}>
+                <DropdownMenuContent
+                    align={isOwn ? 'end' : 'start'}
+                    side="bottom"
+                    sideOffset={4}
+                    collisionPadding={16}
+                    avoidCollisions={true}
+                    className="min-w-[180px] z-[150]"
+                >
                     <DropdownMenuItem icon={Reply} onClick={() => onReply(message)}>
                         Ответить
                     </DropdownMenuItem>
@@ -190,6 +198,14 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
         </div>
     );
 
+    // Определяем, является ли сообщение "только эмодзи"
+    const emojiInfo =
+        message.content_type === 'text' && message.content
+            ? analyzeEmojiContent(message.content)
+            : { isEmojiOnly: false, count: 0 };
+    const emojiSizeClass = emojiInfo.isEmojiOnly
+        ? getEmojiSizeClass(emojiInfo.count)
+        : '';
     return (
         <>
             <div
@@ -263,7 +279,11 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
 
                         {/* Текст */}
                         {message.content && (
-                            <div className="whitespace-pre-wrap break-words">
+                            <div
+                                className={`whitespace-pre-wrap break-words ${
+                                    emojiInfo.isEmojiOnly ? emojiSizeClass : ''
+                                }`}
+                            >
                                 {message.content}
                             </div>
                         )}
@@ -435,7 +455,7 @@ const FileRow = ({ attachment, isOwn }) => {
             onClick={handleDownload}
             disabled={downloading}
             title={attachment.original_name}
-            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left min-w-0 max-w-[280px] ${
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left min-w-0 max-w-[250px] ${
                 isOwn
                     ? 'bg-white/15 hover:bg-white/25'
                     : 'bg-slate-100 hover:bg-slate-200'

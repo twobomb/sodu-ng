@@ -1,5 +1,6 @@
 const pool = require('../db/pool');
-const fs = require('fs/promises');
+const fs = require('fs');                 // синхронные: existsSync
+const fsp = require('fs/promises');       // асинхронные: unlink, access, mkdir
 const path = require('path');
 const { UPLOAD_DIR, AVATARS_DIR } = require('../config/upload');
 
@@ -14,6 +15,7 @@ try {
 const IMAGE_MIMES = new Set([
     'image/jpeg', 'image/png', 'image/gif', 'image/webp',
 ]);
+
 const createAttachments = async ({
                                      conversationId,
                                      files,
@@ -62,7 +64,9 @@ const createAttachments = async ({
     } catch (err) {
         await client.query('ROLLBACK');
         for (const file of files) {
-            try { await fs.unlink(file.path); } catch (_) {}
+            try {
+                await fsp.unlink(file.path);
+            } catch (_) {}
         }
         throw err;
     } finally {
@@ -90,17 +94,17 @@ const canAccessAttachment = async (attachmentId, userId) => {
     // 2. Иначе — только участники разговора
     const res = await pool.query(
         `SELECT 1
-     FROM attachments a
-     JOIN conversation_members cm
-       ON cm.conversation_id = a.conversation_id AND cm.user_id = $2
-     WHERE a.id = $1`,
+         FROM attachments a
+                  JOIN conversation_members cm
+                       ON cm.conversation_id = a.conversation_id AND cm.user_id = $2
+         WHERE a.id = $1`,
         [attachmentId, userId]
     );
     return res.rows.length > 0;
 };
 
 // ============================================================
-// Путь, куда ДОЛЖЕН быть записан файл (используем при загрузке)
+// Путь, куда ДОЛЖЕН быть записан файл
 // ============================================================
 const getFilePath = (attachment) => {
     const baseDir = attachment.is_public ? AVATARS_DIR : UPLOAD_DIR;
@@ -125,8 +129,9 @@ const getFilePathRead = (attachment) => {
         if (fs.existsSync(legacy)) return legacy;
     }
 
-    return primary; // вернём «правильный» путь для логов
+    return primary;
 };
+
 // Генерация превью (jpg 400px по ширине)
 const getThumbnailPath = async (attachment) => {
     if (!sharp || !IMAGE_MIMES.has(attachment.mime_type)) return null;
@@ -137,7 +142,7 @@ const getThumbnailPath = async (attachment) => {
 
     // Кешируем: если уже есть — отдаём
     try {
-        await fs.access(thumbPath);
+        await fsp.access(thumbPath);
         return thumbPath;
     } catch (_) {
         // Нет — генерируем
@@ -157,8 +162,10 @@ const getThumbnailPath = async (attachment) => {
 // Удаление файла с диска (для очистки)
 const deleteFileFromDisk = async (storedName) => {
     try {
-        await fs.unlink(path.join(UPLOAD_DIR, storedName));
-    } catch (_) { /* ignore */ }
+        await fsp.unlink(path.join(UPLOAD_DIR, storedName));
+    } catch (_) {
+        /* ignore */
+    }
 };
 
 module.exports = {

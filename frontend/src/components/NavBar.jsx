@@ -139,8 +139,7 @@ const NavBar = () => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
-
-                        {has('users.view') && (
+                        {(has('users.view') || has('users.view_online') || has('roles.view')) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -161,25 +160,26 @@ const NavBar = () => {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
-                                    <DropdownMenuItem
-                                        icon={List}
-                                        onClick={() => navigate('/users')}
-                                    >
-                                        Список пользователей
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        icon={Activity}
-                                        onClick={() => navigate('/online')}
-                                    >
-                                        Онлайн пользователи
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        icon={Shield}
-                                        onClick={() => navigate('/roles')}
-                                    >
-                                        Роли
-                                    </DropdownMenuItem>
+                                    {has('users.view') && (
+                                        <DropdownMenuItem icon={List} onClick={() => navigate('/users')}>
+                                            Список пользователей
+                                        </DropdownMenuItem>
+                                    )}
+                                    {has('users.view_online') && (
+                                        <DropdownMenuItem icon={Activity} onClick={() => navigate('/online')}>
+                                            Онлайн пользователи
+                                        </DropdownMenuItem>
+                                    )}
+                                    {has('roles.view') && (
+                                        <>
+                                            {(has('users.view') || has('users.view_online')) && (
+                                                <DropdownMenuSeparator />
+                                            )}
+                                            <DropdownMenuItem icon={Shield} onClick={() => navigate('/roles')}>
+                                                Роли
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}

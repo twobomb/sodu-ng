@@ -51,9 +51,11 @@ import {
     Edit,
     Trash2,
     EyeOff,
+    X,
     MoreVertical,
 } from 'lucide-react';
 import UnitForm from '../../components/UnitForm';
+import SearchableSelect from '@/components/ui/searchable-select';
 
 const asArray = (v) => {
     if (Array.isArray(v)) return v;
@@ -74,6 +76,7 @@ const UnitsList = () => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [deptFilter, setDeptFilter] = useState('all');
 
     const [selectedUnit, setSelectedUnit] = useState(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -90,6 +93,20 @@ const UnitsList = () => {
     const departments = asArray(deptData);
     const statusList = asArray(statuses);
 
+    // Опции для SearchableSelect подразделений
+    const deptOptions = useMemo(
+        () => [
+            { value: 'all', label: 'Все подразделения' },
+            ...departments.map((d) => ({
+                value: d.id,
+                label: d.name,
+                extra: d.full_name || '',
+                search: `${d.name} ${d.full_name || ''}`.toLowerCase(),
+            })),
+        ],
+        [departments]
+    );
+
     const filteredUnits = useMemo(() => {
         return units.filter((unit) => {
             const q = searchTerm.toLowerCase();
@@ -99,9 +116,11 @@ const UnitsList = () => {
                 unit.type_short_name?.toLowerCase().includes(q);
             const matchesStatus =
                 statusFilter === 'all' || unit.status_id === statusFilter;
-            return matchesSearch && matchesStatus;
+            const matchesDept =
+                deptFilter === 'all' || unit.department_id === deptFilter;
+            return matchesSearch && matchesStatus && matchesDept;
         });
-    }, [units, searchTerm, statusFilter]);
+    }, [units, searchTerm, statusFilter, deptFilter]);
 
     const handleCreate = () => {
         setSelectedUnit(null);
@@ -214,6 +233,28 @@ const UnitsList = () => {
                         className="pl-10 rounded-lg"
                     />
                 </div>
+
+                {/* Фильтр по подразделению — SearchableSelect */}
+                <div className="w-[260px]">
+                    <SearchableSelect
+                        options={deptOptions}
+                        value={deptFilter}
+                        onChange={setDeptFilter}
+                        placeholder="Все подразделения"
+                        renderOption={(opt) => (
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-sm truncate">{opt.label}</span>
+                                {opt.extra && (
+                                    <span className="text-[11px] text-slate-400 truncate">
+                    {opt.extra}
+                  </span>
+                                )}
+                            </div>
+                        )}
+                    />
+                </div>
+
+                {/* Фильтр по статусу — оставляем обычный Select */}
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[220px] rounded-lg">
                         <SelectValue placeholder="Все статусы" />
@@ -233,9 +274,26 @@ const UnitsList = () => {
                         ))}
                     </SelectContent>
                 </Select>
+
+                {/* Сброс фильтров */}
+                {(deptFilter !== 'all' || statusFilter !== 'all' || searchTerm) && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            setDeptFilter('all');
+                            setStatusFilter('all');
+                            setSearchTerm('');
+                        }}
+                        className="h-9 rounded-lg gap-1.5 text-slate-600"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                        Сбросить
+                    </Button>
+                )}
             </div>
 
-            {/* Таблица — БЕЗ overflow и БЕЗ фиксированной высоты */}
+            {/* Таблица */}
             {filteredUnits.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm p-12 text-center text-slate-500">
                     <p>Нет техники, соответствующей фильтрам</p>

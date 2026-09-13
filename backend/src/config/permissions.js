@@ -60,6 +60,8 @@ const PERMISSIONS_CATALOG = [
         name: 'Пользователи',
         description: 'Управление учётными записями',
         permissions: [
+
+            { key: 'users.view_online', name: 'Просмотр онлайна', description: 'Видеть страницу онлайн-пользователей' },
             { key: 'users.view', name: 'Просмотр', description: 'Видеть список пользователей' },
             { key: 'users.create', name: 'Создание', description: 'Создавать пользователей' },
             { key: 'users.update', name: 'Редактирование', description: 'Изменять пользователей' },

@@ -135,7 +135,8 @@ const ChatWidget = () => {
                     })}
                 </div>
 
-                <div className="flex-1 overflow-hidden">
+                {/* min-h-0 вместо overflow-hidden — чтобы попапы не обрезались */}
+                <div className="flex-1 min-h-0">
                     {tab === 'settings' ? (
                         <ChatSettings />
                     ) : activeConversationId ? (

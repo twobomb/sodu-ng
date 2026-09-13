@@ -42,14 +42,44 @@ const storage = multer.diskStorage({
 
 // ============================================================
 // ФИКС КОДИРОВКИ ИМЕНИ ФАЙЛА
-// multer/busboy парсит Content-Disposition как latin1.
-// Перекодируем originalname: latin1 → UTF-8.
+//
+// Проблема: в зависимости от версии multer и настроек клиента
+// originalname может приходить:
+//   а) корректным UTF-8 — "Отчёт.pdf"
+//   б) искажённым latin1 — "ÐžÑ‚Ñ‡Ñ‘Ñ‚.pdf"
+//
+// Нельзя слепо перекодировать — иначе корректное имя испортится.
+// Проверяем характерные признаки и перекодируем только битые имена.
 // ============================================================
 const fixFilenameEncoding = (file) => {
     try {
         const original = file.originalname;
+        if (!original || original.length === 0) return file;
+
+        // Если уже есть кириллица и нет характерных признаков двойного
+        // кодирования (Ð, Ñ, Ã, Â в паре с байтами 0x80-0xBF) — всё в порядке
+        const hasCyrillic = /[а-яёА-ЯЁ]/.test(original);
+        const looksLikeLatin1Artifact = /[ÐÑÃÂ][\x80-\xBF]/.test(original);
+
+        if (hasCyrillic && !looksLikeLatin1Artifact) {
+            // Имя уже корректное
+            return file;
+        }
+
+        // Пробуем перекодировать latin1 → utf8
         const fixed = Buffer.from(original, 'latin1').toString('utf8');
-        if (/[^\x00-\x7F]/.test(original) && !fixed.includes('\uFFFD')) {
+
+        // Проверяем результат: не должно быть replacement-символов
+        // и должна появиться кириллица (или имя изначально было ASCII)
+        const fixedHasCyrillic = /[а-яёА-ЯЁ]/.test(fixed);
+        const originalIsAscii = /^[\x00-\x7F]*$/.test(original);
+
+        if (originalIsAscii) {
+            // ASCII не нуждается в перекодировании
+            return file;
+        }
+
+        if (!fixed.includes('\uFFFD') && fixedHasCyrillic) {
             file.originalname = fixed;
         }
     } catch (_) {
@@ -62,7 +92,7 @@ const buildUploadMiddleware = (maxSizeBytes) => {
     const upload = multer({
         storage,
         limits: { fileSize: maxSizeBytes },
-        defParamCharset: 'utf8', // для новых версий multer
+        defParamCharset: 'utf8',
     });
 
     return (req, res, next) => {

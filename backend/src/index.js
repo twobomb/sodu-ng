@@ -141,6 +141,35 @@ io.on('connection', async (socket) => {
 
     broadcastOnlineUsers();
 
+
+        // ============================================================
+        // Подписка на комнаты подразделений
+        // — developer и can_view_all → комната 'depts:all'
+        // — остальные → комнаты своих подразделений 'dept:<uuid>'
+        // ============================================================
+        try {
+            const canSeeAll =
+                socket.user.role === 'developer' ||
+                socket.user.can_view_all === true;
+
+            if (canSeeAll) {
+                socket.join('depts:all');
+                logger.info(`Socket ${socket.id} подписан на depts:all`);
+            } else {
+                const deptRes = await pool.query(
+                    'SELECT department_id FROM user_departments WHERE user_id = $1',
+                    [uid]
+                );
+                for (const row of deptRes.rows) {
+                    socket.join(`dept:${row.department_id}`);
+                }
+                logger.info(
+                    `Socket ${socket.id} подписан на ${deptRes.rows.length} подразделений`
+                );
+            }
+        } catch (err) {
+            logger.error('Ошибка подписки на подразделения: ' + err.message);
+        }
     // ============================================================
     // chat:join — подписаться на комнату чата
     // ============================================================

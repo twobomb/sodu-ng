@@ -122,12 +122,11 @@ function App() {
                                 <Route
                                     path="online"
                                     element={
-                                        <PermissionRoute permission="users.view">
+                                        <PermissionRoute permission="users.view_online">
                                             <OnlineUsers />
                                         </PermissionRoute>
                                     }
                                 />
-
                                 <Route
                                     path="roles"
                                     element={

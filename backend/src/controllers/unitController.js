@@ -234,7 +234,7 @@ const changeStatus = asyncHandler(async (req, res) => {
 
         const io = req.app.get('io');
         if (io && !result.noChange) {
-            io.emit('unit:status_changed', {
+            const payload = {
                 unit_id: result.unit.id,
                 unit_name: result.unit.name,
                 department_id: result.unit.department_id,
@@ -244,7 +244,16 @@ const changeStatus = asyncHandler(async (req, res) => {
                 status_short_name: result.unit.status_short_name,
                 status_color: result.unit.status_color,
                 changed_at: new Date().toISOString(),
-            });
+            };
+
+            // Отправляем:
+            //   1. Всем админам/developer'ам — они в комнате 'depts:all'
+            //   2. Всем, кто привязан к этому подразделению — они в комнате 'dept:<uuid>'
+            // Socket.IO дедуплицирует — если сокет в обеих комнатах, событие придёт один раз.
+            io.to(`dept:${result.unit.department_id}`)
+                .to('depts:all')
+                .emit('unit:status_changed', payload);
+
             emitForceRefresh(io);
         }
 

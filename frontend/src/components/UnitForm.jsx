@@ -19,6 +19,7 @@ import {
 import { Truck, Loader2 } from 'lucide-react';
 import { useUnitTypes, useUnitStatuses } from '../hooks/useUnits';
 import { useAuth } from '../context/AuthContext';
+import SearchableSelect from '@/components/ui/searchable-select';
 
 // ============================================================
 // Нормализация: массив / {data: [...]} / undefined → массив
@@ -76,10 +77,7 @@ const UnitForm = ({
                 show_in_grid: initialData.show_in_grid !== false,
             });
         } else {
-            // При создании подставляем дефолтный статус "В расчете"
-            const defaultStatus = statuses.find(
-                (s) => s.short_name === 'В расчете'
-            );
+            const defaultStatus = statuses.find((s) => s.short_name === 'В расчете');
             setFormData({
                 name: '',
                 plate_number: '',
@@ -92,6 +90,30 @@ const UnitForm = ({
         }
         setLocalError('');
     }, [initialData, open, statuses]);
+
+    // Опции для SearchableSelect: тип техники
+    const typeOptions = useMemo(
+        () =>
+            types.map((t) => ({
+                value: t.id,
+                label: t.short_name,
+                extra: t.name,
+                search: `${t.short_name} ${t.name}`.toLowerCase(),
+            })),
+        [types]
+    );
+
+    // Опции для SearchableSelect: подразделения
+    const deptOptions = useMemo(
+        () =>
+            depts.map((d) => ({
+                value: d.id,
+                label: d.name,
+                extra: d.full_name || '',
+                search: `${d.name} ${d.full_name || ''}`.toLowerCase(),
+            })),
+        [depts]
+    );
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -130,8 +152,6 @@ const UnitForm = ({
             show_in_grid: formData.show_in_grid,
         };
 
-        // status_id отправляем только при создании.
-        // При редактировании статус меняется отдельно (POST /:id/status).
         if (!isEdit && formData.status_id) {
             payload.status_id = formData.status_id;
         }
@@ -140,7 +160,7 @@ const UnitForm = ({
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
             <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
@@ -178,35 +198,42 @@ const UnitForm = ({
                             />
                         </div>
 
-                        {/* Тип */}
+                        {/* Тип техники — SearchableSelect */}
                         <div className="space-y-2">
-                            <Label htmlFor="type_id">Тип техники</Label>
-                            <Select
+                            <Label>Тип техники</Label>
+                            <SearchableSelect
+                                options={typeOptions}
                                 value={formData.type_id}
-                                onValueChange={(v) => handleSelectChange('type_id', v)}
-                            >
-                                <SelectTrigger className="rounded-lg">
-                                    <SelectValue placeholder="Выберите тип" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {types.map((t) => (
-                                        <SelectItem key={t.id} value={t.id}>
-                                            <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-orange-600 min-w-[60px]">
-                          {t.short_name}
-                        </span>
-                                                <span>{t.name}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                onChange={(v) => handleSelectChange('type_id', v)}
+                                placeholder="Выберите тип"
+                                emptyText="Нет доступных типов"
+                                renderOption={(opt) => (
+                                    <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-xs text-orange-600 min-w-[60px] flex-shrink-0">
+                      {opt.label}
+                    </span>
+                                        <span className="text-sm text-slate-700 truncate">
+                      {opt.extra}
+                    </span>
+                                    </div>
+                                )}
+                                renderValue={(opt) => (
+                                    <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-xs text-orange-600 flex-shrink-0">
+                      {opt.label}
+                    </span>
+                                        <span className="text-sm text-slate-800 truncate">
+                      {opt.extra}
+                    </span>
+                                    </div>
+                                )}
+                            />
                         </div>
 
-                        {/* Статус — при создании */}
+                        {/* Начальный статус — при создании, обычный Select */}
                         {!isEdit && (
                             <div className="space-y-2">
-                                <Label htmlFor="status_id">Начальный статус</Label>
+                                <Label>Начальный статус</Label>
                                 <Select
                                     value={formData.status_id}
                                     onValueChange={(v) => handleSelectChange('status_id', v)}
@@ -231,43 +258,41 @@ const UnitForm = ({
                             </div>
                         )}
 
-                        {/* Подразделение */}
+                        {/* Подразделение — SearchableSelect */}
                         <div className="space-y-2">
-                            <Label htmlFor="department_id">Подразделение</Label>
-                            <Select
+                            <Label>Подразделение</Label>
+                            <SearchableSelect
+                                options={deptOptions}
                                 value={formData.department_id}
-                                onValueChange={(v) => handleSelectChange('department_id', v)}
-                            >
-                                <SelectTrigger className="rounded-lg">
-                                    <SelectValue placeholder="Выберите подразделение" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {depts.length === 0 ? (
-                                        <div className="px-3 py-2 text-sm text-slate-400">
-                                            Нет доступных подразделений
-                                        </div>
-                                    ) : (
-                                        depts.map((d) => (
-                                            <SelectItem key={d.id} value={d.id}>
-                                                {d.name}
-                                            </SelectItem>
-                                        ))
-                                    )}
-                                </SelectContent>
-                            </Select>
+                                onChange={(v) => handleSelectChange('department_id', v)}
+                                placeholder="Выберите подразделение"
+                                emptyText="Нет доступных подразделений"
+                                renderOption={(opt) => (
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-sm truncate">{opt.label}</span>
+                                        {opt.extra && (
+                                            <span className="text-[11px] text-slate-400 truncate">
+                        {opt.extra}
+                      </span>
+                                        )}
+                                    </div>
+                                )}
+                            />
+                            {depts.length === 0 && (
+                                <p className="text-xs text-amber-600">
+                                    У вас нет доступа ни к одному подразделению
+                                </p>
+                            )}
                         </div>
 
                         {/* Отделение и показ в сетке */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="squad_number">Отделение</Label>
+                                <Label>Отделение</Label>
                                 <Select
                                     value={String(formData.squad_number)}
                                     onValueChange={(v) =>
-                                        handleSelectChange(
-                                            'squad_number',
-                                            v === 'none' ? '' : v
-                                        )
+                                        handleSelectChange('squad_number', v === 'none' ? '' : v)
                                     }
                                 >
                                     <SelectTrigger className="rounded-lg">
