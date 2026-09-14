@@ -21,6 +21,7 @@ import MaintenanceGuard from './components/MaintenanceGuard';
 import UnitTypesList from './components/units/UnitTypesList';
 import UnitStatusesList from './components/units/UnitStatusesList';
 import UnitsGrid from './pages/units/UnitsGrid';
+import HelpPage from './pages/HelpPage';
 
 const queryClient = new QueryClient();
 
@@ -83,6 +84,10 @@ function App() {
                                             <UnitsList />
                                         </PermissionRoute>
                                     }
+                                />
+                                <Route
+                                    path="help"
+                                    element={<HelpPage />}
                                 />
                                 <Route
                                     path="unit-types"

@@ -8,8 +8,11 @@ const { v4: uuidv4 } = require('uuid');
 
 const updateSettingsSchema = Joi.object({
     maintenance_mode: Joi.boolean(),
+    chat_max_file_size_mb: Joi.number().integer().min(1).max(500),
+    chat_max_pinned_chats: Joi.number().integer().min(1).max(50),
+    chat_max_pinned_channels: Joi.number().integer().min(1).max(50),
+    chat_edit_window_minutes: Joi.number().integer().min(1).max(1440),
 });
-
 // GET /api/settings — только developer
 const getSettings = asyncHandler(async (req, res) => {
     try {
@@ -37,6 +40,7 @@ const getPublicSettings = asyncHandler(async (req, res) => {
 });
 
 // PUT /api/settings — только developer
+
 const updateSettings = asyncHandler(async (req, res) => {
     const { error, value } = updateSettingsSchema.validate(req.body);
     if (error) {
@@ -46,6 +50,24 @@ const updateSettings = asyncHandler(async (req, res) => {
     try {
         const updates = {};
 
+        // --- Простые числовые настройки ---
+        const numericKeys = [
+            'chat_max_file_size_mb',
+            'chat_max_pinned_chats',
+            'chat_max_pinned_channels',
+            'chat_edit_window_minutes',
+        ];
+
+        for (const key of numericKeys) {
+            if (value[key] !== undefined) {
+                await settingsService.set(key, value[key], req.user.id);
+                updates[key] = value[key];
+            }
+        }
+
+        const io = req.app.get('io');
+
+        // --- Режим ТО ---
         if (value.maintenance_mode !== undefined) {
             await settingsService.set(
                 'maintenance_mode',
@@ -53,55 +75,48 @@ const updateSettings = asyncHandler(async (req, res) => {
                 req.user.id
             );
             updates.maintenance_mode = value.maintenance_mode;
-        }
 
-        const io = req.app.get('io');
+            if (value.maintenance_mode === true) {
+                const sessions = await pool.query(`
+          SELECT DISTINCT s.user_id
+          FROM sessions s
+          JOIN users u ON s.user_id = u.id
+          WHERE u.role != 'developer'
+        `);
+                const nonDevUserIds = sessions.rows.map((r) => r.user_id);
 
-        // ---- Включение режима ТО ----
-        if (value.maintenance_mode === true) {
-            // Находим все сессии не-developer пользователей
-            const sessions = await pool.query(`
-                SELECT DISTINCT s.user_id
-                FROM sessions s
-                         JOIN users u ON s.user_id = u.id
-                WHERE u.role != 'developer'
-            `);
-
-            const nonDevUserIds = sessions.rows.map((r) => r.user_id);
-
-            // Удаляем их сессии
-            if (nonDevUserIds.length) {
-                await pool.query(
-                    `DELETE FROM sessions WHERE user_id = ANY($1::uuid[])`,
-                    [nonDevUserIds]
-                );
-            }
-
-            // Оповещаем сокеты: с причиной 'maintenance_mode', чтобы фронт
-            // показал корректное сообщение на странице логина
-            if (io) {
-                for (const uid of nonDevUserIds) {
-                    io.to(`user:${uid}`).emit('force_logout', {
-                        reason: 'maintenance_mode',
-                        message: 'Система переведена в режим технического обслуживания',
-                    });
+                if (nonDevUserIds.length) {
+                    await pool.query(
+                        `DELETE FROM sessions WHERE user_id = ANY($1::uuid[])`,
+                        [nonDevUserIds]
+                    );
                 }
-                io.emit('force_refresh');
-            }
 
-            logger.warn(
-                `Включён режим ТО. Сессий завершено: ${nonDevUserIds.length}`,
-                { by: req.user.id }
-            );
+                if (io) {
+                    for (const uid of nonDevUserIds) {
+                        io.to(`user:${uid}`).emit('force_logout', {
+                            reason: 'maintenance_mode',
+                        });
+                    }
+                    io.emit('force_refresh');
+                }
+
+                logger.warn(
+                    `Включён режим ТО. Сессий завершено: ${nonDevUserIds.length}`,
+                    { by: req.user.id }
+                );
+            } else {
+                if (io) {
+                    io.emit('maintenance_mode_off');
+                    io.emit('force_refresh');
+                }
+                logger.info('Режим ТО выключен', { by: req.user.id });
+            }
         }
 
-        // ---- Выключение режима ТО ----
-        if (value.maintenance_mode === false) {
-            if (io) {
-                io.emit('maintenance_mode_off');
-                io.emit('force_refresh');
-            }
-            logger.info('Режим ТО выключен', { by: req.user.id });
+        // Если поменяли размер файла — уведомим фронт
+        if (updates.chat_max_file_size_mb !== undefined && io) {
+            io.emit('force_refresh');
         }
 
         res.json(updates);
@@ -114,7 +129,6 @@ const updateSettings = asyncHandler(async (req, res) => {
         res.status(500).json({ error: err.message || 'Ошибка обновления настроек' });
     }
 });
-
 // ============================================================
 // Схема для broadcast
 // ============================================================

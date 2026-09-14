@@ -21,6 +21,7 @@ const chatRoutes = require('./routes/chatRoutes');
 const unitTypeRoutes = require('./routes/unitTypeRoutes');
 const unitStatusRoutes = require('./routes/unitStatusRoutes');
 const onlineService = require('./services/onlineService');
+const reportRoutes = require('./routes/reportRoutes');
 
 const { verifyToken } = require('./utils/jwt');
 const { touchSession } = require('./services/authService');
@@ -53,6 +54,8 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/chat', messageRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/reports', reportRoutes);
+
 
 app.get('/api/health', async (req, res, next) => {
     try {

@@ -9,6 +9,7 @@ import {
     Activity,
     Shield,
     Building2,
+    HelpCircle,
     Settings as SettingsIcon,
     MessageCircle,
     LayoutGrid,
@@ -199,6 +200,20 @@ const NavBar = () => {
                                 </Button>
                             </Link>
                         )}
+
+                        <Link to="/help">
+                            <Button
+                                variant="ghost"
+                                className={`rounded-lg transition-all ${
+                                    isActive('/help')
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                        : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                                <HelpCircle className="h-4 w-4 mr-2" />
+                                Справка
+                            </Button>
+                        </Link>
                     </div>
 
                     <Link to="/online" title="Онлайн-пользователи">

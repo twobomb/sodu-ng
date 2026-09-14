@@ -28,32 +28,27 @@ const LoginPage = () => {
   // Читаем причину выхода из sessionStorage при монтировании страницы
   useEffect(() => {
     const reason = sessionStorage.getItem('logout_reason');
-
     if (!reason) return;
 
     switch (reason) {
       case 'session_replaced':
-        setNotice(
-            'Сессия завершена: выполнен вход с другого устройства. Если это были не вы — смените пароль.'
-        );
+        setNotice('Сессия завершена: выполнен вход с другого устройства.');
         setNoticeType('warning');
-        break;
-      case 'maintenance_mode':
-        setNotice(
-            'Система на техническом обслуживании. Вход временно недоступен, попробуйте позже.'
-        );
-        setNoticeType('info');
         break;
       case 'blocked':
         setNotice('Ваш аккаунт заблокирован администратором.');
         setNoticeType('warning');
         break;
+      case 'maintenance_mode':
+        // НЕ показываем на LoginPage — заглушка обрабатывается MaintenanceGuard
+        // Но на всякий случай дублируем как уведомление, если пользователь сюда попал
+        break;
       default:
         break;
     }
 
-    // Очищаем флаг, чтобы он не показывался при следующем визите
-    sessionStorage.removeItem('logout_reason');
+    // Не удаляем сразу — дадим MaintenanceGuard прочитать флаг.
+    // Удаляем при успешном логине или при ручной перезагрузке.
   }, []);
 
   const handleSubmit = async (e) => {

@@ -414,22 +414,25 @@ const getGridData = async (userId, canViewAll, departmentIds = [], sort = 'defau
             ACTIVE_STATUSES.includes(u.status_short_name)
         );
     }
+// 6. Считаем level для отображения иерархии.
+// ВАЖНО: если у подразделения есть parent_id, но родитель не в выборке
+// (у пользователя нет на него прав), считаем его корневым —
+// иначе оно потеряется и не попадёт в сетку.
 
-    // 6. Считаем level для отображения иерархии
-    // Строим карту parent -> children, обходим от корней
+    const visibleIds = new Set(departments.map((d) => d.id));
     const childrenMap = {};
     const roots = [];
+
     for (const d of departments) {
-        if (d.parent_id) {
+        // Родитель есть и он виден пользователю → это ребёнок
+        if (d.parent_id && visibleIds.has(d.parent_id)) {
             if (!childrenMap[d.parent_id]) childrenMap[d.parent_id] = [];
             childrenMap[d.parent_id].push(d);
         } else {
+            // Либо корневое, либо родитель недоступен → показываем на верхнем уровне
             roots.push(d);
         }
     }
-
-    // Проверяем, есть ли у подразделения среди видимых предков, чтобы не терять ветки
-    const visibleIds = new Set(deptIds);
 
     const flat = [];
     const walk = (nodes, level) => {

@@ -10,6 +10,12 @@ const {
     getLatestBroadcast,
 } = require('../controllers/settingsController');
 
+const {
+    listFiles,
+    getFolderSize,
+    deleteFiles,
+} = require('../controllers/filesController');
+
 // Публичный — без авторизации
 router.get('/public', getPublicSettings);
 
@@ -18,6 +24,15 @@ router.get('/public', getPublicSettings);
 router.use(authenticate);
 router.use(requireDeveloper);
 
+// Управление файлами
+router.get('/files/folder-size', getFolderSize);
+router.get('/files', listFiles);
+router.post('/files/delete', deleteFiles);
+
+// Основные настройки
+router.post('/broadcast', sendBroadcast);
+router.get('/', getSettings);
+router.put('/', updateSettings);
 router.post('/broadcast', sendBroadcast);
 router.get('/', getSettings);
 router.put('/', updateSettings);
