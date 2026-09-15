@@ -201,14 +201,6 @@ const ChatMembersPanel = ({ open, onOpenChange, conversationId }) => {
                                                                 <Crown className="h-3 w-3 text-amber-500 flex-shrink-0" />
                                                             )}
                                                         </div>
-                                                        {isMe && (
-                                                            <span className="text-[10px] text-slate-400">
-                                (вы)
-                              </span>
-                                                        )}
-                                                        {memberIsAdmin && (
-                                                            <Crown className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                                                        )}
                                                     </div>
                                                     <div className="text-xs text-slate-400 truncate">
                                                         @{m.username}
