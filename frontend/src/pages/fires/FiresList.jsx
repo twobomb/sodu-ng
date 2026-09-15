@@ -95,7 +95,6 @@ const FiresList = () => {
     };
 
     const handleFormSubmit = (data) => {
-        console.log('Submit:', data);
         setIsFormOpen(false);
     };
 

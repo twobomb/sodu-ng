@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
+import {useState, useEffect, useMemo} from 'react';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
+import {Button} from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -9,14 +9,8 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Building2, Loader2 } from 'lucide-react';
+import SearchableSelect from '@/components/ui/searchable-select';
+import {Building2, Loader2} from 'lucide-react';
 
 const DepartmentForm = ({
                             open,
@@ -70,9 +64,27 @@ const DepartmentForm = ({
     );
     const canChangeParent = !hasChildren;
 
+    // Опции для SearchableSelect: "Нет (корневое)" + корневые подразделения
+    const parentOptions = useMemo(
+        () => [
+            {value: '', label: 'Нет (корневое)', extra: '', search: 'нет корневое'},
+            ...availableParents.map((d) => ({
+                value: d.id,
+                label: d.name,
+                extra: d.full_name || '',
+                search: `${d.name} ${d.full_name || ''}`.toLowerCase(),
+            })),
+        ],
+        [availableParents]
+    );
+
     const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        const {name, value} = e.target;
+        setFormData((prev) => ({...prev, [name]: value}));
+    };
+
+    const handleSelectChange = (field, value) => {
+        setFormData((prev) => ({...prev, [field]: value}));
     };
 
     const handleSubmit = (e) => {
@@ -100,7 +112,7 @@ const DepartmentForm = ({
             <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
-                        <Building2 className="h-5 w-5 text-orange-500" />
+                        <Building2 className="h-5 w-5 text-orange-500"/>
                         {isEdit ? 'Редактировать подразделение' : 'Новое подразделение'}
                     </DialogTitle>
                 </DialogHeader>
@@ -165,34 +177,29 @@ const DepartmentForm = ({
 
                         {/* Родительское подразделение */}
                         <div className="space-y-2">
-                            <Label htmlFor="parent_id">Родительское подразделение</Label>
-                            <Select
-                                value={formData.parent_id || 'none'}
-                                onValueChange={(value) =>
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        parent_id: value === 'none' ? '' : value,
-                                    }))
-                                }
+                            <Label>Родительское подразделение</Label>
+                            <SearchableSelect
+                                options={parentOptions}
+                                value={formData.parent_id || ''}
+                                onChange={(v) => handleSelectChange('parent_id', v)}
+                                placeholder="Нет (корневое)"
+                                emptyText="Нет доступных подразделений"
                                 disabled={!canChangeParent}
-                            >
-                                <SelectTrigger className="rounded-lg">
-                                    <SelectValue placeholder="Нет (корневое)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Нет (корневое)</SelectItem>
-                                    {availableParents.map((dept) => (
-                                        <SelectItem key={dept.id} value={dept.id}>
-                                            {dept.name}
-                                            {dept.full_name && (
-                                                <span className="text-slate-400 ml-2">
-                          — {dept.full_name}
-                        </span>
+                                renderOption={(opt) =>
+                                    opt.value === '' ? (
+                                        <span className="text-sm">{opt.label}</span>
+                                    ) : (
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-sm truncate">{opt.label}</span>
+                                            {opt.extra && (
+                                                <span className="text-[11px] text-slate-400 truncate">
+                                                    {opt.extra}
+                                                </span>
                                             )}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                        </div>
+                                    )
+                                }
+                            />
                             {!canChangeParent && (
                                 <p className="text-xs text-amber-600">
                                     У этого подразделения есть дети — сначала перенесите их.
@@ -227,7 +234,7 @@ const DepartmentForm = ({
                         >
                             {isLoading ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin"/>
                                     Сохранение...
                                 </>
                             ) : isEdit ? (

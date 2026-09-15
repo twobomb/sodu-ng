@@ -168,6 +168,35 @@ const deleteFileFromDisk = async (storedName) => {
     }
 };
 
+// ============================================================
+// Удаление всех вложений сообщения:
+// записи в БД + физические файлы (+ jpg-превью, если есть)
+// ============================================================
+const deleteAttachmentsForMessage = async (messageId) => {
+    const res = await pool.query(
+        `SELECT id, stored_name, is_public FROM attachments WHERE message_id = $1`,
+        [messageId]
+    );
+    const rows = res.rows;
+    if (!rows.length) return;
+
+    for (const att of rows) {
+        const baseDir = att.is_public ? AVATARS_DIR : UPLOAD_DIR;
+        try {
+            await fsp.unlink(path.join(baseDir, att.stored_name));
+        } catch (_) {
+            /* файл уже отсутствует — не критично */
+        }
+        try {
+            await fsp.unlink(path.join(UPLOAD_DIR, `thumb_${att.id}.jpg`));
+        } catch (_) {
+            /* превью может не существовать */
+        }
+    }
+
+    await pool.query(`DELETE FROM attachments WHERE message_id = $1`, [messageId]);
+};
+
 module.exports = {
     createAttachments,
     getAttachmentById,
@@ -176,5 +205,6 @@ module.exports = {
     getFilePathRead,
     getThumbnailPath,
     deleteFileFromDisk,
+    deleteAttachmentsForMessage,
     IMAGE_MIMES,
 };

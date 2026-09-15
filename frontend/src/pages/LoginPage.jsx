@@ -56,7 +56,6 @@ const LoginPage = () => {
     setError('');
     setNotice('');
     setLoading(true);
-    initAudio();
     // Инициализация AudioContext прямо в обработчике клика —
     // это даёт браузеру понять, что пользователь взаимодействовал
     initAudio();

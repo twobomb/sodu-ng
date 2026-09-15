@@ -1,4 +1,5 @@
 const pool = require('../db/pool');
+const attachmentService = require('./attachmentService');
 
 // ============================================================
 // ПОЛУЧЕНИЕ СООБЩЕНИЙ С ПАГИНАЦИЕЙ (cursor-based)
@@ -206,6 +207,9 @@ const deleteMessage = async (messageId, userId, canModerate = false) => {
     if (!canModerate && existing.user_id !== userId) {
         return { ok: false, reason: 'forbidden' };
     }
+
+    // Удаляем вложения: записи в БД и физические файлы из uploads/
+    await attachmentService.deleteAttachmentsForMessage(messageId);
 
     const res = await pool.query(
         `UPDATE messages
