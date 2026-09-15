@@ -13,8 +13,12 @@ import {
     isUnitSoundEnabled,
 } from '../lib/unitNotificationSound';
 
-const SOCKET_URL =
-    import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+// VITE_API_URL в проде = '/api', в dev = 'http://localhost:5000/api'.
+// Убираем /api, и если остаётся пусто — значит API на том же origin.
+// Возвращаем undefined, чтобы socket.io взял window.location (сам выберет wss:// на HTTPS).
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const SOCKET_URL = API_BASE.replace(/\/api\/?$/, '') || undefined;
+
 
 export const useSocket = () => {
     const { user } = useAuth();
