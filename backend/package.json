@@ -31,7 +31,6 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "node-pg-migrate": "^9.0.0",
     "nodemon": "^3.1.14"
   }
 }
