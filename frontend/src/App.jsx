@@ -6,7 +6,8 @@ import { ChatProvider } from './context/ChatContext';
 import LoginPage from './pages/LoginPage';
 import Layout from './pages/Layout';
 
-import FiresList from './pages/fires/FiresList';
+import CallsList from './pages/calls/CallsList';
+import CallDetail from './pages/calls/CallDetail';
 import UnitsList from './pages/units/UnitsList';
 import UsersList from './pages/users/UsersList';
 import OnlineUsers from './pages/users/OnlineUsers';
@@ -67,10 +68,18 @@ function App() {
                                         }
                                     />
                                     <Route
-                                        path="fires"
+                                        path="calls"
                                         element={
-                                            <PermissionRoute permission="fires.view">
-                                                <FiresList />
+                                            <PermissionRoute permission="calls.view">
+                                                <CallsList />
+                                            </PermissionRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="calls/:id"
+                                        element={
+                                            <PermissionRoute permission="calls.view">
+                                                <CallDetail />
                                             </PermissionRoute>
                                         }
                                     />

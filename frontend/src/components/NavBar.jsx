@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     Flame,
+    Siren,
     Truck,
     Users,
     ChevronDown,
@@ -74,18 +75,18 @@ const NavBar = () => {
 
                     {/* Меню */}
                     <div className="flex items-center gap-1">
-                        {has('fires.view') && (
-                            <Link to="/fires">
+                        {has('calls.view') && (
+                            <Link to="/calls">
                                 <Button
                                     variant="ghost"
                                     className={`rounded-lg transition-all ${
-                                        isActive('/fires')
+                                        isActive('/calls')
                                             ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
                                             : 'text-slate-600 hover:bg-slate-100'
                                     }`}
                                 >
-                                    <Flame className="h-4 w-4 mr-2" />
-                                    Пожары
+                                    <Siren className="h-4 w-4 mr-2" />
+                                    Вызовы
                                 </Button>
                             </Link>
                         )}

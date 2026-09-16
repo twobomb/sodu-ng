@@ -4,13 +4,13 @@ import { ShieldOff } from 'lucide-react';
 
 /**
  * Редиректит на первый доступный раздел.
- * Порядок приоритета: Пожары → Техника → Подразделения → Пользователи → Роли.
+ * Порядок приоритета: Вызовы → Техника → Подразделения → Пользователи → Роли.
  * Если ничего не доступно — показывает заглушку.
  */
 const HomeRedirect = () => {
     const { has } = usePermissions();
 
-    if (has('fires.view')) return <Navigate to="/fires" replace />;
+    if (has('calls.view')) return <Navigate to="/calls" replace />;
     if (has('units.view')) return <Navigate to="/units" replace />;
     if (has('departments.view')) return <Navigate to="/departments" replace />;
     if (has('users.view')) return <Navigate to="/users" replace />;

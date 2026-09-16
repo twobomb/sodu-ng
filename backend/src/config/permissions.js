@@ -18,14 +18,15 @@ const PERMISSIONS_CATALOG = [
         ],
     },
     {
-        key: 'fires',
-        name: 'Пожары',
-        description: 'Управление пожарами',
+        key: 'calls',
+        name: 'Вызовы',
+        description: 'Управление вызовами',
         permissions: [
-            { key: 'fires.view', name: 'Просмотр', description: 'Видеть список пожаров' },
-            { key: 'fires.create', name: 'Создание', description: 'Добавлять пожары' },
-            { key: 'fires.update', name: 'Редактирование', description: 'Изменять пожары' },
-            { key: 'fires.delete', name: 'Удаление', description: 'Удалять пожары' },
+            { key: 'calls.view', name: 'Просмотр', description: 'Видеть список и карточку вызова' },
+            { key: 'calls.create', name: 'Создание', description: 'Создавать новые вызовы' },
+            { key: 'calls.update', name: 'Редактирование', description: 'Изменять поля вызова в обработке' },
+            { key: 'calls.update_status', name: 'Смена статуса', description: 'Менять статус вызова (Закрыт, Ошибочный)' },
+            { key: 'calls.update_closed', name: 'Правка закрытых', description: 'Редактировать закрытые вызовы' },
         ],
     },
     {

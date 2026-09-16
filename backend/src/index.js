@@ -10,7 +10,7 @@ const { notFoundHandler, errorHandler } = require('./middlewares/errorHandler');
 
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
-const fireRoutes = require('./routes/fireRoutes');
+const callRoutes = require('./routes/callRoutes');
 const unitRoutes = require('./routes/unitRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
 const onlineRoutes = require('./routes/onlineRoutes');
@@ -44,7 +44,7 @@ app.use(requestLogger);
 // ----- Роуты -----
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/fires', fireRoutes);
+app.use('/api/calls', callRoutes);
 app.use('/api/units', unitRoutes);
 app.use('/api/unit-types', unitTypeRoutes);
 app.use('/api/unit-statuses', unitStatusRoutes);
