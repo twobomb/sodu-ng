@@ -146,6 +146,29 @@ export const useChangeUnitStatus = () => {
             qc.invalidateQueries(['units-grid']);
             qc.invalidateQueries(['unit-history']);
             qc.invalidateQueries(['units-history-global']);
+            qc.invalidateQueries(['units-calls-available']);
+            qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'call' || q.queryKey[0] === 'calls' });
+        },
+    });
+};
+
+// Доступные вызовы для привязки техники
+export const useAvailableCalls = () =>
+    useQuery({
+        queryKey: ['units-calls-available'],
+        queryFn: () => api.getAvailableCalls().then((r) => r.data),
+        staleTime: 30 * 1000,
+    });
+
+// Показатели техники (топливо/пена/порошок/пробег)
+export const useUpdateUnitMetrics = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }) => api.updateUnitMetrics(id, data),
+        onSuccess: () => {
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+            qc.invalidateQueries(['unit', undefined]);
         },
     });
 };

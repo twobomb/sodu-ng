@@ -7,15 +7,27 @@ const pool = require('../db/pool');
 
 
 
+const UNIT_CATEGORIES = [
+    'Основная техника',
+    'Специальная техника',
+    'Вспомогательная техника',
+    'Пожарный поезд',
+    'Приспособленная и другая',
+];
+
+const categoryField = Joi.string().valid(...UNIT_CATEGORIES).allow('', null);
+
 const createSchema = Joi.object({
     name: Joi.string().min(2).max(100).required(),
     short_name: Joi.string().min(1).max(50).required(),
+    category: Joi.string().valid(...UNIT_CATEGORIES).required(),
     sort_order: Joi.number().integer().min(0).max(10000),
 });
 
 const updateSchema = Joi.object({
     name: Joi.string().min(2).max(100),
     short_name: Joi.string().min(1).max(50),
+    category: categoryField,
     sort_order: Joi.number().integer().min(0).max(10000),
 });
 

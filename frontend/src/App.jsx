@@ -24,7 +24,6 @@ import DeveloperRoute from './components/DeveloperRoute';
 import HomeRedirect from './components/HomeRedirect';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import UnitTypesList from './components/units/UnitTypesList';
-import UnitStatusesList from './components/units/UnitStatusesList';
 import UnitsGrid from './pages/units/UnitsGrid';
 import HelpPage from './pages/HelpPage';
 
@@ -93,14 +92,6 @@ const router = createBrowserRouter([
                 element: (
                     <PermissionRoute permission="units.view">
                         <UnitTypesList />
-                    </PermissionRoute>
-                ),
-            },
-            {
-                path: 'unit-statuses',
-                element: (
-                    <PermissionRoute permission="units.view">
-                        <UnitStatusesList />
                     </PermissionRoute>
                 ),
             },

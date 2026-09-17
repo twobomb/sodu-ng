@@ -11,6 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -161,37 +168,41 @@ const FireCategoriesList = () => {
             </div>
 
             {editing && (
-                <div className="rounded-xl border border-slate-200 p-4">
-                    <h2 className="text-base font-semibold text-slate-700 mb-3">{editing === '__new__' ? 'Новая категория' : 'Редактирование'}</h2>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="space-y-2">
-                            <Label htmlFor="cat-name">Название</Label>
-                            <Input id="cat-name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg" />
+                <Dialog open={true} onOpenChange={(o) => { if (!o) { setEditing(null); setFormError(''); } }}>
+                    <DialogContent className="sm:max-w-lg rounded-2xl">
+                        <DialogHeader>
+                            <DialogTitle>{editing === '__new__' ? 'Новая категория' : 'Редактирование категории'}</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-3 sm:grid-cols-3 py-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="cat-name">Название</Label>
+                                <Input id="cat-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus className="rounded-lg" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="cat-code">Код (необязательно)</Label>
+                                <Input id="cat-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="1.1.1" className="rounded-lg" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="cat-parent">Родитель</Label>
+                                <NativeSelect value={parentId} onChange={(e) => setParentId(e.target.value)} className="w-full">
+                                    <NativeSelectOption value="">Корневая категория</NativeSelectOption>
+                                    {cats.map((c) => (
+                                        <NativeSelectOption key={c.id} value={c.id}>
+                                            {c.code ? c.code + ' ' : ''}{c.name}
+                                        </NativeSelectOption>
+                                    ))}
+                                </NativeSelect>
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="cat-code">Код (необязательно)</Label>
-                            <Input id="cat-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="1.1.1" className="rounded-lg" />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="cat-parent">Родитель</Label>
-                            <NativeSelect value={parentId} onChange={(e) => setParentId(e.target.value)} className="w-full">
-                                <NativeSelectOption value="">Корневая категория</NativeSelectOption>
-                                {cats.map((c) => (
-                                    <NativeSelectOption key={c.id} value={c.id}>
-                                        {c.code ? c.code + ' ' : ''}{c.name}
-                                    </NativeSelectOption>
-                                ))}
-                            </NativeSelect>
-                        </div>
-                    </div>
-                    {formError && <p className="text-sm text-red-600 mt-2">{formError}</p>}
-                    <div className="flex gap-2 mt-3">
-                        <Button onClick={handleSubmit} disabled={!name.trim() || create.isPending || update.isPending} className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700">
-                            {create.isPending || update.isPending ? 'Сохранение...' : 'Сохранить'}
-                        </Button>
-                        <Button variant="outline" onClick={() => setEditing(null)} className="rounded-lg">Отмена</Button>
-                    </div>
-                </div>
+                        {formError && <p className="text-sm text-red-600 mt-2">{formError}</p>}
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => { setEditing(null); setFormError(''); }} className="rounded-lg">Отмена</Button>
+                            <Button onClick={handleSubmit} disabled={!name.trim() || create.isPending || update.isPending} className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700">
+                                {create.isPending || update.isPending ? 'Сохранение...' : 'Сохранить'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             )}
 
             <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>

@@ -8,14 +8,20 @@ const logger = require('../utils/logger');
 const SELECT_UNIT_BASE = `
   u.id, u.name, u.plate_number, u.department_id,
   u.type_id, u.status_id, u.squad_number, u.show_in_grid,
+  u.call_id, u.fuel_gasoline, u.fuel_diesel, u.foam_agent, u.powder, u.mileage,
   u.created_at, u.updated_at,
   t.name       AS type_name,
   t.short_name AS type_short_name,
+  t.category   AS type_category,
   s.name       AS status_name,
   s.short_name AS status_short_name,
   s.color      AS status_color,
   s.color_name AS status_color_name,
-  d.name       AS department_name
+  s.group_kind AS status_group_kind,
+  d.name       AS department_name,
+  cl.type      AS call_type,
+  cl.incident_at AS call_incident_at,
+  cl.address   AS call_address
 `;
 
 const FROM_UNIT_BASE = `
@@ -23,6 +29,7 @@ const FROM_UNIT_BASE = `
   LEFT JOIN unit_types t ON u.type_id = t.id
   LEFT JOIN unit_statuses s ON u.status_id = s.id
   LEFT JOIN departments d ON u.department_id = d.id
+  LEFT JOIN calls cl ON cl.id = u.call_id
 `;
 
 // ============================================================
@@ -124,7 +131,7 @@ const createUnit = async (data, actorId) => {
 // ОБНОВЛЕНИЕ ТЕХНИКИ
 // Статус меняется ОТДЕЛЬНО через changeStatus()
 // ============================================================
-const updateUnit = async (id, data) => {
+const updateUnit = async (id, data, actorId = null) => {
     const fields = [];
     const values = [];
     let idx = 1;
@@ -136,12 +143,17 @@ const updateUnit = async (id, data) => {
         'department_id',
         'squad_number',
         'show_in_grid',
+        'fuel_gasoline',
+        'fuel_diesel',
+        'foam_agent',
+        'powder',
+        'mileage',
     ];
 
     for (const key of allowed) {
         if (data[key] !== undefined) {
             fields.push(`${key} = $${idx++}`);
-            values.push(data[key]);
+            values.push(data[key] === '' ? null : data[key]);
         }
     }
 
@@ -158,6 +170,18 @@ const updateUnit = async (id, data) => {
     );
 
     if (!res.rows.length) return null;
+
+    // История показателей (если переданы)
+    for (const [col, metric] of METRICS) {
+        if (data[col] !== undefined) {
+            await pool.query(
+                `INSERT INTO unit_metrics_history (unit_id, metric, value, changed_by, changed_at)
+                 VALUES ($1, $2, $3, $4, NOW())`,
+                [id, metric, data[col] === '' ? null : data[col], actorId || null]
+            );
+        }
+    }
+
     return getUnitById(id);
 };
 
@@ -165,33 +189,43 @@ const updateUnit = async (id, data) => {
 // СМЕНА СТАТУСА
 // Пишет запись в историю. Если статус тот же — не пишет.
 // ============================================================
-const changeStatus = async (unitId, statusId, actorId, comment = null) => {
+// Текст действия для «Хода событий» при установке выездного статуса
+const eventTextForStatus = (statusName, unitName) => {
+    if (statusName.includes('В дороге')) return `${unitName} выехала к месту вызова`;
+    if (statusName.includes('На месте')) return `${unitName} прибыла на место вызова`;
+    if (statusName.includes('Возвращается')) return `${unitName} возвращается с места вызова`;
+    return `${unitName}: ${statusName}`;
+};
+
+// ============================================================
+// СМЕНА СТАТУСА (+ привязка к вызову, даты, событие в ход событий)
+// ============================================================
+const changeStatus = async (unitId, statusId, actorId, opts = {}) => {
+    const { callId = null, dispatchAt = null, arrivalAt = null, addEvent = false, comment = null } = opts;
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // Текущий статус
         const currentRes = await client.query(
-            `SELECT status_id FROM units WHERE id = $1`,
+            `SELECT status_id, call_id, name FROM units WHERE id = $1`,
             [unitId]
         );
         if (!currentRes.rows.length) {
             await client.query('ROLLBACK');
             return { ok: false, reason: 'not_found' };
         }
+        const current = currentRes.rows[0];
+        const statusChanged = current.status_id !== statusId;
 
-        const currentStatusId = currentRes.rows[0].status_id;
-
-        // Если статус не меняется — не пишем в историю
-        if (currentStatusId === statusId) {
+        // Если ничего не меняется — ничего не пишем
+        if (!statusChanged && !callId && !dispatchAt && !arrivalAt && !addEvent) {
             await client.query('COMMIT');
             return { ok: true, unit: await getUnitById(unitId), noChange: true };
         }
 
-        // Проверяем, что новый статус существует
         const statusRes = await client.query(
-            `SELECT id, name, short_name, color FROM unit_statuses WHERE id = $1`,
+            `SELECT id, name, short_name, color, group_kind FROM unit_statuses WHERE id = $1`,
             [statusId]
         );
         if (!statusRes.rows.length) {
@@ -199,20 +233,46 @@ const changeStatus = async (unitId, statusId, actorId, comment = null) => {
             return { ok: false, reason: 'status_not_found' };
         }
         const s = statusRes.rows[0];
+        const isDispatch = s.group_kind === 'dispatch';
 
-        // Обновляем технику
+        // Привязка к вызову: обычный статус снимает, выездной — ставит (если указан)
+        const newCallId = isDispatch ? (callId || current.call_id || null) : null;
+
         await client.query(
-            `UPDATE units SET status_id = $1, updated_at = NOW() WHERE id = $2`,
-            [statusId, unitId]
+            `UPDATE units SET status_id = $1, call_id = $2, updated_at = NOW() WHERE id = $3`,
+            [statusId, newCallId, unitId]
         );
 
-        // Пишем в историю
-        await client.query(
-            `INSERT INTO unit_status_history
-         (unit_id, status_id, status_name, status_short_name, status_color, changed_by, comment)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [unitId, statusId, s.name, s.short_name, s.color, actorId || null, comment]
-        );
+        // История статуса — только если статус изменился
+        if (statusChanged) {
+            await client.query(
+                `INSERT INTO unit_status_history
+                 (unit_id, status_id, status_name, status_short_name, status_color, changed_by, comment)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [unitId, statusId, s.name, s.short_name, s.color, actorId || null, comment]
+            );
+        }
+
+        // Даты выезда/прибытия в call_units — при передаче callId (независимо от статуса)
+        if (callId) {
+            await client.query(
+                `INSERT INTO call_units (call_id, unit_id, dispatch_at, arrival_at)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (call_id, unit_id) DO UPDATE SET
+                   dispatch_at = COALESCE(EXCLUDED.dispatch_at, call_units.dispatch_at),
+                   arrival_at = COALESCE(EXCLUDED.arrival_at, call_units.arrival_at)`,
+                [callId, unitId, dispatchAt || null, arrivalAt || null]
+            );
+
+            // Событие в «ход событий» — только при реальной смене на выездной статус
+            if (addEvent && statusChanged && isDispatch) {
+                await client.query(
+                    `INSERT INTO call_events (id, call_id, event_at, text, created_by)
+                     VALUES ($1, $2, NOW(), $3, $4)`,
+                    [uuidv4(), callId, eventTextForStatus(s.name, current.name), actorId || null]
+                );
+            }
+        }
 
         await client.query('COMMIT');
     } catch (err) {
@@ -224,6 +284,83 @@ const changeStatus = async (unitId, statusId, actorId, comment = null) => {
 
     const unit = await getUnitById(unitId);
     return { ok: true, unit };
+};
+
+// ============================================================
+// ОБНОВЛЕНИЕ ПОКАЗАТЕЛЕЙ (топливо/пена/порошок/пробег) + история
+// ============================================================
+const METRICS = [
+    ['fuel_gasoline', 'gasoline'],
+    ['fuel_diesel', 'diesel'],
+    ['foam_agent', 'foam'],
+    ['powder', 'powder'],
+    ['mileage', 'mileage'],
+];
+
+const updateMetrics = async (unitId, values, actorId) => {
+    const fields = [];
+    const params = [];
+    const historyRows = [];
+    let idx = 1;
+
+    for (const [col, metric] of METRICS) {
+        if (values[col] === undefined) continue;
+        const v = values[col] === '' || values[col] === null ? null : Number(values[col]);
+        fields.push(`${col} = $${idx++}`);
+        params.push(v);
+        historyRows.push([unitId, metric, v, actorId || null]);
+    }
+
+    if (!fields.length) return getUnitById(unitId);
+
+    params.push(unitId);
+    const res = await pool.query(
+        `UPDATE units SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id`,
+        params
+    );
+    if (!res.rows.length) return null;
+
+    for (const r of historyRows) {
+        await pool.query(
+            `INSERT INTO unit_metrics_history (unit_id, metric, value, changed_by, changed_at)
+             VALUES ($1, $2, $3, $4, NOW())`,
+            r
+        );
+    }
+
+    return getUnitById(unitId);
+};
+
+// ============================================================
+// ДОСТУПНЫЕ ВЫЗОВЫ ДЛЯ ПРИВЯЗКИ ТЕХНИКИ
+// Только «Обрабатывается» и из доступных подразделений
+// ============================================================
+const getAvailableCalls = async (userId, canViewAll) => {
+    const params = [];
+    let where = "c.status = 'processing'";
+
+    if (!canViewAll) {
+        const deps = await pool.query(
+            'SELECT department_id FROM user_departments WHERE user_id = $1',
+            [userId]
+        );
+        const deptIds = deps.rows.map((r) => r.department_id);
+        if (!deptIds.length) return [];
+        params.push(deptIds);
+        where += ` AND c.department_id = ANY($${params.length})`;
+    }
+
+    const res = await pool.query(
+        `SELECT c.id, c.type, c.incident_at, c.address,
+                d.name AS department_name, m.name AS municipality_name
+         FROM calls c
+         LEFT JOIN departments d ON c.department_id = d.id
+         LEFT JOIN municipalities m ON c.municipality_id = m.id
+         WHERE ${where}
+         ORDER BY c.incident_at DESC`,
+        params
+    );
+    return res.rows;
 };
 
 // ============================================================
@@ -510,6 +647,8 @@ module.exports = {
     createUnit,
     updateUnit,
     changeStatus,
+    updateMetrics,
+    getAvailableCalls,
     deleteUnit,
     getUnitHistory,
     getGlobalHistory,

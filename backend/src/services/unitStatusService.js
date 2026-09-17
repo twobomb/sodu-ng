@@ -11,7 +11,7 @@ const getAll = async (departmentIds = null) => {
             const res = await pool.query(`
         SELECT
           s.id, s.name, s.short_name, s.color, s.color_name,
-          s.sort_order, s.is_system,
+          s.sort_order, s.is_system, s.group_kind,
           s.created_at, s.updated_at,
           0 AS units_count
         FROM unit_statuses s
@@ -31,7 +31,7 @@ const getAll = async (departmentIds = null) => {
         `
     SELECT
       s.id, s.name, s.short_name, s.color, s.color_name,
-      s.sort_order, s.is_system,
+      s.sort_order, s.is_system, s.group_kind,
       s.created_at, s.updated_at,
       COUNT(u.id)::int AS units_count
     FROM unit_statuses s

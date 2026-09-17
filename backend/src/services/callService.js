@@ -75,12 +75,15 @@ const getUserDepartmentIds = async (userId) => {
 
 const getCallUnits = async (callId) => {
     const res = await pool.query(
-        `SELECT cu.unit_id, u.name AS unit_name, u.plate_number, u.department_id,
-                     d.name AS department_name, t.short_name AS type_short_name
+        `SELECT cu.unit_id, cu.dispatch_at, cu.arrival_at, u.name AS unit_name, u.plate_number, u.department_id,
+                     u.status_id, u.call_id,
+                     d.name AS department_name, t.short_name AS type_short_name,
+                     st.name AS unit_status_name, st.color AS unit_status_color, st.group_kind AS unit_status_group_kind
          FROM call_units cu
          LEFT JOIN units u ON cu.unit_id = u.id
          LEFT JOIN departments d ON u.department_id = d.id
          LEFT JOIN unit_types t ON u.type_id = t.id
+         LEFT JOIN unit_statuses st ON u.status_id = st.id
          WHERE cu.call_id = $1
          ORDER BY d.name, u.name`,
         [callId]
@@ -95,7 +98,7 @@ const getCallEvents = async (callId) => {
          FROM call_events ce
          LEFT JOIN users u ON ce.created_by = u.id
          WHERE ce.call_id = $1
-         ORDER BY ce.event_at ASC, ce.created_at ASC`,
+         ORDER BY ce.event_at DESC, ce.created_at DESC`,
         [callId]
     );
     return res.rows;

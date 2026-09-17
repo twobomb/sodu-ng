@@ -15,8 +15,7 @@ router.use(authenticate);
 router.get('/', requirePermission('units.view'), getAll);
 router.get('/:id', requirePermission('units.view'), getById);
 
-router.post('/', requirePermission('units.manage_dictionaries'), create);
-router.put('/:id', requirePermission('units.manage_dictionaries'), update);
-router.delete('/:id', requirePermission('units.manage_dictionaries'), remove);
+// Статусы техники — статические: создание/редактирование/удаление запрещены.
+// (запись о сущности и эндпоинты CRUD оставлены, но недоступны из UI и сервера)
 
 module.exports = router;

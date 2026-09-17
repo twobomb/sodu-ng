@@ -7,14 +7,14 @@ const { v4: uuidv4 } = require('uuid');
 
 const getAll = async () => {
     const res = await pool.query(
-        `SELECT id, name, sort_order FROM fire_causes ORDER BY sort_order ASC, name ASC`
+        `SELECT id, name, is_system, sort_order FROM fire_causes ORDER BY sort_order ASC, name ASC`
     );
     return res.rows;
 };
 
 const getById = async (id) => {
     const res = await pool.query(
-        `SELECT id, name, sort_order FROM fire_causes WHERE id = $1`,
+        `SELECT id, name, is_system, sort_order FROM fire_causes WHERE id = $1`,
         [id]
     );
     return res.rows[0] || null;
@@ -31,6 +31,10 @@ const create = async ({ name }) => {
 };
 
 const update = async (id, data) => {
+    const existing = await getById(id);
+    if (!existing) return null;
+    if (existing.is_system) return { error: 'system' };
+
     if (data.name === undefined) return getById(id);
     const res = await pool.query(
         `UPDATE fire_causes SET name = $1, updated_at = NOW()
@@ -42,6 +46,10 @@ const update = async (id, data) => {
 };
 
 const remove = async (id) => {
+    const existing = await getById(id);
+    if (!existing) return { ok: false, reason: 'not_found' };
+    if (existing.is_system) return { ok: false, reason: 'system' };
+
     const used = await pool.query(
         `SELECT COUNT(*)::int AS n FROM calls WHERE fire_cause_id = $1`,
         [id]

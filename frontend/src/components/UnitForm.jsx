@@ -62,6 +62,11 @@ const UnitForm = ({
         department_id: '',
         squad_number: '',
         show_in_grid: true,
+        fuel_gasoline: '',
+        fuel_diesel: '',
+        foam_agent: '',
+        powder: '',
+        mileage: '',
     });
     const [localError, setLocalError] = useState('');
 
@@ -75,6 +80,11 @@ const UnitForm = ({
                 department_id: initialData.department_id || '',
                 squad_number: initialData.squad_number ?? '',
                 show_in_grid: initialData.show_in_grid !== false,
+                fuel_gasoline: initialData.fuel_gasoline ?? '',
+                fuel_diesel: initialData.fuel_diesel ?? '',
+                foam_agent: initialData.foam_agent ?? '',
+                powder: initialData.powder ?? '',
+                mileage: initialData.mileage ?? '',
             });
         } else {
             const defaultStatus = statuses.find((s) => s.short_name === 'В расчете');
@@ -86,6 +96,11 @@ const UnitForm = ({
                 department_id: '',
                 squad_number: '',
                 show_in_grid: true,
+                fuel_gasoline: '',
+                fuel_diesel: '',
+                foam_agent: '',
+                powder: '',
+                mileage: '',
             });
         }
         setLocalError('');
@@ -150,6 +165,11 @@ const UnitForm = ({
                     ? null
                     : Number(formData.squad_number),
             show_in_grid: formData.show_in_grid,
+            fuel_gasoline: formData.fuel_gasoline === '' ? null : Number(formData.fuel_gasoline),
+            fuel_diesel: formData.fuel_diesel === '' ? null : Number(formData.fuel_diesel),
+            foam_agent: formData.foam_agent === '' ? null : Number(formData.foam_agent),
+            powder: formData.powder === '' ? null : Number(formData.powder),
+            mileage: formData.mileage === '' ? null : Number(formData.mileage),
         };
 
         if (!isEdit && formData.status_id) {
@@ -323,6 +343,33 @@ const UnitForm = ({
                     {formData.show_in_grid ? 'Да' : 'Нет'}
                   </span>
                                 </label>
+                            </div>
+                        </div>
+
+                        {/* Показатели */}
+                        <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+                            <Label className="text-sm text-slate-700">Показатели</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-500">Бензин, л</Label>
+                                    <Input type="number" min="0" name="fuel_gasoline" value={formData.fuel_gasoline} onChange={handleChange} className="rounded-lg" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-500">Дизель, л</Label>
+                                    <Input type="number" min="0" name="fuel_diesel" value={formData.fuel_diesel} onChange={handleChange} className="rounded-lg" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-500">Пенообразователь, л</Label>
+                                    <Input type="number" min="0" name="foam_agent" value={formData.foam_agent} onChange={handleChange} className="rounded-lg" />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-slate-500">Порошок, кг</Label>
+                                    <Input type="number" min="0" name="powder" value={formData.powder} onChange={handleChange} className="rounded-lg" />
+                                </div>
+                                <div className="space-y-1 col-span-2">
+                                    <Label className="text-xs text-slate-500">Пробег, км</Label>
+                                    <Input type="number" min="0" name="mileage" value={formData.mileage} onChange={handleChange} className="rounded-lg" />
+                                </div>
                             </div>
                         </div>
 

@@ -16,18 +16,18 @@ const intField = Joi.number().integer().min(0).allow('', null).empty('');
 
 const personDead = Joi.object({
     fio: Joi.string().allow('', null),
-    birth_year: Joi.string().allow('', null),
+    birth_date: Joi.string().allow('', null),
 });
 const personInjured = Joi.object({
     fio: Joi.string().allow('', null),
-    birth_year: Joi.string().allow('', null),
+    birth_date: Joi.string().allow('', null),
     diagnosis: Joi.string().allow('', null),
     hospitalization: Joi.string().allow('', null),
     hospital: Joi.string().allow('', null),
 });
 const personRescued = Joi.object({
     fio: Joi.string().allow('', null),
-    birth_year: Joi.string().allow('', null),
+    birth_date: Joi.string().allow('', null),
 });
 
 const updateCallSchema = Joi.object({

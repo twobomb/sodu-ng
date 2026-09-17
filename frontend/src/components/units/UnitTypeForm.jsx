@@ -10,6 +10,15 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog';
 import { Truck, Loader2 } from 'lucide-react';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+
+const UNIT_CATEGORIES = [
+    'Основная техника',
+    'Специальная техника',
+    'Вспомогательная техника',
+    'Пожарный поезд',
+    'Приспособленная и другая',
+];
 
 const UnitTypeForm = ({
                           open,
@@ -22,6 +31,7 @@ const UnitTypeForm = ({
     const [formData, setFormData] = useState({
         name: '',
         short_name: '',
+        category: '',
         sort_order: '',
     });
     const [localError, setLocalError] = useState('');
@@ -31,10 +41,11 @@ const UnitTypeForm = ({
             setFormData({
                 name: initialData.name || '',
                 short_name: initialData.short_name || '',
+                category: initialData.category || '',
                 sort_order: initialData.sort_order ?? '',
             });
         } else {
-            setFormData({ name: '', short_name: '', sort_order: '' });
+            setFormData({ name: '', short_name: '', category: '', sort_order: '' });
         }
         setLocalError('');
     }, [initialData, open]);
@@ -53,10 +64,15 @@ const UnitTypeForm = ({
             setLocalError('Укажите сокращённое название');
             return;
         }
+        if (!formData.category) {
+            setLocalError('Укажите категорию техники');
+            return;
+        }
 
         const payload = {
             name: formData.name.trim(),
             short_name: formData.short_name.trim(),
+            category: formData.category || null,
         };
 
         if (formData.sort_order !== '' && formData.sort_order !== null) {
@@ -109,6 +125,23 @@ const UnitTypeForm = ({
                             <p className="text-xs text-slate-400">
                                 Отображается в сетке техники
                             </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="category">Категория</Label>
+                            <NativeSelect
+                                id="category"
+                                value={formData.category}
+                                onChange={(e) =>
+                                    setFormData((p) => ({ ...p, category: e.target.value }))
+                                }
+                                className="w-full"
+                            >
+                                <NativeSelectOption value="" disabled>Выберите категорию</NativeSelectOption>
+                                {UNIT_CATEGORIES.map((c) => (
+                                    <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>
+                                ))}
+                            </NativeSelect>
                         </div>
 
                         <div className="space-y-2">

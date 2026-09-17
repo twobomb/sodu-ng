@@ -142,15 +142,24 @@ const FireCausesList = () => {
                     )}
                     {filtered.map((item) => (
                         <TableRow key={item.id}>
-                            <TableCell>{item.name}</TableCell>
+                            <TableCell>
+                                {item.name}
+                                {item.is_system && (
+                                    <span className="ml-2 rounded bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5">системная</span>
+                                )}
+                            </TableCell>
                             {canManage && (
                                 <TableCell className="text-right">
-                                    <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="h-8 w-8 p-0" title="Редактировать">
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => setToDelete(item)} className="h-8 w-8 p-0 text-red-500 hover:text-red-700" title="Удалить">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    {!item.is_system && (
+                                        <>
+                                            <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="h-8 w-8 p-0" title="Редактировать">
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => setToDelete(item)} className="h-8 w-8 p-0 text-red-500 hover:text-red-700" title="Удалить">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </>
+                                    )}
                                 </TableCell>
                             )}
                         </TableRow>

@@ -9,6 +9,8 @@ const {
     createUnit,
     updateUnit,
     changeStatus,
+    updateMetrics,
+    getAvailableCalls,
     deleteUnit,
     getUnitHistory,
     getGlobalHistory,
@@ -29,6 +31,13 @@ router.get(
     getGlobalHistory
 );
 
+// Доступные вызовы для привязки техники (ДО /:id)
+router.get(
+    '/calls-available',
+    requirePermission('units.update_status'),
+    getAvailableCalls
+);
+
 // ----- Создание -----
 router.post('/', requirePermission('units.create'), createUnit);
 
@@ -38,6 +47,11 @@ router.get(
     '/:id/history',
     requirePermission('units.view_history'),
     getUnitHistory
+);
+router.post(
+    '/:id/metrics',
+    requirePermission('units.update'),
+    updateMetrics
 );
 router.put('/:id', requirePermission('units.update'), updateUnit);
 router.post(

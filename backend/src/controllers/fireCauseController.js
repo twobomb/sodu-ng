@@ -45,6 +45,9 @@ const update = asyncHandler(async (req, res) => {
     if (error) return res.status(400).json({ error: error.details[0].message });
     try {
         const updated = await fireCauseService.update(req.params.id, value);
+        if (updated && updated.error === 'system') {
+            return res.status(400).json({ error: 'Системную причину «Иные причины (указать причину)» нельзя редактировать' });
+        }
         if (!updated) return res.status(404).json({ error: 'Причина не найдена' });
         emitForceRefresh(req.app.get('io'));
         res.json(updated);
@@ -60,6 +63,7 @@ const remove = asyncHandler(async (req, res) => {
         if (!result.ok) {
             const messages = {
                 not_found: 'Причина не найдена',
+                system: 'Системную причину «Иные причины (указать причину)» нельзя удалить',
                 in_use: `Причина используется в вызовах (${result.count}) — сначала переназначьте`,
             };
             const status = result.reason === 'not_found' ? 404 : 400;

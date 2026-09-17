@@ -25,11 +25,28 @@ const updateUnitSchema = Joi.object({
     department_id: Joi.string().uuid(),
     squad_number: Joi.number().integer().min(1).max(10).allow(null),
     show_in_grid: Joi.boolean(),
+    fuel_gasoline: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    fuel_diesel: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    foam_agent: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    powder: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    mileage: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
 });
 
 const changeStatusSchema = Joi.object({
     status_id: Joi.string().uuid().required(),
     comment: Joi.string().max(500).allow('', null),
+    call_id: Joi.string().uuid().allow('', null),
+    dispatch_at: Joi.string().allow('', null),
+    arrival_at: Joi.string().allow('', null),
+    add_event: Joi.boolean().default(false),
+});
+
+const updateMetricsSchema = Joi.object({
+    fuel_gasoline: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    fuel_diesel: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    foam_agent: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    powder: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    mileage: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
 });
 
 // ============================================================
@@ -171,7 +188,7 @@ const updateUnit = asyncHandler(async (req, res) => {
             }
         }
 
-        const updated = await unitService.updateUnit(id, value);
+        const updated = await unitService.updateUnit(id, value, user.id);
         if (!updated) {
             return res.status(404).json({ error: 'Техника не найдена' });
         }
@@ -216,11 +233,38 @@ const changeStatus = asyncHandler(async (req, res) => {
             }
         }
 
+        // Валидация вызова для привязки (если указан)
+        if (value.call_id) {
+            const callRes = await pool.query(
+                'SELECT id, status, department_id FROM calls WHERE id = $1',
+                [value.call_id]
+            );
+            if (!callRes.rows.length) {
+                return res.status(400).json({ error: 'Вызов не найден' });
+            }
+            const call = callRes.rows[0];
+            if (call.status !== 'processing') {
+                return res.status(400).json({ error: 'Вызов должен быть в статусе «Обрабатывается»' });
+            }
+            if (!user.can_view_all) {
+                const depts = await getUserDepartmentIds(user.id);
+                if (!call.department_id || !depts.includes(call.department_id)) {
+                    return res.status(403).json({ error: 'Нет доступа к выбранному вызову' });
+                }
+            }
+        }
+
         const result = await unitService.changeStatus(
             id,
             value.status_id,
             user.id,
-            value.comment || null
+            {
+                callId: value.call_id || null,
+                dispatchAt: value.dispatch_at || null,
+                arrivalAt: value.arrival_at || null,
+                addEvent: !!value.add_event,
+                comment: value.comment || null,
+            }
         );
 
         if (!result.ok) {
@@ -409,6 +453,57 @@ const getGridData = asyncHandler(async (req, res) => {
 });
 
 // ============================================================
+// GET /api/units/calls-available — доступные вызовы для привязки
+// ============================================================
+const getAvailableCalls = asyncHandler(async (req, res) => {
+    try {
+        const user = req.user;
+        const calls = await unitService.getAvailableCalls(user.id, user.can_view_all);
+        res.json(calls);
+    } catch (err) {
+        logger.error('Ошибка получения доступных вызовов: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка получения доступных вызовов' });
+    }
+});
+
+// ============================================================
+// POST /api/units/:id/metrics — показатели техники + история
+// ============================================================
+const updateMetrics = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { error, value } = updateMetricsSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    try {
+        const existing = await unitService.getUnitById(id);
+        if (!existing) return res.status(404).json({ error: 'Техника не найдена' });
+
+        const user = req.user;
+        if (!user.can_view_all) {
+            const depts = await getUserDepartmentIds(user.id);
+            if (!depts.includes(existing.department_id)) {
+                return res.status(403).json({ error: 'Нет доступа к этой технике' });
+            }
+        }
+
+        const updated = await unitService.updateMetrics(id, value, user.id);
+        const io = req.app.get('io');
+        if (io) emitForceRefresh(io);
+        res.json(updated);
+    } catch (err) {
+        logger.error(`Ошибка обновления показателей техники ${id}: ` + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка обновления показателей' });
+    }
+});
+
+// ============================================================
 // ЭКСПОРТ
 // ============================================================
 module.exports = {
@@ -417,6 +512,8 @@ module.exports = {
     createUnit,
     updateUnit,
     changeStatus,
+    updateMetrics,
+    getAvailableCalls,
     deleteUnit,
     getUnitHistory,
     getGlobalHistory,

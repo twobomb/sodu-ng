@@ -16,7 +16,7 @@ const getAll = async (departmentIds = null) => {
             // Нет доступных подразделений — все счётчики по нулям
             const res = await pool.query(`
         SELECT
-          t.id, t.name, t.short_name, t.sort_order,
+          t.id, t.name, t.short_name, t.category, t.sort_order,
           t.created_at, t.updated_at,
           0 AS units_count
         FROM unit_types t
@@ -37,7 +37,7 @@ const getAll = async (departmentIds = null) => {
     const res = await pool.query(
         `
             SELECT
-                t.id, t.name, t.short_name, t.sort_order,
+                t.id, t.name, t.short_name, t.category, t.sort_order,
                 t.created_at, t.updated_at,
                 COUNT(u.id)::int AS units_count
             FROM unit_types t
@@ -63,7 +63,7 @@ const getById = async (id) => {
 // ============================================================
 // СОЗДАНИЕ
 // ============================================================
-const create = async ({ name, short_name, sort_order }) => {
+const create = async ({ name, short_name, category = null, sort_order }) => {
     // Если sort_order не задан — берём максимальный + 10
     let order = sort_order;
     if (order === undefined || order === null) {
@@ -74,10 +74,10 @@ const create = async ({ name, short_name, sort_order }) => {
     }
 
     const res = await pool.query(
-        `INSERT INTO unit_types (name, short_name, sort_order)
-     VALUES ($1, $2, $3)
+        `INSERT INTO unit_types (name, short_name, category, sort_order)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-        [name.trim(), short_name.trim(), order]
+        [name.trim(), short_name.trim(), category || null, order]
     );
     return res.rows[0];
 };
@@ -101,6 +101,10 @@ const update = async (id, data) => {
     if (data.sort_order !== undefined) {
         fields.push(`sort_order = $${idx++}`);
         values.push(data.sort_order);
+    }
+    if (data.category !== undefined) {
+        fields.push(`category = $${idx++}`);
+        values.push(data.category === '' ? null : data.category);
     }
 
     if (!fields.length) {

@@ -167,6 +167,7 @@ const UnitTypesList = () => {
                             <TableRow>
                                 <TableHead>Сокращённое</TableHead>
                                 <TableHead>Полное название</TableHead>
+                                <TableHead>Категория</TableHead>
                                 <TableHead>Используется</TableHead>
                                 <TableHead className="text-right">Действия</TableHead>
                             </TableRow>
@@ -180,6 +181,7 @@ const UnitTypesList = () => {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="font-medium">{type.name}</TableCell>
+                                    <TableCell className="text-sm text-slate-600">{type.category || '—'}</TableCell>
                                     <TableCell>
                                         {type.units_count > 0 ? (
                                             <span className="text-sm text-slate-600">

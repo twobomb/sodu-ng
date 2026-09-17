@@ -10,6 +10,9 @@ export const changeUnitStatus = (id, data) =>
     apiClient.post(`/units/${id}/status`, data);
 export const getUnitsGrid = (sort = 'default') =>
     apiClient.get('/units/grid', { params: { sort } });
+export const getAvailableCalls = () => apiClient.get('/units/calls-available');
+export const updateUnitMetrics = (id, data) =>
+    apiClient.post(`/units/${id}/metrics`, data);
 export const getGlobalHistory = (params = {}) =>
     apiClient.get('/units/history/global', { params });
 export const getUnitHistory = (id, params = {}) =>

@@ -15,7 +15,6 @@ import {
     Settings as SettingsIcon,
     MessageCircle,
     LayoutGrid,
-    Palette,
     BookOpen,
     FolderTree,
     Ban,
@@ -134,12 +133,6 @@ const NavBar = () => {
                                         onClick={() => navigate('/unit-types')}
                                     >
                                         Типы техники
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        icon={Palette}
-                                        onClick={() => navigate('/unit-statuses')}
-                                    >
-                                        Статусы техники
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
