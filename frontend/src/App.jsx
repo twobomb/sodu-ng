@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
@@ -13,6 +13,10 @@ import UsersList from './pages/users/UsersList';
 import OnlineUsers from './pages/users/OnlineUsers';
 import RolesList from './pages/roles/RolesList';
 import DepartmentsList from './pages/departments/DepartmentsList.jsx';
+import MunicipalitiesList from './pages/municipalities/MunicipalitiesList.jsx';
+import FireCategoriesList from './pages/dictionaries/FireCategoriesList.jsx';
+import FireCausesList from './pages/dictionaries/FireCausesList.jsx';
+import FireNonaccountList from './pages/dictionaries/FireNonaccountList.jsx';
 import SettingsPage from './pages/settings/SettingsPage';
 
 import PermissionRoute from './components/PermissionRoute';
@@ -39,123 +43,154 @@ const PrivateRoute = ({ children }) => {
     return children;
 };
 
+// Data Router — нужен для useBlocker (предупреждение о несохранённых данных)
+const router = createBrowserRouter([
+    { path: '/login', element: <LoginPage /> },
+    {
+        path: '/',
+        element: (
+            <PrivateRoute>
+                <Layout />
+            </PrivateRoute>
+        ),
+        children: [
+            { index: true, element: <HomeRedirect /> },
+            {
+                path: 'units-grid',
+                element: (
+                    <PermissionRoute permission="units.view">
+                        <UnitsGrid />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'calls',
+                element: (
+                    <PermissionRoute permission="calls.view">
+                        <CallsList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'calls/:id',
+                element: (
+                    <PermissionRoute permission="calls.view">
+                        <CallDetail />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'units',
+                element: (
+                    <PermissionRoute permission="units.view">
+                        <UnitsList />
+                    </PermissionRoute>
+                ),
+            },
+            { path: 'help', element: <HelpPage /> },
+            {
+                path: 'unit-types',
+                element: (
+                    <PermissionRoute permission="units.view">
+                        <UnitTypesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'unit-statuses',
+                element: (
+                    <PermissionRoute permission="units.view">
+                        <UnitStatusesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'departments',
+                element: (
+                    <PermissionRoute permission="departments.view">
+                        <DepartmentsList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'municipalities',
+                element: (
+                    <PermissionRoute permission="departments.view">
+                        <MunicipalitiesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'dictionaries/fire-categories',
+                element: (
+                    <PermissionRoute permission="calls.view">
+                        <FireCategoriesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'dictionaries/fire-causes',
+                element: (
+                    <PermissionRoute permission="calls.view">
+                        <FireCausesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'dictionaries/fire-nonaccount',
+                element: (
+                    <PermissionRoute permission="calls.view">
+                        <FireNonaccountList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'users',
+                element: (
+                    <PermissionRoute permission="users.view">
+                        <UsersList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'online',
+                element: (
+                    <PermissionRoute permission="users.view_online">
+                        <OnlineUsers />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'roles',
+                element: (
+                    <PermissionRoute permission="roles.view">
+                        <RolesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'settings',
+                element: (
+                    <DeveloperRoute>
+                        <SettingsPage />
+                    </DeveloperRoute>
+                ),
+            },
+            { path: '*', element: <Navigate to="/" replace /> },
+        ],
+    },
+]);
+
 function App() {
     return (
         <QueryClientProvider client={queryClient}>
-            <BrowserRouter>
-                <AuthProvider>
-                    <ChatProvider>
-                        <MaintenanceGuard>
-                            <Routes>
-                                <Route path="/login" element={<LoginPage />} />
-
-                                <Route
-                                    path="/"
-                                    element={
-                                        <PrivateRoute>
-                                            <Layout />
-                                        </PrivateRoute>
-                                    }
-                                >
-                                    <Route index element={<HomeRedirect />} />
-
-                                    <Route
-                                        path="units-grid"
-                                        element={
-                                            <PermissionRoute permission="units.view">
-                                                <UnitsGrid />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="calls"
-                                        element={
-                                            <PermissionRoute permission="calls.view">
-                                                <CallsList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="calls/:id"
-                                        element={
-                                            <PermissionRoute permission="calls.view">
-                                                <CallDetail />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="units"
-                                        element={
-                                            <PermissionRoute permission="units.view">
-                                                <UnitsList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route path="help" element={<HelpPage />} />
-                                    <Route
-                                        path="unit-types"
-                                        element={
-                                            <PermissionRoute permission="units.view">
-                                                <UnitTypesList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="unit-statuses"
-                                        element={
-                                            <PermissionRoute permission="units.view">
-                                                <UnitStatusesList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="departments"
-                                        element={
-                                            <PermissionRoute permission="departments.view">
-                                                <DepartmentsList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="users"
-                                        element={
-                                            <PermissionRoute permission="users.view">
-                                                <UsersList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="online"
-                                        element={
-                                            <PermissionRoute permission="users.view_online">
-                                                <OnlineUsers />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="roles"
-                                        element={
-                                            <PermissionRoute permission="roles.view">
-                                                <RolesList />
-                                            </PermissionRoute>
-                                        }
-                                    />
-                                    <Route
-                                        path="settings"
-                                        element={
-                                            <DeveloperRoute>
-                                                <SettingsPage />
-                                            </DeveloperRoute>
-                                        }
-                                    />
-
-                                    <Route path="*" element={<Navigate to="/" replace />} />
-                                </Route>
-                            </Routes>
-                        </MaintenanceGuard>
-                    </ChatProvider>
-                </AuthProvider>
-            </BrowserRouter>
+            <AuthProvider>
+                <ChatProvider>
+                    <MaintenanceGuard>
+                        <RouterProvider router={router} />
+                    </MaintenanceGuard>
+                </ChatProvider>
+            </AuthProvider>
         </QueryClientProvider>
     );
 }

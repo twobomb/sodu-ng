@@ -15,6 +15,7 @@ const {
     createDirect,
     searchConversations,
     markAsRead,
+    markAllRead,
     getMyProfile,
     updateMyProfile,
     getChattableUsers,
@@ -47,6 +48,7 @@ router.post('/conversations/:id/leave', leaveConversation);
 // Закрепление и прочтение
 router.post('/conversations/:id/pin', pinConversation);
 router.post('/conversations/:id/read', markAsRead);
+router.post('/read-all', markAllRead);
 
 // Участники
 router.get('/users', getChattableUsers);

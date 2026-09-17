@@ -10,6 +10,7 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { useAllMunicipalities } from '../hooks/useMunicipalities';
 import {Building2, Loader2} from 'lucide-react';
 
 const DepartmentForm = ({
@@ -27,8 +28,13 @@ const DepartmentForm = ({
         address: '',
         phone: '',
         parent_id: '',
+        municipality_id: '',
     });
     const [localError, setLocalError] = useState('');
+
+    const municipalityQuery = useAllMunicipalities();
+    const muniData = municipalityQuery.data;
+    const muniList = Array.isArray(muniData) ? muniData : (muniData?.data || []);
 
     useEffect(() => {
         if (initialData) {
@@ -38,6 +44,7 @@ const DepartmentForm = ({
                 address: initialData.address || '',
                 phone: initialData.phone || '',
                 parent_id: initialData.parent_id || '',
+                municipality_id: initialData.municipality_id || '',
             });
         } else {
             setFormData({
@@ -46,6 +53,7 @@ const DepartmentForm = ({
                 address: '',
                 phone: '',
                 parent_id: '',
+                municipality_id: '',
             });
         }
         setLocalError('');
@@ -78,6 +86,20 @@ const DepartmentForm = ({
         [availableParents]
     );
 
+    // Опции округов: "Без округа" + список округов
+    const muniOptions = useMemo(
+        () => [
+            {value: '', label: 'Без округа', extra: '', search: 'без округа'},
+            ...muniList.map((m) => ({
+                value: m.id,
+                label: m.name,
+                extra: '',
+                search: `${m.name}`.toLowerCase(),
+            })),
+        ],
+        [muniList]
+    );
+
     const handleChange = (e) => {
         const {name, value} = e.target;
         setFormData((prev) => ({...prev, [name]: value}));
@@ -102,6 +124,7 @@ const DepartmentForm = ({
             address: formData.address.trim() || null,
             phone: formData.phone.trim() || null,
             parent_id: formData.parent_id === '' ? null : formData.parent_id,
+            municipality_id: formData.municipality_id === '' ? null : formData.municipality_id,
         };
 
         onSubmit(payload);
@@ -172,6 +195,21 @@ const DepartmentForm = ({
                                 value={formData.phone}
                                 onChange={handleChange}
                                 className="rounded-lg font-mono"
+                            />
+                        </div>
+
+                        {/* Округ */}
+                        <div className="space-y-2">
+                            <Label>Округ</Label>
+                            <SearchableSelect
+                                options={muniOptions}
+                                value={formData.municipality_id || ''}
+                                onChange={(v) => handleSelectChange('municipality_id', v)}
+                                placeholder="Без округа"
+                                emptyText="Округов не добавлено. Создайте их на странице «Округа»."
+                                renderOption={(opt) => (
+                                    <span className="text-sm truncate">{opt.label}</span>
+                                )}
                             />
                         </div>
 

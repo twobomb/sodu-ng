@@ -12,12 +12,30 @@ const CALL_STATUSES = callService.CALL_STATUSES;
 // Валидируем строки дат (приходят как ISO-строка или пустая строка / null)
 const datetimeField = Joi.string().allow('', null);
 
+const intField = Joi.number().integer().min(0).allow('', null).empty('');
+
+const personDead = Joi.object({
+    fio: Joi.string().allow('', null),
+    birth_year: Joi.string().allow('', null),
+});
+const personInjured = Joi.object({
+    fio: Joi.string().allow('', null),
+    birth_year: Joi.string().allow('', null),
+    diagnosis: Joi.string().allow('', null),
+    hospitalization: Joi.string().allow('', null),
+    hospital: Joi.string().allow('', null),
+});
+const personRescued = Joi.object({
+    fio: Joi.string().allow('', null),
+    birth_year: Joi.string().allow('', null),
+});
+
 const updateCallSchema = Joi.object({
     type: Joi.string().valid(...CALL_TYPES).allow('', null),
     rank: Joi.string().valid(...CALL_RANKS).allow('', null),
     incident_at: datetimeField,
     message_received_at: datetimeField,
-    municipality: Joi.string().max(300).allow('', null),
+    municipality_id: Joi.string().uuid().allow('', null),
     address: Joi.string().max(500).allow('', null),
     dispatch_at: datetimeField,
     arrival_at: datetimeField,
@@ -25,6 +43,24 @@ const updateCallSchema = Joi.object({
     open_fire_eliminated_at: datetimeField,
     fire_eliminated_at: datetimeField,
     description: Joi.string().max(10000).allow('', null),
+    fire_area: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+    area_type: Joi.string().valid('urban', 'rural').allow('', null),
+    fire_category_id: Joi.string().uuid().allow('', null),
+    fire_cause_id: Joi.string().uuid().allow('', null),
+    fire_cause_other: Joi.string().max(1000).allow('', null),
+    not_accounted_fire: Joi.boolean().allow('', null),
+    not_accounted_reason_id: Joi.string().uuid().allow('', null),
+    victims_dead_total: intField,
+    victims_dead_children: intField,
+    victims_dead_data: Joi.array().items(personDead).default([]),
+    victims_injured_total: intField,
+    victims_injured_children: intField,
+    victims_injured_data: Joi.array().items(personInjured).default([]),
+    victims_rescued_total: intField,
+    victims_rescued_children: intField,
+    victims_rescued_data: Joi.array().items(personRescued).default([]),
+    victims_evacuated_total: intField,
+    victims_evacuated_children: intField,
 }).min(1);
 
 const setStatusSchema = Joi.object({
@@ -43,6 +79,13 @@ const addEventSchema = Joi.object({
 // ============================================================
 // Вспомогательные
 // ============================================================
+const callExistsPermission = (req, permission) => {
+    const user = req.user;
+    if (!user) return false;
+    if (user.role === 'developer') return true;
+    return (user.permissions || []).includes(permission);
+};
+
 // Можно ли редактировать поля вызова:
 //  - обработка / ошибка → нужно calls.update
 //  - закрыт → нужно calls.update_closed
@@ -51,16 +94,6 @@ const canEditCall = (req, call) => {
         return callExistsPermission(req, 'calls.update_closed');
     }
     return callExistsPermission(req, 'calls.update');
-};
-
-// Для юнит-тестов не нужен, просто обёртка над hasPermission-like через роли.
-// Т.к. в этом проекте проверка прав — на middleware, здесь мы просто проверяем флаг
-// (developer уже прошёл middleware; у него permissions = null).
-const callExistsPermission = (req, permission) => {
-    const user = req.user;
-    if (!user) return false;
-    if (user.role === 'developer') return true;
-    return (user.permissions || []).includes(permission);
 };
 
 // Проверить доступ пользователя к каждой единице техники
@@ -92,7 +125,7 @@ const assertUnitAccess = async (user, unitIds) => {
 };
 
 // ============================================================
-// GET /api/calls
+// GET /api/calls — список с пагинацией и фильтрами
 // ============================================================
 const getCalls = asyncHandler(async (req, res) => {
     try {
@@ -102,15 +135,36 @@ const getCalls = asyncHandler(async (req, res) => {
             search: req.query.search || '',
             date_from: req.query.date_from || null,
             date_to: req.query.date_to || null,
+            page: req.query.page,
+            pageSize: req.query.pageSize,
         };
-        const calls = await callService.getCalls(filters);
-        res.json(calls);
+        const result = await callService.getCalls(filters);
+        res.json(result);
     } catch (err) {
         logger.error('Ошибка получения вызовов: ' + err.message, {
             stack: err.stack,
             user: req.user?.id,
         });
         res.status(500).json({ error: 'Ошибка получения вызовов' });
+    }
+});
+
+// ============================================================
+// GET /api/calls/municipalities — округа, доступные пользователю
+// ============================================================
+const getMunicipalities = asyncHandler(async (req, res) => {
+    try {
+        const rows = await callService.getAccessibleMunicipalities(
+            req.user.id,
+            req.user.can_view_all
+        );
+        res.json(rows);
+    } catch (err) {
+        logger.error('Ошибка получения округов: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка получения округов' });
     }
 });
 
@@ -133,11 +187,11 @@ const getCallById = asyncHandler(async (req, res) => {
 });
 
 // ============================================================
-// POST /api/calls — создание нового (пустые поля)
+// POST /api/calls — создание нового (пустые поля, тип «Пожар»)
 // ============================================================
 const createCall = asyncHandler(async (req, res) => {
     try {
-        const call = await callService.createCall(req.user.id);
+        const call = await callService.createCall(req.user.id, req.user.can_view_all);
         const io = req.app.get('io');
         emitForceRefresh(io);
         res.status(201).json(call);
@@ -177,6 +231,9 @@ const updateCall = asyncHandler(async (req, res) => {
         emitForceRefresh(io);
         res.json(updated);
     } catch (err) {
+        if (err.status === 403 || err.status === 400) {
+            return res.status(err.status).json({ error: err.message });
+        }
         logger.error(`Ошибка обновления вызова ${id}: ` + err.message, {
             stack: err.stack,
             body: req.body,
@@ -200,10 +257,16 @@ const setCallStatus = asyncHandler(async (req, res) => {
         const call = await callService.getCallById(id);
         if (!call) return res.status(404).json({ error: 'Вызов не найден' });
 
-        // Ошибочный — аналог удаления. Разрешаем только с правом смены статуса;
-        // документируется на фронте подтверждением.
         if (!callExistsPermission(req, 'calls.update_status')) {
             return res.status(403).json({ error: 'Недостаточно прав для смены статуса' });
+        }
+
+        // С закрытого вызова статус может менять только тот, кто может
+        // редактировать закрытые вызовы
+        if (call.status === 'closed' && !callExistsPermission(req, 'calls.update_closed')) {
+            return res.status(403).json({
+                error: 'Вызов закрыт. Менять статус могут только пользователи с правом правки закрытых вызовов.',
+            });
         }
 
         const updated = await callService.setCallStatus(id, value.status);
@@ -241,7 +304,6 @@ const setCallUnits = asyncHandler(async (req, res) => {
             });
         }
 
-        // Проверяем доступ к каждой единице техники
         const uniqueIds = [...new Set(value.unit_ids)];
         await assertUnitAccess(req.user, uniqueIds);
 
@@ -333,6 +395,7 @@ const deleteCallEvent = asyncHandler(async (req, res) => {
 
 module.exports = {
     getCalls,
+    getMunicipalities,
     getCallById,
     createCall,
     updateCall,
@@ -341,3 +404,6 @@ module.exports = {
     addCallEvent,
     deleteCallEvent,
 };
+
+
+

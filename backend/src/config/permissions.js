@@ -82,6 +82,18 @@ const PERMISSIONS_CATALOG = [
         ],
     },
     {
+        key: 'dictionaries',
+        name: 'Справочники',
+        description: 'Управление справочниками (категории пожаров, причины)',
+        permissions: [
+            {
+                key: 'dictionaries.manage',
+                name: 'Управление',
+                description: 'Редактировать справочники вызовов (категории, причины пожаров)',
+            },
+        ],
+    },
+    {
         key: 'chat',
         name: 'Чат',
         description: 'Модуль обмена сообщениями',

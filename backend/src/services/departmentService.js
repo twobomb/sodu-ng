@@ -23,10 +23,12 @@ const hasChildren = async (departmentId) => {
  */
 const getAllDepartments = async () => {
     const result = await pool.query(`
-        SELECT id, name, full_name, address, phone, parent_id, sort_order,
-               created_at, updated_at
-        FROM departments
-        ORDER BY parent_id NULLS FIRST, sort_order ASC, name ASC
+        SELECT d.id, d.name, d.full_name, d.address, d.phone, d.parent_id, d.sort_order,
+               d.municipality_id, m.name AS municipality_name,
+               d.created_at, d.updated_at
+        FROM departments d
+        LEFT JOIN municipalities m ON d.municipality_id = m.id
+        ORDER BY d.parent_id NULLS FIRST, d.sort_order ASC, d.name ASC
     `);
     return result.rows;
 };
@@ -95,9 +97,12 @@ const reorderDepartments = async (updates) => {
  */
 const getDepartmentById = async (id) => {
     const result = await pool.query(
-        `SELECT id, name, full_name, address, phone, parent_id, sort_order,
-                created_at, updated_at
-         FROM departments WHERE id = $1`,
+        `SELECT d.id, d.name, d.full_name, d.address, d.phone, d.parent_id, d.sort_order,
+                d.municipality_id, m.name AS municipality_name,
+                d.created_at, d.updated_at
+         FROM departments d
+         LEFT JOIN municipalities m ON d.municipality_id = m.id
+         WHERE d.id = $1`,
         [id]
     );
     return result.rows[0] || null;
@@ -106,7 +111,7 @@ const getDepartmentById = async (id) => {
  * Создать новое подразделение
  * @param {Object} data - { name, parent_id }
  */
-const createDepartment = async ({ name, full_name, address, phone, parent_id }) => {
+const createDepartment = async ({ name, full_name, address, phone, parent_id, municipality_id }) => {
     const check = await validateParentIsRoot(parent_id);
     if (!check.ok) {
         if (check.reason === 'parent_not_found') {
@@ -125,10 +130,10 @@ const createDepartment = async ({ name, full_name, address, phone, parent_id }) 
 
     const id = uuidv4();
     const res = await pool.query(
-        `INSERT INTO departments (id, name, full_name, address, phone, parent_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO departments (id, name, full_name, address, phone, parent_id, municipality_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING id, name, full_name, address, phone, parent_id, sort_order,
-               created_at, updated_at`,
+               municipality_id, created_at, updated_at`,
         [
             id,
             name,
@@ -136,6 +141,7 @@ const createDepartment = async ({ name, full_name, address, phone, parent_id }) 
             address || null,
             phone || null,
             parent_id || null,
+            municipality_id || null,
         ]
     );
     return res.rows[0];
@@ -144,7 +150,7 @@ const createDepartment = async ({ name, full_name, address, phone, parent_id }) 
  * Обновить подразделение (проверка на циклическую ссылку)
  */
 const updateDepartment = async (id, data) => {
-    const { name, full_name, address, phone, parent_id } = data;
+    const { name, full_name, address, phone, parent_id, municipality_id } = data;
 
     // ...существующая валидация parent_id без изменений...
 
@@ -172,6 +178,10 @@ const updateDepartment = async (id, data) => {
         fields.push(`parent_id = $${idx++}`);
         values.push(parent_id || null);
     }
+    if (municipality_id !== undefined) {
+        fields.push(`municipality_id = $${idx++}`);
+        values.push(municipality_id || null);
+    }
 
     if (!fields.length) {
         const cur = await pool.query(
@@ -188,7 +198,7 @@ const updateDepartment = async (id, data) => {
         `UPDATE departments SET ${fields.join(', ')}
          WHERE id = $${idx}
              RETURNING id, name, full_name, address, phone, parent_id, sort_order,
-               created_at, updated_at`,
+               municipality_id, created_at, updated_at`,
         values
     );
     return res.rows[0] || null;

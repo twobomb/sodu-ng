@@ -1,0 +1,16 @@
+◇ injected env (5) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+[11:06:53] [32minfo[39m: Server running on port 5000
+[11:06:54] [32minfo[39m: GET /api/online 200 - 44ms
+[11:06:54] [32minfo[39m: GET /api/settings/public 200 - 149ms
+[11:06:54] [32minfo[39m: Socket подключён: twobomb (dQb3xA16JTrcXjVtAAAA)
+[11:06:54] [32minfo[39m: Socket dQb3xA16JTrcXjVtAAAA подписан на 2 чатов
+[11:06:54] [32minfo[39m: Socket dQb3xA16JTrcXjVtAAAA подписан на depts:all
+[11:06:56] [32minfo[39m: Socket подключён: admin (s7aNskXfnfJEy_I1AAAB)
+[11:06:56] [32minfo[39m: Socket s7aNskXfnfJEy_I1AAAB подписан на 2 чатов
+[11:06:56] [32minfo[39m: Socket s7aNskXfnfJEy_I1AAAB подписан на depts:all
+[11:06:58] [33mwarn[39m: GET /api/departments 401 - 1ms
+[11:06:58] [33mwarn[39m: GET /api/municipalities 401 - 1ms
+[11:06:58] [32minfo[39m: GET /api/health 200 - 1ms

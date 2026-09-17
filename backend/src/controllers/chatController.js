@@ -801,6 +801,27 @@ const markAsRead = asyncHandler(async (req, res) => {
         res.status(500).json({ error: 'Ошибка отметки' });
     }
 });
+
+// ============================================================
+// POST /api/chat/read-all — отметить все чаты прочитанными
+// ============================================================
+const markAllRead = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    try {
+        await chatService.markAllRead(userId);
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${userId}`).emit('chat:read_all');
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        logger.error('Ошибка отметки всех чатов прочитанными: ' + err.message, {
+            stack: err.stack,
+            user: userId,
+        });
+        res.status(500).json({ error: 'Ошибка отметки' });
+    }
+});
 module.exports = {
     getConversations,
     getConversation,
@@ -816,6 +837,7 @@ module.exports = {
     searchConversations,
     leaveConversation,
     markAsRead,
+    markAllRead,
     getMyProfile,
     transferAdmin,
     updateMyProfile,

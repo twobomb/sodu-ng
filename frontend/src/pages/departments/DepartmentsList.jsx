@@ -362,9 +362,15 @@ const DepartmentsList = () => {
                                                 )}
                                             </div>
 
-                                            {/* Адрес и телефон — во вторую строку */}
-                                            {(dept?.address || dept?.phone) && (
+                                            {/* Округ, адрес и телефон — во вторую строку */}
+                                            {(dept?.municipality_name || dept?.address || dept?.phone) && (
                                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-slate-500">
+                                                    {dept.municipality_name && (
+                                                        <span className="inline-flex items-center gap-1 font-medium text-orange-600">
+                              <MapPin className="h-3 w-3 text-orange-400" />
+                              {dept.municipality_name}
+                            </span>
+                                                    )}
                                                     {dept.address && (
                                                         <span className="inline-flex items-center gap-1">
                               <MapPin className="h-3 w-3 text-slate-400" />

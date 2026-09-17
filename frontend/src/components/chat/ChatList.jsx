@@ -4,6 +4,7 @@ import {
     usePinConversation,
     useChattableUsers,
     useCreateDirect,
+    useMarkAllRead,
 } from '../../hooks/useChat';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import {
     Loader2,
     Plus,
     Users,
+    CheckCheck,
 } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import { formatDistanceToNow } from 'date-fns';
@@ -40,6 +42,11 @@ const ChatList = ({ filter = 'all', onSelect }) => {
     );
     const pin = usePinConversation();
     const createDirect = useCreateDirect();
+    const markAllRead = useMarkAllRead();
+    const unreadCount = (conversations || []).reduce(
+        (sum, c) => sum + (c.unread_count || 0),
+        0
+    );
 
     const filteredConversations = useMemo(() => {
         const list = conversations || [];
@@ -86,6 +93,18 @@ const ChatList = ({ filter = 'all', onSelect }) => {
                         className="pl-9 h-9 rounded-lg text-sm"
                     />
                 </div>
+                {unreadCount > 0 && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => markAllRead.mutate()}
+                        disabled={markAllRead.isPending}
+                        className="h-9 w-9 p-0"
+                        title="Отметить все чаты прочитанными"
+                    >
+                        <CheckCheck className="h-4 w-4" />
+                    </Button>
+                )}
                 {has('chat.create_channel') && filter === 'channels' && (
                     <Button
                         size="sm"

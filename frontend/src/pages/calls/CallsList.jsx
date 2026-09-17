@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/native-select';
 import { Loader2, Plus, Search, Siren } from 'lucide-react';
 
+const PAGE_SIZES = [10, 25, 50, 100];
+
 const CallsList = () => {
     const navigate = useNavigate();
     const { has } = usePermissions();
@@ -35,13 +37,21 @@ const CallsList = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
 
+    // Пагинация
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
+
     const { data, isLoading, error } = useCalls({
         search: searchTerm || undefined,
         status: statusFilter,
         type: typeFilter,
+        page,
+        pageSize,
     });
 
-    const calls = Array.isArray(data) ? data : (data?.data || []);
+    const calls = data?.items || [];
+    const total = data?.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     const handleCreate = () => {
         if (createCall.isPending) return;
@@ -51,6 +61,11 @@ const CallsList = () => {
                 if (id) navigate(`/calls/${id}`);
             },
         });
+    };
+
+    const changePageSize = (val) => {
+        setPageSize(Number(val));
+        setPage(1);
     };
 
     return (
@@ -91,7 +106,10 @@ const CallsList = () => {
                         <Input
                             placeholder="Адрес, округ, описание..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setPage(1);
+                            }}
                             className="rounded-lg pl-8"
                         />
                     </div>
@@ -100,7 +118,10 @@ const CallsList = () => {
                     <Label>Статус</Label>
                     <NativeSelect
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        onChange={(e) => {
+                            setStatusFilter(e.target.value);
+                            setPage(1);
+                        }}
                         className="w-full"
                     >
                         <NativeSelectOption value="all">Все статусы</NativeSelectOption>
@@ -115,7 +136,10 @@ const CallsList = () => {
                     <Label>Тип вызова</Label>
                     <NativeSelect
                         value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
+                        onChange={(e) => {
+                            setTypeFilter(e.target.value);
+                            setPage(1);
+                        }}
                         className="w-full"
                     >
                         <NativeSelectOption value="all">Все типы</NativeSelectOption>
@@ -135,55 +159,102 @@ const CallsList = () => {
                     Ошибка загрузки вызовов
                 </div>
             ) : (
-                <div className="rounded-lg border border-slate-200 overflow-hidden">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Создан</TableHead>
-                                <TableHead>Событие</TableHead>
-                                <TableHead>Адрес</TableHead>
-                                <TableHead>Округ</TableHead>
-                                <TableHead>Тип</TableHead>
-                                <TableHead>Техника</TableHead>
-                                <TableHead>Статус</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {calls.length === 0 && (
+                <div>
+                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                        <Table>
+                            <TableHeader>
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center text-slate-400 py-6">
-                                        Вызовов не найдено
-                                    </TableCell>
+                                    <TableHead>Создан</TableHead>
+                                    <TableHead>Событие</TableHead>
+                                    <TableHead>Адрес</TableHead>
+                                    <TableHead>Округ</TableHead>
+                                    <TableHead>Тип</TableHead>
+                                    <TableHead>Техника</TableHead>
+                                    <TableHead>Статус</TableHead>
                                 </TableRow>
-                            )}
-                            {calls.map((call) => {
-                                const statusMeta = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500' };
-                                return (
-                                    <TableRow
-                                        key={call.id}
-                                        className="cursor-pointer hover:bg-slate-50"
-                                        onClick={() => navigate(`/calls/${call.id}`)}
-                                    >
-                                        <TableCell className="whitespace-nowrap">
-                                            {formatDateTime(call.created_at)}
-                                        </TableCell>
-                                        <TableCell className="whitespace-nowrap">
-                                            {formatDateTime(call.incident_at)}
-                                        </TableCell>
-                                        <TableCell>{call.address || '—'}</TableCell>
-                                        <TableCell>{call.municipality || '—'}</TableCell>
-                                        <TableCell>{call.type || '—'}</TableCell>
-                                        <TableCell>{call.units_count || 0}</TableCell>
-                                        <TableCell>
-                                            <Badge className={`${statusMeta.badge} text-white`}>
-                                                {statusMeta.label}
-                                            </Badge>
+                            </TableHeader>
+                            <TableBody>
+                                {calls.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center text-slate-400 py-6">
+                                            Вызовов не найдено
                                         </TableCell>
                                     </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
+                                )}
+                                {calls.map((call) => {
+                                    const statusMeta = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500' };
+                                    const rowClass =
+                                        call.status === 'error'
+                                            ? 'bg-red-100 hover:bg-red-200'
+                                            : call.status === 'closed'
+                                                ? 'bg-green-100 hover:bg-green-200'
+                                                : 'bg-blue-100 hover:bg-blue-200';
+                                    return (
+                                        <TableRow
+                                            key={call.id}
+                                            className={`cursor-pointer ${rowClass}`}
+                                            onClick={() => navigate(`/calls/${call.id}`)}
+                                        >
+                                            <TableCell className="whitespace-nowrap">
+                                                {formatDateTime(call.created_at)}
+                                            </TableCell>
+                                            <TableCell className="whitespace-nowrap">
+                                                {formatDateTime(call.incident_at)}
+                                            </TableCell>
+                                            <TableCell>{call.address || '—'}</TableCell>
+                                            <TableCell>{call.municipality_name || '—'}</TableCell>
+                                            <TableCell>{call.type || '—'}</TableCell>
+                                            <TableCell>{call.units_count || 0}</TableCell>
+                                            <TableCell>
+                                                <Badge className={`${statusMeta.badge} text-white`}>
+                                                    {statusMeta.label}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* Пагинация */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <span>Показывать:</span>
+                            <NativeSelect
+                                value={pageSize}
+                                onChange={(e) => changePageSize(e.target.value)}
+                                className="w-20"
+                            >
+                                {PAGE_SIZES.map((s) => (
+                                    <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>
+                                ))}
+                            </NativeSelect>
+                            <span>
+                                {total} всего · стр. {page} из {totalPages || 1}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={page <= 1}
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                className="rounded-lg"
+                            >
+                                Назад
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                className="rounded-lg"
+                            >
+                                Вперёд
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -191,3 +262,5 @@ const CallsList = () => {
 };
 
 export default CallsList;
+
+

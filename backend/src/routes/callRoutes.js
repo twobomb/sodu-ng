@@ -4,6 +4,7 @@ const { authenticate } = require('../middlewares/auth');
 const { requirePermission } = require('../middlewares/permissionGuard');
 const {
     getCalls,
+    getMunicipalities,
     getCallById,
     createCall,
     updateCall,
@@ -33,6 +34,7 @@ const requireCallUpdate = (req, res, next) => {
 
 // ----- Просмотр -----
 router.get('/', requirePermission('calls.view'), getCalls);
+router.get('/municipalities', requirePermission('calls.view'), getMunicipalities);
 router.get('/:id', requirePermission('calls.view'), getCallById);
 
 // ----- Создание -----

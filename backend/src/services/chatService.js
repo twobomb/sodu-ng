@@ -607,6 +607,32 @@ const getInvitableUsers = async (conversationId, query = '') => {
     return res.rows;
 };
 
+// ============================================================
+// ОТМЕТИТЬ ВСЕ ЧАТЫ ПРОЧИТАННЫМИ
+// ============================================================
+const markAllRead = async (userId) => {
+    // Сбрасываем unread-счётчик во всех чатах пользователя
+    await pool.query(
+        `UPDATE conversation_members SET last_read_at = NOW() WHERE user_id = $1`,
+        [userId]
+    );
+    // Проставляем последнее прочитанное сообщение в каждом чате
+    await pool.query(
+        `INSERT INTO message_reads (conversation_id, user_id, last_read_message_id, last_read_at)
+         SELECT cm.conversation_id, cm.user_id,
+                (SELECT m.id FROM messages m
+                 WHERE m.conversation_id = cm.conversation_id AND m.deleted_at IS NULL
+                 ORDER BY m.created_at DESC LIMIT 1),
+                NOW()
+         FROM conversation_members cm
+         WHERE cm.user_id = $1
+         ON CONFLICT (conversation_id, user_id) DO UPDATE
+         SET last_read_at = NOW(),
+             last_read_message_id = EXCLUDED.last_read_message_id`,
+        [userId]
+    );
+};
+
 module.exports = {
     bootstrapUser,
     getUserConversations,
@@ -620,6 +646,7 @@ module.exports = {
     getMembers,
     pinConversation,
     markAsRead,
+    markAllRead,
     searchConversations,
     getOrCreateDirect,
     getRawConversation,

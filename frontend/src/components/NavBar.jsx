@@ -10,12 +10,15 @@ import {
     Activity,
     Shield,
     Building2,
+    MapPin,
     HelpCircle,
     Settings as SettingsIcon,
     MessageCircle,
     LayoutGrid,
-    Wifi,
     Palette,
+    BookOpen,
+    FolderTree,
+    Ban,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -187,19 +190,73 @@ const NavBar = () => {
                         )}
 
                         {has('departments.view') && (
-                            <Link to="/departments">
-                                <Button
-                                    variant="ghost"
-                                    className={`rounded-lg transition-all ${
-                                        isActive('/departments')
-                                            ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
-                                            : 'text-slate-600 hover:bg-slate-100'
-                                    }`}
-                                >
-                                    <Building2 className="h-4 w-4 mr-2" />
-                                    Подразделения
-                                </Button>
-                            </Link>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className={`rounded-lg transition-all ${
+                                            isActive('/departments') || isActive('/municipalities')
+                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        <Building2 className="h-4 w-4 mr-2" />
+                                        Структура
+                                        <ChevronDown
+                                            className={`h-3 w-3 ml-1 transition-transform ${
+                                                isActive('/departments') || isActive('/municipalities') ? 'rotate-180' : ''
+                                            }`}
+                                        />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    <DropdownMenuItem
+                                        icon={Building2}
+                                        onClick={() => navigate('/departments')}
+                                    >
+                                        Подразделения
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        icon={MapPin}
+                                        onClick={() => navigate('/municipalities')}
+                                    >
+                                        Округа
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+
+                        {(has('calls.view') || has('dictionaries.manage')) && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className={`rounded-lg transition-all ${
+                                            isActive('/dictionaries')
+                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        <BookOpen className="h-4 w-4 mr-2" />
+                                        Справочники
+                                        <ChevronDown className="h-3 w-3 ml-1" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    <DropdownMenuItem icon={FolderTree} onClick={() => navigate('/dictionaries/fire-categories')}>
+                                        Категории пожаров
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem icon={Flame} onClick={() => navigate('/dictionaries/fire-causes')}>
+                                        Причины пожаров
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem icon={Ban} onClick={() => navigate('/dictionaries/fire-nonaccount')}>
+                                        Пожар не подлежит учёту — причины
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
 
                         <Link to="/help">

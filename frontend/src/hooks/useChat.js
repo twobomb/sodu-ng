@@ -233,6 +233,17 @@ export const useMarkAsRead = () => {
     });
 };
 
+// Отметить все чаты прочитанными
+export const useMarkAllRead = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.markAllRead(),
+        onSuccess: () => {
+            qc.invalidateQueries(['chat', 'conversations']);
+        },
+    });
+};
+
 export const useMembers = (conversationId) =>
     useQuery({
         queryKey: ['chat', 'members', conversationId],

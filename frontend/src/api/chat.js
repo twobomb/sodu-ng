@@ -41,6 +41,8 @@ export const pinConversation = (id, pinned) =>
 export const markAsRead = (id, messageId = null) =>
     apiClient.post(`/chat/conversations/${id}/read`, { messageId });
 
+export const markAllRead = () => apiClient.post('/chat/read-all');
+
 export const searchConversations = (q) =>
     apiClient.get('/chat/search', { params: { q } });
 

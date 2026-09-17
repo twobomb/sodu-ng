@@ -25,6 +25,14 @@ export const CALL_RANKS = [
     'Ранг №5',
 ];
 
+// Местность для категорирования пожара
+export const AREA_TYPES = [
+    { value: 'urban', label: 'Город' },
+    { value: 'rural', label: 'Сельская местность' },
+];
+export const AREA_TYPE_LABEL = (v) =>
+    (AREA_TYPES.find((a) => a.value === v) || {}).label || '—';
+
 export const CALL_STATUS_META = {
     processing: { label: 'Обрабатывается', badge: 'bg-blue-500' },
     closed: { label: 'Закрыт', badge: 'bg-green-600' },

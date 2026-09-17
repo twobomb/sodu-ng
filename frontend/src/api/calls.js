@@ -1,6 +1,7 @@
 import apiClient from './client';
 
 export const getCalls = (params = {}) => apiClient.get('/calls', { params });
+export const getMunicipalities = () => apiClient.get('/calls/municipalities');
 export const getCall = (id) => apiClient.get(`/calls/${id}`);
 export const createCall = () => apiClient.post('/calls');
 export const updateCall = (id, data) => apiClient.put(`/calls/${id}`, data);

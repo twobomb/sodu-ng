@@ -15,8 +15,10 @@ const invalidateCalls = (queryClient) =>
 // ============================================================
 export const useCalls = (filters = {}) => {
     const clean = {};
-    for (const k of ['status', 'type', 'search', 'date_from', 'date_to']) {
-        if (filters[k]) clean[k] = filters[k];
+    for (const k of ['status', 'type', 'search', 'date_from', 'date_to', 'page', 'pageSize']) {
+        if (filters[k] !== undefined && filters[k] !== '' && filters[k] !== null) {
+            clean[k] = filters[k];
+        }
     }
     return useQuery({
         queryKey: ['calls', clean],
@@ -24,6 +26,14 @@ export const useCalls = (filters = {}) => {
         refetchOnWindowFocus: true,
     });
 };
+
+// Округа, доступные текущему пользователю
+export const useMunicipalities = () =>
+    useQuery({
+        queryKey: ['calls', 'municipalities'],
+        queryFn: () => api.getMunicipalities().then((r) => r.data),
+        staleTime: 60 * 1000,
+    });
 
 // ============================================================
 // ОДИН ВЫЗОВ (карточка)

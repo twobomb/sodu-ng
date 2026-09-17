@@ -32,11 +32,34 @@ const CALL_STATUSES = ['processing', 'closed', 'error'];
 // ============================================================
 const SELECT_CALL_BASE = `
   c.id, c.status, c.type, c.rank,
-  c.incident_at, c.message_received_at, c.municipality, c.address,
+  c.incident_at, c.message_received_at,
+  c.department_id, c.municipality_id, c.address,
   c.dispatch_at, c.arrival_at,
   c.localization_at, c.open_fire_eliminated_at, c.fire_eliminated_at,
   c.description, c.created_by, c.created_at, c.updated_at,
-  u.username AS creator_username
+  c.fire_area, c.area_type,
+  c.fire_category_id, c.fire_cause_id, c.fire_cause_other,
+  c.not_accounted_fire, c.not_accounted_reason_id,
+  c.victims_dead_total, c.victims_dead_children, c.victims_dead_data,
+  c.victims_injured_total, c.victims_injured_children, c.victims_injured_data,
+  c.victims_rescued_total, c.victims_rescued_children, c.victims_rescued_data,
+  c.victims_evacuated_total, c.victims_evacuated_children,
+  u.username AS creator_username,
+  d.name AS department_name,
+  m.name AS municipality_name,
+  fc.name AS fire_category_name, fc.code AS fire_category_code,
+  fca.name AS fire_cause_name,
+  fna.name AS not_accounted_reason_name
+`;
+
+const FROM_CALL_BASE = `
+  FROM calls c
+  LEFT JOIN users u ON c.created_by = u.id
+  LEFT JOIN departments d ON c.department_id = d.id
+  LEFT JOIN municipalities m ON c.municipality_id = m.id
+  LEFT JOIN fire_categories fc ON c.fire_category_id = fc.id
+  LEFT JOIN fire_causes fca ON c.fire_cause_id = fca.id
+  LEFT JOIN fire_nonaccount_reasons fna ON c.not_accounted_reason_id = fna.id
 `;
 
 // ============================================================
@@ -79,24 +102,55 @@ const getCallEvents = async (callId) => {
 };
 
 // ============================================================
-// СПИСОК (статус error везде игнорируем)
+// ОКРУГА: доступные пользователю (по подразделениям пользователя)
+// Смотрим подразделения, к которым есть доступ, берём их округа,
+// составляем список уникальных округов.
+// ============================================================
+const getAccessibleMunicipalities = async (userId, canViewAll) => {
+    if (canViewAll) {
+        const res = await pool.query(
+            `SELECT m.id, m.name
+             FROM municipalities m
+             ORDER BY m.name`
+        );
+        return res.rows;
+    }
+    const deps = await getUserDepartmentIds(userId);
+    if (!deps.length) return [];
+    const res = await pool.query(
+        `SELECT DISTINCT m.id, m.name
+         FROM municipalities m
+         JOIN departments d ON d.municipality_id = m.id
+         WHERE d.id = ANY($1)
+         ORDER BY m.name`,
+        [deps]
+    );
+    return res.rows;
+};
+
+// ============================================================
+// СПИСОК
+// «Все статусы» показывает все вызовы, включая ошибочные.
+// Фильтр по конкретному статусу — только этот статус.
 // ============================================================
 const getCalls = async (filters = {}) => {
-    const conds = [`c.status <> 'error'`];
+    const conds = [];
     const params = [];
     let i = 1;
 
-    if (filters.status && filters.status !== 'all') {
+    const status = filters.status || 'all';
+    if (status && status !== 'all') {
         conds.push(`c.status = $${i++}`);
-        params.push(filters.status);
+        params.push(status);
     }
+
     if (filters.type && filters.type !== 'all') {
         conds.push(`c.type = $${i++}`);
         params.push(filters.type);
     }
     if (filters.search) {
         conds.push(
-            `(c.address ILIKE $${i} OR c.municipality ILIKE $${i} OR c.description ILIKE $${i})`
+            `(c.address ILIKE $${i} OR m.name ILIKE $${i} OR c.description ILIKE $${i})`
         );
         params.push(`%${filters.search}%`);
         i++;
@@ -110,27 +164,37 @@ const getCalls = async (filters = {}) => {
         params.push(filters.date_to);
     }
 
-    const where = `WHERE ${conds.join(' AND ')}`;
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
-    const res = await pool.query(
+    const pageSizes = [10, 25, 50, 100];
+    const pageSize = pageSizes.includes(Number(filters.pageSize))
+        ? Number(filters.pageSize)
+        : 25;
+    const page = Math.max(1, parseInt(filters.page, 10) || 1);
+    const offset = (page - 1) * pageSize;
+
+    const totalRes = await pool.query(
+        `SELECT count(*)::int AS total ${FROM_CALL_BASE} ${where}`,
+        params
+    );
+    const total = totalRes.rows[0].total;
+
+    const dataRes = await pool.query(
         `SELECT ${SELECT_CALL_BASE},
                     (SELECT count(*)::int FROM call_units cu WHERE cu.call_id = c.id)  AS units_count,
                     (SELECT count(*)::int FROM call_events ce WHERE ce.call_id = c.id) AS events_count
-         FROM calls c
-         LEFT JOIN users u ON c.created_by = u.id
-         ${where}
-         ORDER BY c.created_at DESC`,
-        params
+         ${FROM_CALL_BASE} ${where}
+         ORDER BY c.created_at DESC
+         LIMIT $${i} OFFSET $${i + 1}`,
+        [...params, pageSize, offset]
     );
-    return res.rows;
+
+    return { items: dataRes.rows, total, page, pageSize };
 };
 
 const getCallById = async (id) => {
     const res = await pool.query(
-        `SELECT ${SELECT_CALL_BASE}
-         FROM calls c
-         LEFT JOIN users u ON c.created_by = u.id
-         WHERE c.id = $1`,
+        `SELECT ${SELECT_CALL_BASE} ${FROM_CALL_BASE} WHERE c.id = $1`,
         [id]
     );
     if (!res.rows.length) return null;
@@ -142,20 +206,32 @@ const getCallById = async (id) => {
 };
 
 // ============================================================
-// СОЗДАНИЕ — новый вызов с пустыми полями
+// СОЗДАНИЕ — новый вызов: тип «Пожар», округ по умолчанию
 // ============================================================
-const createCall = async (userId) => {
+const createCall = async (userId, canViewAll) => {
     const id = uuidv4();
-    const res = await pool.query(
-        `INSERT INTO calls (id, status, created_by)
-         VALUES ($1, 'processing', $2)
-         RETURNING *`,
-        [id, userId]
+    let departmentId = null;
+    let municipalityId = null;
+
+    if (!canViewAll) {
+        const deps = await getUserDepartmentIds(userId);
+        if (deps.length === 1) {
+            departmentId = deps[0];
+            const mres = await pool.query(
+                `SELECT municipality_id FROM departments WHERE id = $1`,
+                [deps[0]]
+            );
+            if (mres.rows.length) municipalityId = mres.rows[0].municipality_id;
+        }
+    }
+
+    await pool.query(
+        `INSERT INTO calls (id, status, type, department_id, municipality_id, created_by)
+         VALUES ($1, 'processing', 'Пожар', $2, $3, $4)`,
+        [id, departmentId, municipalityId, userId]
     );
-    const call = res.rows[0];
-    call.units = [];
-    call.events = [];
-    return call;
+
+    return getCallById(id);
 };
 
 // ============================================================
@@ -166,7 +242,8 @@ const UPDATE_COLUMNS = [
     'rank',
     'incident_at',
     'message_received_at',
-    'municipality',
+    'department_id',
+    'municipality_id',
     'address',
     'dispatch_at',
     'arrival_at',
@@ -174,6 +251,24 @@ const UPDATE_COLUMNS = [
     'open_fire_eliminated_at',
     'fire_eliminated_at',
     'description',
+    'fire_area',
+    'area_type',
+    'fire_category_id',
+    'fire_cause_id',
+    'fire_cause_other',
+    'not_accounted_fire',
+    'not_accounted_reason_id',
+    'victims_dead_total',
+    'victims_dead_children',
+    'victims_dead_data',
+    'victims_injured_total',
+    'victims_injured_children',
+    'victims_injured_data',
+    'victims_rescued_total',
+    'victims_rescued_children',
+    'victims_rescued_data',
+    'victims_evacuated_total',
+    'victims_evacuated_children',
 ];
 
 const updateCall = async (id, data) => {
@@ -184,7 +279,12 @@ const updateCall = async (id, data) => {
     for (const col of UPDATE_COLUMNS) {
         if (data[col] !== undefined) {
             fields.push(`${col} = $${i++}`);
-            params.push(data[col] === '' ? null : data[col]);
+            let val = data[col] === '' ? null : data[col];
+            // jsonb-колонки данных пострадавших сериализуем в JSON строку
+            if (col.endsWith('_data')) {
+                val = val == null ? null : JSON.stringify(val);
+            }
+            params.push(val);
         }
     }
 
@@ -206,7 +306,7 @@ const updateCall = async (id, data) => {
 // ============================================================
 const setCallStatus = async (id, status) => {
     const res = await pool.query(
-        `UPDATE calls SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        `UPDATE calls SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id`,
         [status, id]
     );
     if (!res.rows.length) return null;
@@ -264,6 +364,7 @@ module.exports = {
     CALL_RANKS,
     CALL_STATUSES,
     getUserDepartmentIds,
+    getAccessibleMunicipalities,
     getCalls,
     getCallById,
     getCallUnits,
@@ -275,3 +376,5 @@ module.exports = {
     addCallEvent,
     deleteCallEvent,
 };
+
+
