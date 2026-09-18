@@ -1,5 +1,6 @@
 const pool = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
+const { colorFor, generateCallId, decorateCall } = require('../utils/callIdentity');
 
 // ============================================================
 // КОНСТАНТЫ
@@ -45,6 +46,7 @@ const SELECT_CALL_BASE = `
   c.victims_rescued_total, c.victims_rescued_children, c.victims_rescued_data,
   c.victims_evacuated_total, c.victims_evacuated_children,
   u.username AS creator_username,
+  c.number, c.call_code, c.color,
   d.name AS department_name,
   m.name AS municipality_name,
   fc.name AS fire_category_name, fc.code AS fire_category_code,
@@ -136,10 +138,21 @@ const getAccessibleMunicipalities = async (userId, canViewAll) => {
 // «Все статусы» показывает все вызовы, включая ошибочные.
 // Фильтр по конкретному статусу — только этот статус.
 // ============================================================
-const getCalls = async (filters = {}) => {
+const getCalls = async (filters = {}, opts = {}) => {
     const conds = [];
     const params = [];
     let i = 1;
+
+    // Видимость по привязанным подразделениям.
+    // can_view_all видит все вызовы (включая без привязки), остальные — только те,
+    // в привязке которых есть хотя бы одно подразделение пользователя.
+    if (!opts.canViewAll) {
+        const deptIds = opts.departmentIds || [];
+        conds.push(
+            `EXISTS (SELECT 1 FROM call_departments cd WHERE cd.call_id = c.id AND cd.department_id = ANY($${i++}))`
+        );
+        params.push(deptIds);
+    }
 
     const status = filters.status || 'all';
     if (status && status !== 'all') {
@@ -153,7 +166,7 @@ const getCalls = async (filters = {}) => {
     }
     if (filters.search) {
         conds.push(
-            `(c.address ILIKE $${i} OR m.name ILIKE $${i} OR c.description ILIKE $${i})`
+            `(c.address ILIKE $${i} OR m.name ILIKE $${i} OR c.description ILIKE $${i} OR c.call_code ILIKE $${i})`
         );
         params.push(`%${filters.search}%`);
         i++;
@@ -192,7 +205,7 @@ const getCalls = async (filters = {}) => {
         [...params, pageSize, offset]
     );
 
-    return { items: dataRes.rows, total, page, pageSize };
+    return { items: dataRes.rows.map(decorateCall), total, page, pageSize };
 };
 
 const getCallById = async (id) => {
@@ -205,7 +218,7 @@ const getCallById = async (id) => {
     const call = res.rows[0];
     call.units = await getCallUnits(id);
     call.events = await getCallEvents(id);
-    return call;
+    return decorateCall(call);
 };
 
 // ============================================================
@@ -215,16 +228,24 @@ const createCall = async (userId, canViewAll) => {
     const id = uuidv4();
     let departmentId = null;
     let municipalityId = null;
+    let deps = [];
 
     if (!canViewAll) {
-        const deps = await getUserDepartmentIds(userId);
-        if (deps.length === 1) {
-            departmentId = deps[0];
-            const mres = await pool.query(
-                `SELECT municipality_id FROM departments WHERE id = $1`,
-                [deps[0]]
+        deps = await getUserDepartmentIds(userId);
+        if (deps.length) {
+            const dres = await pool.query(
+                `SELECT id, municipality_id FROM departments WHERE id = ANY($1)`,
+                [deps]
             );
-            if (mres.rows.length) municipalityId = mres.rows[0].municipality_id;
+            const rows = dres.rows;
+            // Уникальные округа, привязанные к доступным подразделениям
+            const munis = [...new Set(rows.map((r) => r.municipality_id).filter(Boolean))];
+            // Если доступ ровно к одному округу — ставим его; если к нескольким/ни одному — пусто
+            if (munis.length === 1) {
+                municipalityId = munis[0];
+                const deptRow = rows.find((r) => r.municipality_id === munis[0]);
+                departmentId = deptRow ? deptRow.id : deps[0];
+            }
         }
     }
 
@@ -233,6 +254,28 @@ const createCall = async (userId, canViewAll) => {
          VALUES ($1, 'processing', 'Пожар', $2, $3, $4)`,
         [id, departmentId, municipalityId, userId]
     );
+
+    // По умолчанию привязываем подразделения, к которым есть доступ у создателя.
+    // Пользователи с can_view_all вызов не привязывают ни к одному подразделению.
+    if (!canViewAll && deps.length) {
+        for (const depId of deps) {
+            await pool.query(
+                `INSERT INTO call_departments (call_id, department_id)
+                 VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [id, depId]
+            );
+        }
+    }
+
+    // Детерминированный словесный идентификатор и цвет по порядковому номеру.
+    const numRes = await pool.query('SELECT number FROM calls WHERE id = $1', [id]);
+    const number = Number(numRes.rows[0].number);
+    if (Number.isInteger(number) && number >= 1) {
+        await pool.query(
+            `UPDATE calls SET call_code = $1, color = $2 WHERE id = $3`,
+            [generateCallId(number), colorFor(number), id]
+        );
+    }
 
     return getCallById(id);
 };
@@ -362,6 +405,42 @@ const deleteCallEvent = async (callId, eventId) => {
     return res.rows.length > 0;
 };
 
+// ============================================================
+// ПРИВЯЗКА ПОДРАЗДЕЛЕНИЙ К ВЫЗОВУ (видимость/доступ к карточке)
+// ============================================================
+const getCallDepartments = async (callId) => {
+    const res = await pool.query(
+        `SELECT cd.department_id AS id, d.name AS name
+         FROM call_departments cd
+         LEFT JOIN departments d ON d.id = cd.department_id
+         WHERE cd.call_id = $1
+         ORDER BY d.name`,
+        [callId]
+    );
+    return res.rows;
+};
+
+const setCallDepartments = async (callId, deptIds) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM call_departments WHERE call_id = $1', [callId]);
+        for (const depId of deptIds) {
+            await client.query(
+                `INSERT INTO call_departments (call_id, department_id)
+                 VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [callId, depId]
+            );
+        }
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = {
     CALL_TYPES,
     CALL_RANKS,
@@ -378,6 +457,8 @@ module.exports = {
     setCallUnits,
     addCallEvent,
     deleteCallEvent,
+    getCallDepartments,
+    setCallDepartments,
 };
 
 

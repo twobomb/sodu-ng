@@ -13,10 +13,14 @@ export const getUnitsGrid = (sort = 'default') =>
 export const getAvailableCalls = () => apiClient.get('/units/calls-available');
 export const updateUnitMetrics = (id, data) =>
     apiClient.post(`/units/${id}/metrics`, data);
+export const reorderUnits = (unitIds) =>
+    apiClient.put('/units/order', { unit_ids: unitIds });
 export const getGlobalHistory = (params = {}) =>
     apiClient.get('/units/history/global', { params });
 export const getUnitHistory = (id, params = {}) =>
     apiClient.get(`/units/${id}/history`, { params });
+export const getUnitMetricsHistory = (id, metric = null) =>
+    apiClient.get(`/units/${id}/metrics-history`, { params: metric ? { metric } : {} });
 // ----- Типы техники -----
 export const getUnitTypes = () => apiClient.get('/unit-types');
 export const createUnitType = (data) => apiClient.post('/unit-types', data);

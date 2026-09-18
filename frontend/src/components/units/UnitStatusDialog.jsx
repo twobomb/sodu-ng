@@ -21,7 +21,7 @@ const callLabel = (c) => {
     if (c.type) parts.push(c.type);
     if (c.address) parts.push(c.address);
     if (c.municipality_name) parts.push(c.municipality_name);
-    return parts.join(' · ') || 'Вызов';
+    return parts.join(' · ') || '';
 };
 
 // Собственный селект вызова с поиском и возможностью сбросить («Не выбрано»).
@@ -45,8 +45,17 @@ const InlineCallSelect = ({ options, value, onChange, disabled }) => {
                 onClick={() => setOpen(!open)}
                 className={`w-full text-left rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-                <span className={`block truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>
-                    {selected ? selected.label : 'Выберите вызов...'}
+                <span className={`flex items-center gap-2 truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>
+                    {selected && selected.color ? (
+                        <span
+                            className="inline-block h-3 w-3 shrink-0 rounded-sm border border-slate-300"
+                            style={{ backgroundColor: selected.color }}
+                        />
+                    ) : null}
+                    {selected && selected.code ? (
+                        <span className="shrink-0 text-slate-400">{selected.code}</span>
+                    ) : null}
+                    <span className={`truncate ${selected ? 'text-slate-600' : 'text-slate-400'}`}>{selected ? selected.label : 'Выберите вызов...'}</span>
                 </span>
                 {selected ? (
                     <span
@@ -79,9 +88,16 @@ const InlineCallSelect = ({ options, value, onChange, disabled }) => {
                                 key={o.value}
                                 type="button"
                                 onClick={() => { onChange(o.value); setOpen(false); }}
-                                className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100 whitespace-pre-wrap break-words"
+                                className="flex items-start gap-2 w-full text-left px-3 py-2 text-sm hover:bg-slate-100 whitespace-pre-wrap break-words"
                             >
-                                {o.label}
+                                {o.color ? (
+                                    <span
+                                        className="mt-0.5 inline-block h-3.5 w-3.5 shrink-0 rounded-sm border border-slate-300"
+                                        style={{ backgroundColor: o.color }}
+                                    />
+                                ) : null}
+                                {o.code ? <span className="shrink-0 text-slate-400">{o.code}</span> : null}
+                                <span className="text-slate-600">{o.label}</span>
                             </button>
                         ))}
                     </div>
@@ -115,7 +131,17 @@ const UnitStatusDialog = ({
 
     const callOptions = useMemo(
         () =>
-            calls.map((c) => ({ value: c.id, label: callLabel(c), search: callLabel(c).toLowerCase() })),
+            calls.map((c) => {
+                const lab = callLabel(c);
+                const full = c.call_code ? `${c.call_code} ${lab}` : lab;
+                return {
+                    value: c.id,
+                    label: lab,
+                    search: full.toLowerCase(),
+                    code: c.call_code || '',
+                    color: c.color || null,
+                };
+            }),
         [calls]
     );
 

@@ -71,6 +71,10 @@ const setUnitsSchema = Joi.object({
     unit_ids: Joi.array().items(Joi.string().uuid()).default([]),
 });
 
+const setDepartmentsSchema = Joi.object({
+    department_ids: Joi.array().items(Joi.string().uuid()).default([]),
+});
+
 const addEventSchema = Joi.object({
     event_at: Joi.string().required(),
     text: Joi.string().min(1).max(5000).required(),
@@ -138,7 +142,10 @@ const getCalls = asyncHandler(async (req, res) => {
             page: req.query.page,
             pageSize: req.query.pageSize,
         };
-        const result = await callService.getCalls(filters);
+        const result = await callService.getCalls(filters, {
+            canViewAll: req.user.can_view_all,
+            departmentIds: await callService.getUserDepartmentIds(req.user.id),
+        });
         res.json(result);
     } catch (err) {
         logger.error('Ошибка получения вызовов: ' + err.message, {
@@ -176,6 +183,20 @@ const getCallById = asyncHandler(async (req, res) => {
     try {
         const call = await callService.getCallById(id);
         if (!call) return res.status(404).json({ error: 'Вызов не найден' });
+
+        // Доступ к карточке: can_view_all видит всё, остальные — по привязанным подразделениям
+        if (!req.user.can_view_all) {
+            const depts = await callService.getUserDepartmentIds(req.user.id);
+            const vis = await pool.query(
+                `SELECT 1 FROM call_departments
+                 WHERE call_id = $1 AND department_id = ANY($2) LIMIT 1`,
+                [id, depts]
+            );
+            if (!vis.rows.length) {
+                return res.status(403).json({ error: 'Нет доступа к этому вызову' });
+            }
+        }
+
         res.json(call);
     } catch (err) {
         logger.error(`Ошибка получения вызова ${id}: ` + err.message, {
@@ -305,7 +326,25 @@ const setCallUnits = asyncHandler(async (req, res) => {
         }
 
         const uniqueIds = [...new Set(value.unit_ids)];
-        await assertUnitAccess(req.user, uniqueIds);
+        // Доступ пользователя к самому вызову (по привязанным подразделениям)
+        if (!req.user.can_view_all) {
+            const depts = await callService.getUserDepartmentIds(req.user.id);
+            const vis = await pool.query(
+                `SELECT 1 FROM call_departments
+                 WHERE call_id = $1 AND department_id = ANY($2) LIMIT 1`,
+                [id, depts]
+            );
+            if (!vis.rows.length) {
+                return res.status(403).json({ error: 'Нет доступа к этому вызову' });
+            }
+        }
+
+        // Проверяем доступ только к ВНОВЬ добавляемой технике.
+        // Удаление техники не требует доступа, а уже прикреплённая техника
+        // других подразделений не должна блокировать добавление своей.
+        const currentUnitIds = (call.units || []).map((u) => u.unit_id);
+        const addedIds = uniqueIds.filter((uid) => !currentUnitIds.includes(uid));
+        await assertUnitAccess(req.user, addedIds);
 
         await callService.setCallUnits(id, uniqueIds);
         const updated = await callService.getCallById(id);
@@ -393,6 +432,66 @@ const deleteCallEvent = asyncHandler(async (req, res) => {
     }
 });
 
+// ============================================================
+// GET /api/calls/:id/departments — привязанные подразделения
+// ============================================================
+const getCallDepartments = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+        const rows = await callService.getCallDepartments(id);
+        res.json(rows);
+    } catch (err) {
+        logger.error(`Ошибка получения подразделений вызова ${id}: ` + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка получения подразделений' });
+    }
+});
+
+// ============================================================
+// PUT /api/calls/:id/departments — обновить привязку подразделений
+// ============================================================
+const setCallDepartments = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { error, value } = setDepartmentsSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    try {
+        const call = await callService.getCallById(id);
+        if (!call) return res.status(404).json({ error: 'Вызов не найден' });
+        if (!canEditCall(req, call)) {
+            return res.status(403).json({
+                error: call.status === 'closed'
+                    ? 'Вызов закрыт. Редактировать могут только пользователи с правом правки закрытых вызовов.'
+                    : 'Недостаточно прав для изменения доступа',
+            });
+        }
+
+        const user = req.user;
+        const unique = [...new Set(value.department_ids || [])];
+        // Обычный пользователь может назначать только подразделения из своего доступа
+        if (!user.can_view_all) {
+            const depts = await callService.getUserDepartmentIds(user.id);
+            if (unique.some((d) => !depts.includes(d))) {
+                return res.status(403).json({ error: 'Нет доступа к одному из выбранных подразделений' });
+            }
+        }
+
+        await callService.setCallDepartments(id, unique);
+        const io = req.app.get('io');
+        emitForceRefresh(io);
+        res.json(await callService.getCallDepartments(id));
+    } catch (err) {
+        logger.error(`Ошибка обновления доступа вызова ${id}: ` + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка обновления доступа' });
+    }
+});
+
 module.exports = {
     getCalls,
     getMunicipalities,
@@ -403,6 +502,8 @@ module.exports = {
     setCallUnits,
     addCallEvent,
     deleteCallEvent,
+    getCallDepartments,
+    setCallDepartments,
 };
 
 

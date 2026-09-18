@@ -1,25 +1,25 @@
-import { useMemo, useRef } from 'react';
-import { Loader2, X, Truck, Clock, Palette, MoreVertical } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, X, Truck, Clock, ExternalLink } from 'lucide-react';
 import {
     useUnitHistory,
     useUnitStatuses,
     useChangeUnitStatus,
+    useAvailableCalls,
 } from '../../hooks/useUnits';
 import { usePermissions } from '../../hooks/usePermissions';
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import UnitStatusDialog from './UnitStatusDialog';
 
 const UnitDetailsPanel = ({ unit, onClose }) => {
+    const navigate = useNavigate();
     const { has } = usePermissions();
     const { data: statuses } = useUnitStatuses();
     const changeStatus = useChangeUnitStatus();
+    const { data: availableCalls } = useAvailableCalls();
+    const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+    const [statusError, setStatusError] = useState('');
 
     const {
         data: historyData,
@@ -53,13 +53,21 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
 
     const canChangeStatus = has('units.update_status');
 
-    const handleStatusChange = (statusId) => {
-        if (statusId === unit.status_id) return;
+    const handleStatusSubmit = (payload) => {
+        setStatusError('');
         changeStatus.mutate(
-            { id: unit.id, data: { status_id: statusId } },
+            {
+                id: unit.id,
+                data: {
+                    status_id: payload.status_id,
+                    call_id: payload.call_id,
+                    add_event: payload.add_event,
+                },
+            },
             {
                 onError: (err) =>
-                    alert(err.response?.data?.error || 'Ошибка смены статуса'),
+                    setStatusError(err.response?.data?.error || 'Ошибка смены статуса'),
+                onSuccess: () => setStatusDialogOpen(false),
             }
         );
     };
@@ -97,90 +105,95 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
                 <div className="flex items-start justify-between gap-3 text-sm">
                     <span className="text-slate-500 flex-shrink-0">Статус</span>
                     <div className="flex flex-col items-end gap-1.5">
-            <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white"
-                style={{ backgroundColor: unit.status_color }}
-            >
-              {changeStatus.isPending && (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-              )}
-                <span>{unit.status_name}</span>
-            </span>
-
-                        {canChangeStatus && (
-                            <DropdownMenu modal={false}>
-                                <DropdownMenuTrigger
-                                    asChild
-                                    disabled={changeStatus.isPending}
-                                >
-                                    <button
-                                        type="button"
-                                        disabled={changeStatus.isPending}
-                                        className="inline-flex items-center gap-1 text-[10px] text-orange-600 hover:text-orange-700 font-medium"
-                                        title="Сменить статус"
-                                    >
-                                        <Palette className="h-3 w-3" />
-                                        сменить
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    align="end"
-                                    sideOffset={4}
-                                    collisionPadding={16}
-                                    className="min-w-[220px]"
-                                >
-                                    <DropdownMenuLabel>Сменить статус</DropdownMenuLabel>
-                                    {(statuses || []).map((s) => {
-                                        const isCurrent = s.id === unit.status_id;
-                                        return (
-                                            <DropdownMenuItem
-                                                key={s.id}
-                                                disabled={isCurrent}
-                                                onClick={() => !isCurrent && handleStatusChange(s.id)}
-                                            >
-                                                <div className="flex items-center gap-2 w-full">
-                          <span
-                              className="h-3 w-3 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: s.color }}
-                          />
-                                                    <span className="flex-1">{s.name}</span>
-                                                    {isCurrent && (
-                                                        <span className="text-[10px] text-slate-400">
-                              текущий
+                    {canChangeStatus ? (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStatusError('');
+                                setStatusDialogOpen(true);
+                            }}
+                            disabled={changeStatus.isPending}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white transition-all hover:scale-[1.04] hover:brightness-110 hover:shadow-md cursor-pointer disabled:opacity-70 disabled:cursor-wait"
+                            style={{ backgroundColor: unit.status_color }}
+                            title="Нажмите, чтобы изменить статус"
+                        >
+                            {changeStatus.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                            <span>{unit.status_name}</span>
+                        </button>
+                    ) : (
+                        <span
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white"
+                            style={{ backgroundColor: unit.status_color }}
+                        >
+                            <span>{unit.status_name}</span>
+                        </span>
+                    )}
+                    {unit.call_id && (
+                        <button
+                            type="button"
+                            onClick={() => navigate(`/calls/${unit.call_id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs text-orange-600 hover:text-orange-700 font-medium hover:underline"
+                            title="Открыть вызов"
+                        >
+                            <span
+                                className="inline-block h-3 w-3 rounded-sm border border-slate-300"
+                                style={{ backgroundColor: unit.call_color || '#e42525' }}
+                            />
+                            <span className="truncate max-w-[180px]">
+                                {unit.call_code || unit.call_type || 'Вызов'}
                             </span>
-                                                    )}
-                                                </div>
-                                            </DropdownMenuItem>
-                                        );
-                                    })}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
-                    </div>
+                            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                        </button>
+                    )}
                 </div>
-
-                {unit.status_changed_at && (
-                    <InfoRow
-                        label="Изменён"
-                        value={format(
-                            new Date(unit.status_changed_at),
-                            'dd.MM.yyyy HH:mm',
-                            { locale: ru }
-                        )}
-                    />
-                )}
-                <InfoRow label="Тип" value={unit.type_name || '—'} />
-                <InfoRow label="Подразделение" value={unit.department_name || '—'} />
-                <InfoRow
-                    label="Отделение"
-                    value={unit.squad_number ? `№${unit.squad_number}` : '—'}
-                />
-                {unit.show_in_grid === false && (
-                    <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
-                        Скрыта из сетки
-                    </div>
-                )}
             </div>
+
+            {unit.status_changed_at && (
+                <InfoRow
+                    label="Изменён"
+                    value={format(
+                        new Date(unit.status_changed_at),
+                        'dd.MM.yyyy HH:mm',
+                        { locale: ru }
+                    )}
+                />
+            )}
+            <InfoRow label="Тип" value={unit.type_name || '—'} />
+            <InfoRow label="Подразделение" value={unit.department_name || '—'} />
+            <InfoRow
+                label="Отделение"
+                value={unit.squad_number ? `№${unit.squad_number}` : '—'}
+            />
+
+            {/* Показатели */}
+            <div className="pt-2 border-t border-slate-100">
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">
+                    Показатели
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                    {[
+                        ['Бензин', unit.fuel_gasoline, 'л'],
+                        ['Дизель', unit.fuel_diesel, 'л'],
+                        ['Пена', unit.foam_agent, 'л'],
+                        ['Порошок', unit.powder, 'кг'],
+                        ['Пробег', unit.mileage, 'км'],
+                    ].map(([label, v, u]) => (
+                        <div key={label} className="flex items-center justify-between gap-2">
+                            <span className="text-slate-400">{label}</span>
+                            <span className="font-medium whitespace-nowrap">
+                                {v == null || v === '' ? '—' : `${v} ${u}`}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {unit.show_in_grid === false && (
+                <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
+                    Скрыта из сетки
+                </div>
+            )}
+        </div>
 
             {/* История — здесь скролл и бесконечная подгрузка */}
             <div
@@ -234,6 +247,23 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
                                             «{h.comment}»
                                         </div>
                                     )}
+                                    {h.call_id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/calls/${h.call_id}`)}
+                                            className="mt-1 inline-flex items-center gap-1.5 text-xs text-orange-600 hover:text-orange-700 font-medium hover:underline"
+                                            title="Открыть вызов"
+                                        >
+                                            <span
+                                                className="inline-block h-3 w-3 rounded-sm border border-slate-300"
+                                                style={{ backgroundColor: h.call_color || '#e42525' }}
+                                            />
+                                            <span className="truncate max-w-[200px]">
+                                                {h.call_code || 'Вызов'}
+                                            </span>
+                                            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -253,6 +283,20 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
                     </>
                 )}
             </div>
+
+            {/* Диалог смены статуса с привязкой вызова */}
+            <UnitStatusDialog
+                open={statusDialogOpen}
+                onOpenChange={setStatusDialogOpen}
+                unitName={unit.name}
+                statuses={statuses || []}
+                calls={Array.isArray(availableCalls) ? availableCalls : []}
+                currentStatusId={unit.status_id}
+                defaultCallId={unit.call_id || ''}
+                onSubmit={handleStatusSubmit}
+                pending={changeStatus.isPending}
+                error={statusError || undefined}
+            />
         </div>
     );
 };

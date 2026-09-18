@@ -3,6 +3,8 @@ import {
     Loader2,
     RefreshCw,
     LayoutList,
+    LayoutGrid,
+    Maximize2,
     Zap,
     Volume2,
     VolumeX,
@@ -41,7 +43,10 @@ const UnitsGrid = () => {
     // ============================================================
     // Состояния
     // ============================================================
-    const [sort, setSort] = useState('default');
+    const [sort, setSort] = useState(() => localStorage.getItem('unitsGridSort') || 'default');
+    const [viewMode, setViewMode] = useState(
+        () => localStorage.getItem('unitsGridViewMode') || 'compact'
+    );
     const [selectedUnitId, setSelectedUnitId] = useState(null);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState(null);
@@ -69,6 +74,14 @@ const UnitsGrid = () => {
     });
 
     const selectedUnit = selectedUnitFromGrid || selectedUnitFromApi || null;
+
+    // Запоминаем выбранный режим отображения и сортировку
+    useEffect(() => {
+        localStorage.setItem('unitsGridViewMode', viewMode);
+    }, [viewMode]);
+    useEffect(() => {
+        localStorage.setItem('unitsGridSort', sort);
+    }, [sort]);
 
     // Синхронизация настройки звука
     useEffect(() => {
@@ -288,6 +301,34 @@ const UnitsGrid = () => {
                     </DropdownMenuContent>
                 </DropdownMenu>
 
+                {/* Режим отображения ячеек */}
+                <div className="flex items-center bg-slate-100 rounded-lg p-0.5" title="Режим отображения ячеек">
+                    <button
+                        type="button"
+                        onClick={() => setViewMode('compact')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                            viewMode === 'compact'
+                                ? 'bg-white shadow-sm text-slate-800'
+                                : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        Компактный
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setViewMode('big')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                            viewMode === 'big'
+                                ? 'bg-white shadow-sm text-slate-800'
+                                : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                    >
+                        <Maximize2 className="h-3.5 w-3.5" />
+                        Большой
+                    </button>
+                </div>
+
                 {/* Переключатель сортировки */}
                 <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
                     <button
@@ -417,6 +458,7 @@ const UnitsGrid = () => {
                                                 <UnitCell
                                                     key={unit.id}
                                                     unit={unit}
+                                                    big={viewMode === 'big'}
                                                     onClick={(u) => setSelectedUnitId(u.id)}
                                                     isSelected={selectedUnitId === unit.id}
                                                 />

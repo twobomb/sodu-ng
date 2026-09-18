@@ -28,4 +28,13 @@ const remove = async (id) => {
     return res.rows.length > 0;
 };
 
-module.exports = { getAll, create, remove };
+const update = async (id, { name }) => {
+    const res = await pool.query(
+        `UPDATE municipalities SET name = $1, updated_at = NOW()
+         WHERE id = $2 RETURNING *`,
+        [name, id]
+    );
+    return res.rows[0] || null;
+};
+
+module.exports = { getAll, create, update, remove };

@@ -25,11 +25,6 @@ const updateUnitSchema = Joi.object({
     department_id: Joi.string().uuid(),
     squad_number: Joi.number().integer().min(1).max(10).allow(null),
     show_in_grid: Joi.boolean(),
-    fuel_gasoline: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
-    fuel_diesel: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
-    foam_agent: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
-    powder: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
-    mileage: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
 });
 
 const changeStatusSchema = Joi.object({
@@ -47,6 +42,10 @@ const updateMetricsSchema = Joi.object({
     foam_agent: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
     powder: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
     mileage: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+});
+
+const reorderUnitsSchema = Joi.object({
+    unit_ids: Joi.array().items(Joi.string().uuid()).required(),
 });
 
 // ============================================================
@@ -236,7 +235,7 @@ const changeStatus = asyncHandler(async (req, res) => {
         // Валидация вызова для привязки (если указан)
         if (value.call_id) {
             const callRes = await pool.query(
-                'SELECT id, status, department_id FROM calls WHERE id = $1',
+                'SELECT id, status FROM calls WHERE id = $1',
                 [value.call_id]
             );
             if (!callRes.rows.length) {
@@ -246,9 +245,15 @@ const changeStatus = asyncHandler(async (req, res) => {
             if (call.status !== 'processing') {
                 return res.status(400).json({ error: 'Вызов должен быть в статусе «Обрабатывается»' });
             }
+            // Доступ проверяем по привязанным подразделениям (call_departments)
             if (!user.can_view_all) {
                 const depts = await getUserDepartmentIds(user.id);
-                if (!call.department_id || !depts.includes(call.department_id)) {
+                const acc = await pool.query(
+                    `SELECT 1 FROM call_departments
+                     WHERE call_id = $1 AND department_id = ANY($2) LIMIT 1`,
+                    [value.call_id, depts]
+                );
+                if (!acc.rows.length) {
                     return res.status(403).json({ error: 'Нет доступа к выбранному вызову' });
                 }
             }
@@ -427,6 +432,36 @@ const getGlobalHistory = asyncHandler(async (req, res) => {
 });
 
 // ============================================================
+// GET /api/units/:id/metrics-history?metric=gasoline|diesel|foam|powder|mileage
+// История показателей техники для графика.
+// ============================================================
+const getUnitMetricsHistory = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const metric = req.query.metric || null;
+    try {
+        const unit = await unitService.getUnitById(id);
+        if (!unit) return res.status(404).json({ error: 'Техника не найдена' });
+
+        const user = req.user;
+        if (!user.can_view_all) {
+            const depts = await getUserDepartmentIds(user.id);
+            if (!depts.includes(unit.department_id)) {
+                return res.status(403).json({ error: 'Нет доступа к этой технике' });
+            }
+        }
+
+        const rows = await unitService.getUnitMetricsHistory(id, metric);
+        res.json(rows);
+    } catch (err) {
+        logger.error(`Ошибка получения истории показателей ${id}: ` + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка получения истории показателей' });
+    }
+});
+
+// ============================================================
 // GET /api/units/grid?sort=default|dynamic
 // ============================================================
 const getGridData = asyncHandler(async (req, res) => {
@@ -504,6 +539,53 @@ const updateMetrics = asyncHandler(async (req, res) => {
 });
 
 // ============================================================
+// PUT /api/units/order — порядок техники в подразделении
+// ============================================================
+const reorderUnits = asyncHandler(async (req, res) => {
+    const { error, value } = reorderUnitsSchema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+    const unitIds = [...new Set(value.unit_ids)];
+    if (!unitIds.length) {
+        return res.status(400).json({ error: 'Нет техники для сортировки' });
+    }
+
+    try {
+        const user = req.user;
+        if (!user.can_view_all) {
+            const depts = await getUserDepartmentIds(user.id);
+            const rows = await pool.query(
+                'SELECT id, department_id FROM units WHERE id = ANY($1)',
+                [unitIds]
+            );
+            const byId = new Map(rows.rows.map((r) => [r.id, r.department_id]));
+            for (const id of unitIds) {
+                const dept = byId.get(id);
+                if (!dept) {
+                    return res.status(404).json({ error: 'Техника не найдена' });
+                }
+                if (!depts.includes(dept)) {
+                    return res.status(403).json({ error: 'Нет доступа к этой технике' });
+                }
+            }
+        }
+
+        await unitService.reorderUnits(unitIds);
+        const io = req.app.get('io');
+        if (io) emitForceRefresh(io);
+        res.json({ ok: true });
+    } catch (err) {
+        logger.error(`Ошибка сортировки техники: ` + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка сортировки техники' });
+    }
+});
+
+// ============================================================
 // ЭКСПОРТ
 // ============================================================
 module.exports = {
@@ -515,7 +597,9 @@ module.exports = {
     updateMetrics,
     getAvailableCalls,
     deleteUnit,
+    reorderUnits,
     getUnitHistory,
+    getUnitMetricsHistory,
     getGlobalHistory,
     getGridData,
 };

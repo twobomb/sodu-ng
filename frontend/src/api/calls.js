@@ -13,3 +13,6 @@ export const addCallEvent = (id, data) =>
     apiClient.post(`/calls/${id}/events`, data);
 export const deleteCallEvent = (id, eventId) =>
     apiClient.delete(`/calls/${id}/events/${eventId}`);
+export const getCallDepartments = (id) => apiClient.get(`/calls/${id}/departments`);
+export const setCallDepartments = (id, departmentIds) =>
+    apiClient.put(`/calls/${id}/departments`, { department_ids: departmentIds });

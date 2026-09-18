@@ -1,9 +1,11 @@
-import { Loader2, Clock } from 'lucide-react';
+import { Loader2, Clock, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useGlobalHistory } from '../../hooks/useUnits';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 const GlobalHistoryLog = ({ onSelectUnit }) => {
+    const navigate = useNavigate();
     const { data: history, isLoading } = useGlobalHistory(50);
 
     if (isLoading) {
@@ -71,6 +73,23 @@ const GlobalHistoryLog = ({ onSelectUnit }) => {
               >
                 {h.status_name}
               </span>
+                            {h.call_id && (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/calls/${h.call_id}`)}
+                                    className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium hover:underline"
+                                    title="Открыть вызов"
+                                >
+                                    <span
+                                        className="inline-block h-4 w-4 rounded-sm border-2 border-slate-300"
+                                        style={{ backgroundColor: h.call_color || '#e42525' }}
+                                    />
+                                    <span className="truncate max-w-[200px]">
+                                        {h.call_code || 'Вызов'}
+                                    </span>
+                                    <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                                </button>
+                            )}
                         </div>
 
                         {/* Время: дата мелко, время крупно. Автор — мелко справа */}

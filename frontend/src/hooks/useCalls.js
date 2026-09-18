@@ -96,3 +96,25 @@ export const useDeleteCallEvent = () => {
         onSuccess: () => invalidateCalls(qc),
     });
 };
+
+// ============================================================
+// ПРИВЯЗКА ПОДРАЗДЕЛЕНИЙ К ВЫЗОВУ (доступ/видимость)
+// ============================================================
+export const useCallDepartments = (id) =>
+    useQuery({
+        queryKey: ['call-departments', id],
+        queryFn: () => api.getCallDepartments(id).then((r) => r.data),
+        enabled: !!id,
+        staleTime: 30 * 1000,
+    });
+
+export const useSetCallDepartments = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, departmentIds }) => api.setCallDepartments(id, departmentIds),
+        onSuccess: (res, vars) => {
+            qc.invalidateQueries(['call-departments', vars.id]);
+            invalidateCalls(qc);
+        },
+    });
+};

@@ -12,6 +12,8 @@ const {
     setCallUnits,
     addCallEvent,
     deleteCallEvent,
+    getCallDepartments,
+    setCallDepartments,
 } = require('../controllers/callController');
 
 // Все маршруты требуют аутентификации
@@ -42,6 +44,8 @@ router.post('/', requirePermission('calls.create'), createCall);
 
 // ----- Редактирование -----
 router.put('/:id', requireCallUpdate, updateCall);
+router.get('/:id/departments', requirePermission('calls.view'), getCallDepartments);
+router.put('/:id/departments', requireCallUpdate, setCallDepartments);
 router.put('/:id/status', requirePermission('calls.update_status'), setCallStatus);
 router.put('/:id/units', requireCallUpdate, setCallUnits);
 router.post('/:id/events', requireCallUpdate, addCallEvent);

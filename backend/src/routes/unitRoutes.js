@@ -10,9 +10,11 @@ const {
     updateUnit,
     changeStatus,
     updateMetrics,
+    reorderUnits,
     getAvailableCalls,
     deleteUnit,
     getUnitHistory,
+    getUnitMetricsHistory,
     getGlobalHistory,
     getGridData
 } = require('../controllers/unitController');
@@ -48,11 +50,18 @@ router.get(
     requirePermission('units.view_history'),
     getUnitHistory
 );
+router.get(
+    '/:id/metrics-history',
+    requirePermission('units.view_history'),
+    getUnitMetricsHistory
+);
 router.post(
     '/:id/metrics',
-    requirePermission('units.update'),
+    requirePermission('units.update_metrics'),
     updateMetrics
 );
+// Сортировка техники в подразделении (перетаскивание) — ДО /:id
+router.put('/order', requirePermission('units.update'), reorderUnits);
 router.put('/:id', requirePermission('units.update'), updateUnit);
 router.post(
     '/:id/status',

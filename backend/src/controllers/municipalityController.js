@@ -53,4 +53,28 @@ const remove = asyncHandler(async (req, res) => {
     }
 });
 
-module.exports = { getAll, create, remove };
+const updateSchema = Joi.object({
+    name: Joi.string().min(1).max(200).trim().required(),
+});
+
+// PUT /api/municipalities/:id
+const update = asyncHandler(async (req, res) => {
+    const { error, value } = updateSchema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+    try {
+        const row = await municipalityService.update(req.params.id, value);
+        if (!row) return res.status(404).json({ error: 'Округ не найден' });
+        emitForceRefresh(req.app.get('io'));
+        res.json(row);
+    } catch (err) {
+        logger.error(`Ошибка обновления округа ${req.params.id}: ` + err.message, {
+            stack: err.stack,
+            body: req.body,
+        });
+        res.status(500).json({ error: 'Ошибка обновления округа' });
+    }
+});
+
+module.exports = { getAll, create, update, remove };

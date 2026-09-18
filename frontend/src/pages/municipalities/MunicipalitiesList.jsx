@@ -1,6 +1,11 @@
 import { useState, useMemo } from 'react';
 import { usePermissions } from '../../hooks/usePermissions';
-import { useAllMunicipalities, useCreateMunicipality, useDeleteMunicipality } from '../../hooks/useMunicipalities';
+import {
+    useAllMunicipalities,
+    useCreateMunicipality,
+    useUpdateMunicipality,
+    useDeleteMunicipality,
+} from '../../hooks/useMunicipalities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +18,13 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -22,7 +34,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, Trash2, MapPin } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, MapPin } from 'lucide-react';
 
 const asArray = (v) => {
     if (Array.isArray(v)) return v;
@@ -37,16 +49,54 @@ const MunicipalitiesList = () => {
     const { data, isLoading, error } = useAllMunicipalities();
 
     const createM = useCreateMunicipality();
+    const updateM = useUpdateMunicipality();
     const deleteM = useDeleteMunicipality();
 
-    const [name, setName] = useState('');
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState(null); // округ на редактирование
+    const [formName, setFormName] = useState('');
+    const [formError, setFormError] = useState('');
     const [toDelete, setToDelete] = useState(null);
 
     const list = useMemo(() => asArray(data), [data]);
 
-    const handleCreate = () => {
-        if (!name.trim() || createM.isPending) return;
-        createM.mutate({ name: name.trim() }, { onSuccess: () => setName('') });
+    const openCreate = () => {
+        setEditing(null);
+        setFormName('');
+        setFormError('');
+        setFormOpen(true);
+    };
+
+    const openEdit = (m) => {
+        setEditing(m);
+        setFormName(m.name || '');
+        setFormError('');
+        setFormOpen(true);
+    };
+
+    const handleSave = () => {
+        setFormError('');
+        const name = formName.trim();
+        if (!name) {
+            setFormError('Укажите название округа');
+            return;
+        }
+        if (editing) {
+            updateM.mutate(
+                { id: editing.id, data: { name } },
+                {
+                    onSuccess: () => setFormOpen(false),
+                    onError: (err) =>
+                        setFormError(err?.response?.data?.error || 'Ошибка обновления округа'),
+                }
+            );
+        } else {
+            createM.mutate(
+                { name },
+                { onSuccess: () => setFormOpen(false), onError: (err) =>
+                    setFormError(err?.response?.data?.error || 'Ошибка создания округа') }
+            );
+        }
     };
 
     return (
@@ -61,40 +111,16 @@ const MunicipalitiesList = () => {
                         Справочник округов. Округ выбирается в подразделении и используется при оформлении вызовов
                     </p>
                 </div>
+                {canUpdate && (
+                    <Button
+                        onClick={openCreate}
+                        className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Добавить округ
+                    </Button>
+                )}
             </div>
-
-            {canUpdate && (
-                <div className="rounded-xl border border-slate-200 p-4">
-                    <h2 className="text-base font-semibold text-slate-700 mb-3">Добавить округ</h2>
-                    <div className="flex gap-2 items-end">
-                        <div className="flex-1 space-y-2">
-                            <Label htmlFor="muni_name">Название округа</Label>
-                            <Input
-                                id="muni_name"
-                                placeholder="Например: городской округ город Кировск"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                className="rounded-lg"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <div className="h-6" />
-                            <Button
-                                onClick={handleCreate}
-                                disabled={createM.isPending || !name.trim()}
-                                className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
-                            >
-                                {createM.isPending ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Plus className="h-4 w-4 mr-2" />
-                                )}
-                                Добавить
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {isLoading ? (
                 <div className="flex justify-center items-center h-64">
@@ -129,6 +155,15 @@ const MunicipalitiesList = () => {
                                     <TableCell className="font-medium">{m.name}</TableCell>
                                     {canUpdate && (
                                         <TableCell className="text-right">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => openEdit(m)}
+                                                className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50"
+                                                title="Редактировать округ"
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -171,6 +206,52 @@ const MunicipalitiesList = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Создание / редактирование округа */}
+            <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
+                <DialogContent className="sm:max-w-md rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg">
+                            {editing ? 'Редактировать округ' : 'Новый округ'}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="muni_name">Название округа</Label>
+                            <Input
+                                id="muni_name"
+                                autoFocus
+                                placeholder="Например: городской округ город Кировск"
+                                value={formName}
+                                onChange={(e) => setFormName(e.target.value)}
+                                className="rounded-lg"
+                            />
+                        </div>
+                        {formError && <p className="text-xs text-red-600">{formError}</p>}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setFormOpen(false)}
+                            className="rounded-lg"
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={createM.isPending || updateM.isPending}
+                            className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                        >
+                            {createM.isPending || updateM.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : null}
+                            {editing ? 'Сохранить' : 'Создать'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent } from '../../hooks/useCalls';
+import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments } from '../../hooks/useCalls';
 import { useUnits, useUnitStatuses, useChangeUnitStatus, useAvailableCalls } from '../../hooks/useUnits';
+import { useDepartments } from '../../hooks/useDepartments';
+import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useFireCategories, useFireCauses, useFireNonaccountReasons } from '../../hooks/useDictionaries';
 import { CALL_TYPES, CALL_RANKS, CALL_STATUS_META, CALL_STATUS_TRANSITIONS, AREA_TYPES, nowLocalInput, toLocalInput, toIso, formatDateTime } from '../../lib/calls';
@@ -31,7 +33,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search } from 'lucide-react';
 
 // Поля-даты вызова (в БД — timestamptz)
 const DATETIME_FIELDS = [
@@ -210,11 +212,21 @@ const fmtDur = (a, b) => {
 
 const UnitCallControl = ({ unit, statuses, calls, canEdit, currentCallId, onRemove, onSubmitStatus, onSubmitDates, pending, error }) => {
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [dispatchAt, setDispatchAt] = useState(toLocalInput(unit.dispatch_at));
-    const [arrivalAt, setArrivalAt] = useState(toLocalInput(unit.arrival_at));
+    const baseDispatch = toLocalInput(unit.dispatch_at);
+    const baseArrival = toLocalInput(unit.arrival_at);
+    const [dispatchAt, setDispatchAt] = useState(baseDispatch);
+    const [arrivalAt, setArrivalAt] = useState(baseArrival);
     const durTxt = fmtDur(dispatchAt, arrivalAt);
     const datesInvalid = !!dispatchAt && !!arrivalAt && new Date(arrivalAt) <= new Date(dispatchAt);
     const attachedHere = !!currentCallId && unit.call_id === currentCallId;
+    // даты изменились относительно серверных
+    const datesDirty = dispatchAt !== baseDispatch || arrivalAt !== baseArrival;
+
+    // Синхронизация с сервером (если даты меняет другой пользователь)
+    useEffect(() => {
+        setDispatchAt(baseDispatch);
+        setArrivalAt(baseArrival);
+    }, [baseDispatch, baseArrival]);
 
     return (
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -251,7 +263,7 @@ const UnitCallControl = ({ unit, statuses, calls, canEdit, currentCallId, onRemo
                 {datesInvalid && <div className="sm:col-span-2 text-xs text-red-600">Время выезда должно быть раньше времени прибытия</div>}
                 {canEdit && (
                     <div className="sm:col-span-2 flex items-center gap-2 mt-1">
-                        <Button size="sm" onClick={() => onSubmitDates(unit, { dispatch_at: toIso(dispatchAt), arrival_at: toIso(arrivalAt) })} disabled={pending || datesInvalid || (!dispatchAt && !arrivalAt)} className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700">
+                        <Button size="sm" onClick={() => onSubmitDates(unit, { dispatch_at: toIso(dispatchAt), arrival_at: toIso(arrivalAt) })} disabled={pending || datesInvalid || !datesDirty} className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
                             {pending ? 'Сохранение...' : 'Сохранить даты'}
                         </Button>
                         {error && <span className="text-xs text-red-600">{error}</span>}
@@ -290,6 +302,31 @@ const CallDetail = () => {
     const unitStatusesQuery = useUnitStatuses();
     const availableCallsQuery = useAvailableCalls();
     const changeUnitStatus = useChangeUnitStatus();
+
+    const { user } = useAuth();
+    const deptsQuery = useDepartments();
+    const callDeptsQuery = useCallDepartments(id);
+    const setCallDepts = useSetCallDepartments();
+
+    const [accessOpen, setAccessOpen] = useState(false);
+    const [accessSearch, setAccessSearch] = useState('');
+    const [accessSelected, setAccessSelected] = useState([]);
+    // Ошибка сохранения статуса/дат — точечно для конкретной техники
+    const [unitErr, setUnitErr] = useState(null); // { unitId, message }
+
+    useEffect(() => {
+        if (accessOpen && Array.isArray(callDeptsQuery.data)) {
+            setAccessSelected(callDeptsQuery.data.map((d) => d.id));
+        }
+    }, [accessOpen, callDeptsQuery.data]);
+
+    // Если доступ к карточке отозвали, пока пользователь её открывал — возвращаем в список
+    useEffect(() => {
+        const status = callQuery.error?.response?.status;
+        if (status === 403 || status === 404) {
+            navigate('/calls');
+        }
+    }, [callQuery.error, navigate]);
     const catsQuery = useFireCategories();
     const causesQuery = useFireCauses();
     const nonAccQuery = useFireNonaccountReasons();
@@ -489,23 +526,42 @@ const CallDetail = () => {
     const allStatuses = Array.isArray(unitStatusesQuery.data) ? unitStatusesQuery.data : [];
     const availableCallsRows = Array.isArray(availableCallsQuery.data) ? availableCallsQuery.data : [];
 
+    const deptsRaw = deptsQuery.data;
+    const allDepts = Array.isArray(deptsRaw) ? deptsRaw : (deptsRaw?.data || []);
+    const userDeptIds = user?.department_ids || (user?.departments || []).map((d) => d.id) || [];
+    const accessibleDepts = user?.can_view_all
+        ? allDepts
+        : allDepts.filter((d) => userDeptIds.includes(d.id));
+    const filteredDepts = accessibleDepts.filter(
+        (d) => !accessSearch.trim() || String(d.name || '').toLowerCase().includes(accessSearch.toLowerCase())
+    );
+
     const handleApplyUnitStatus = (payload) => {
         const { unit_id, ...data } = payload;
-        changeUnitStatus.mutate({ id: unit_id, data });
+        setUnitErr(null);
+        changeUnitStatus.mutate(
+            { id: unit_id, data },
+            { onError: (e) => setUnitErr({ unitId: unit_id, message: e?.response?.data?.error || 'Ошибка' }) }
+        );
     };
 
     const handleApplyUnitDates = (unit, dates) => {
         // Сохраняем даты через единый endpoint смены статуса (текущий статус техники)
-        changeUnitStatus.mutate({
-            id: unit.unit_id,
-            data: {
-                status_id: unit.status_id || null,
-                call_id: call.id,
-                dispatch_at: dates.dispatch_at,
-                arrival_at: dates.arrival_at,
-                add_event: false,
+        const id = unit.unit_id;
+        setUnitErr(null);
+        changeUnitStatus.mutate(
+            {
+                id,
+                data: {
+                    status_id: unit.status_id || null,
+                    call_id: call.id,
+                    dispatch_at: dates.dispatch_at,
+                    arrival_at: dates.arrival_at,
+                    add_event: false,
+                },
             },
-        });
+            { onError: (e) => setUnitErr({ unitId: id, message: e?.response?.data?.error || 'Ошибка' }) }
+        );
     };
 
     const handleAddUnit = (unitId) => {
@@ -610,11 +666,28 @@ const CallDetail = () => {
                         {call.creator_username && (
                             <span className="text-sm text-slate-500 flex items-center gap-1">
                                 <User className="h-3.5 w-3.5 text-slate-400" />
-                                Создал: <span className="font-medium text-slate-700">{call.creator_username}</span>
+                                Создал: <span className="font-medium text-slate-700 max-w-[200px] block overflow-hidden text-ellipsis whitespace-nowrap">
+  {call.creator_username}
+</span>
+                            </span>
+                        )}
+                        {call.call_code && (
+                            <span
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700"
+                                title={`Вызов №${call.number}`}
+                            >
+                                <span
+                                    className="inline-block h-3.5 w-3.5 rounded-sm border border-slate-300"
+                                    style={{ backgroundColor: call.color || '#e42525' }}
+                                />
+                                {call.call_code}
                             </span>
                         )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                        <Button variant="outline" onClick={() => setAccessOpen(true)} className="rounded-lg border-slate-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" title="Настроить доступ к вызову">
+                            <Shield className="h-4 w-4 mr-2" /> Доступ
+                        </Button>
                         {canChangeStatus && transitions.map((t) => {
                             const colorCls = t.value === 'closed'
                                 ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white hover:text-white border-transparent'
@@ -665,7 +738,7 @@ const CallDetail = () => {
                                 onSubmitStatus={handleApplyUnitStatus}
                                 onSubmitDates={handleApplyUnitDates}
                                 pending={changeUnitStatus.isPending}
-                                error={changeUnitStatus.error?.response?.data?.error}
+                                error={unitErr && unitErr.unitId === u.unit_id ? unitErr.message : null}
                             />
                         ))}
                     </div>
@@ -961,6 +1034,65 @@ const CallDetail = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Диалог: доступ к вызову */}
+            <Dialog open={accessOpen} onOpenChange={setAccessOpen}>
+                <DialogContent className="sm:max-w-lg rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg flex items-center gap-2">
+                            <Shield className="h-5 w-5 text-orange-500" /> Доступ к вызову
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-3 space-y-3">
+                        <p className="text-xs text-slate-500">
+                            Выберите подразделения которые могут видеть и редактировать карточку данного вызова. Пользователи с повышенными правами, могут видеть и редактировать её в любом случае
+                        </p>
+                        <div className="relative">
+                            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <Input
+                                value={accessSearch}
+                                onChange={(e) => setAccessSearch(e.target.value)}
+                                placeholder="Поиск подразделения..."
+                                className="rounded-lg pl-9"
+                            />
+                        </div>
+                        <div className="max-h-72 overflow-auto rounded-lg border border-slate-200 space-y-1">
+                            {filteredDepts.length === 0 && (
+                                <p className="text-sm text-slate-400 py-3">Нет доступных подразделений</p>
+                            )}
+                            {filteredDepts.map((d) => (
+                                <label key={d.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                                    <input
+                                        type="checkbox"
+                                        checked={accessSelected.includes(d.id)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) setAccessSelected((p) => [...p, d.id]);
+                                            else setAccessSelected((p) => p.filter((x) => x !== d.id));
+                                        }}
+                                        className="h-4 w-4 accent-orange-600"
+                                    />
+                                    <span className="text-sm text-slate-700 flex-1">{d.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAccessOpen(false)} className="rounded-lg">Отмена</Button>
+                        <Button
+                            disabled={setCallDepts.isPending}
+                            onClick={() =>
+                                setCallDepts.mutate(
+                                    { id, departmentIds: accessSelected },
+                                    { onSuccess: () => setAccessOpen(false) }
+                                )
+                            }
+                            className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                        >
+                            {setCallDepts.isPending ? 'Сохранение...' : 'Сохранить'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

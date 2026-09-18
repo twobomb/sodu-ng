@@ -19,6 +19,17 @@ export const useCreateMunicipality = () => {
     });
 };
 
+export const useUpdateMunicipality = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }) => api.updateMunicipality(id, data),
+        onSuccess: () => {
+            qc.invalidateQueries(['municipalities']);
+            qc.invalidateQueries(['departments']);
+        },
+    });
+};
+
 export const useDeleteMunicipality = () => {
     const qc = useQueryClient();
     return useMutation({

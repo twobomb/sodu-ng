@@ -173,6 +173,29 @@ export const useUpdateUnitMetrics = () => {
     });
 };
 
+// Переупорядочивание техники внутри подразделения
+export const useReorderUnits = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (unitIds) => api.reorderUnits(unitIds),
+        onSuccess: () => {
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+        },
+    });
+};
+
+// ============================================================
+// ИСТОРИЯ ПОКАЗАТЕЛЕЙ (топливо/пена/порошок/пробег)
+// ============================================================
+export const useUnitMetricsHistory = (unitId, metric, enabled = true) =>
+    useQuery({
+        queryKey: ['unit-metrics-history', unitId, metric],
+        queryFn: () => api.getUnitMetricsHistory(unitId, metric).then((r) => r.data),
+        enabled: !!unitId && !!metric && enabled,
+        staleTime: 10 * 1000,
+    });
+
 // ============================================================
 // СЕТКА ВСЕЙ ТЕХНИКИ
 // ============================================================

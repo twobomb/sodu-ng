@@ -164,8 +164,8 @@ const CallsList = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-[1%] whitespace-nowrap">Идентификатор</TableHead>
                                     <TableHead>Создан</TableHead>
-                                    <TableHead>Событие</TableHead>
                                     <TableHead>Адрес</TableHead>
                                     <TableHead>Округ</TableHead>
                                     <TableHead>Тип</TableHead>
@@ -195,11 +195,18 @@ const CallsList = () => {
                                             className={`cursor-pointer ${rowClass}`}
                                             onClick={() => navigate(`/calls/${call.id}`)}
                                         >
-                                            <TableCell className="whitespace-nowrap">
-                                                {formatDateTime(call.created_at)}
+                                            <TableCell className="whitespace-nowrap font-medium text-slate-800">
+                                                <span className="inline-flex items-center gap-2">
+                                                    <span
+                                                        className="inline-block h-4 w-4 rounded-sm border border-slate-300"
+                                                        style={{ backgroundColor: call.color || '#e42525' }}
+                                                        title={call.color || ''}
+                                                    />
+                                                    {call.call_code || '—'}
+                                                </span>
                                             </TableCell>
                                             <TableCell className="whitespace-nowrap">
-                                                {formatDateTime(call.incident_at)}
+                                                {formatDateTime(call.created_at)}
                                             </TableCell>
                                             <TableCell>{call.address || '—'}</TableCell>
                                             <TableCell>{call.municipality_name || '—'}</TableCell>

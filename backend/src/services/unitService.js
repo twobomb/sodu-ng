@@ -1,6 +1,7 @@
 const pool = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
+const { decorateCall } = require('../utils/callIdentity');
 
 // ============================================================
 // Общая часть SELECT — используется в нескольких запросах
@@ -8,6 +9,7 @@ const logger = require('../utils/logger');
 const SELECT_UNIT_BASE = `
   u.id, u.name, u.plate_number, u.department_id,
   u.type_id, u.status_id, u.squad_number, u.show_in_grid,
+  u.sort_order,
   u.call_id, u.fuel_gasoline, u.fuel_diesel, u.foam_agent, u.powder, u.mileage,
   u.created_at, u.updated_at,
   t.name       AS type_name,
@@ -20,6 +22,8 @@ const SELECT_UNIT_BASE = `
   s.group_kind AS status_group_kind,
   d.name       AS department_name,
   cl.type      AS call_type,
+  cl.call_code AS call_code,
+  cl.color     AS call_color,
   cl.incident_at AS call_incident_at,
   cl.address   AS call_address
 `;
@@ -47,7 +51,7 @@ const getAllUnits = async (userId, canViewAll, departmentIds = []) => {
 
     const res = await pool.query(
         `SELECT ${SELECT_UNIT_BASE} ${FROM_UNIT_BASE} ${where}
-     ORDER BY u.created_at DESC`,
+     ORDER BY u.department_id, u.sort_order ASC, u.created_at DESC`,
         params
     );
     return res.rows;
@@ -143,11 +147,6 @@ const updateUnit = async (id, data, actorId = null) => {
         'department_id',
         'squad_number',
         'show_in_grid',
-        'fuel_gasoline',
-        'fuel_diesel',
-        'foam_agent',
-        'powder',
-        'mileage',
     ];
 
     for (const key of allowed) {
@@ -170,17 +169,6 @@ const updateUnit = async (id, data, actorId = null) => {
     );
 
     if (!res.rows.length) return null;
-
-    // История показателей (если переданы)
-    for (const [col, metric] of METRICS) {
-        if (data[col] !== undefined) {
-            await pool.query(
-                `INSERT INTO unit_metrics_history (unit_id, metric, value, changed_by, changed_at)
-                 VALUES ($1, $2, $3, $4, NOW())`,
-                [id, metric, data[col] === '' ? null : data[col], actorId || null]
-            );
-        }
-    }
 
     return getUnitById(id);
 };
@@ -238,6 +226,21 @@ const changeStatus = async (unitId, statusId, actorId, opts = {}) => {
         // Привязка к вызову: обычный статус снимает, выездной — ставит (если указан)
         const newCallId = isDispatch ? (callId || current.call_id || null) : null;
 
+        // Данные вызова для истории (код и цвет)
+        let historyCall = null;
+        if (newCallId) {
+            const cRes = await client.query(
+                `SELECT call_code, color FROM calls WHERE id = $1`,
+                [newCallId]
+            );
+            if (cRes.rows.length) {
+                historyCall = {
+                    call_code: cRes.rows[0].call_code,
+                    call_color: cRes.rows[0].color,
+                };
+            }
+        }
+
         await client.query(
             `UPDATE units SET status_id = $1, call_id = $2, updated_at = NOW() WHERE id = $3`,
             [statusId, newCallId, unitId]
@@ -247,9 +250,16 @@ const changeStatus = async (unitId, statusId, actorId, opts = {}) => {
         if (statusChanged) {
             await client.query(
                 `INSERT INTO unit_status_history
-                 (unit_id, status_id, status_name, status_short_name, status_color, changed_by, comment)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [unitId, statusId, s.name, s.short_name, s.color, actorId || null, comment]
+                 (unit_id, status_id, status_name, status_short_name, status_color,
+                  changed_by, comment, call_id, call_code, call_color)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                [
+                    unitId, statusId, s.name, s.short_name, s.color,
+                    actorId || null, comment,
+                    newCallId || null,
+                    historyCall ? historyCall.call_code : null,
+                    historyCall ? historyCall.call_color : null,
+                ]
             );
         }
 
@@ -347,11 +357,15 @@ const getAvailableCalls = async (userId, canViewAll) => {
         const deptIds = deps.rows.map((r) => r.department_id);
         if (!deptIds.length) return [];
         params.push(deptIds);
-        where += ` AND c.department_id = ANY($${params.length})`;
+        // Доступ к вызову — по привязанным подразделениям (call_departments)
+        where += ` AND EXISTS (
+            SELECT 1 FROM call_departments cd
+            WHERE cd.call_id = c.id AND cd.department_id = ANY($${params.length})
+        )`;
     }
 
     const res = await pool.query(
-        `SELECT c.id, c.type, c.incident_at, c.address,
+        `SELECT c.id, c.number, c.call_code, c.color, c.type, c.incident_at, c.address,
                 d.name AS department_name, m.name AS municipality_name
          FROM calls c
          LEFT JOIN departments d ON c.department_id = d.id
@@ -360,7 +374,7 @@ const getAvailableCalls = async (userId, canViewAll) => {
          ORDER BY c.incident_at DESC`,
         params
     );
-    return res.rows;
+    return res.rows.map(decorateCall);
 };
 
 // ============================================================
@@ -372,6 +386,27 @@ const deleteUnit = async (id) => {
         [id]
     );
     return res.rows.length > 0;
+};
+// ============================================================
+// ПОРЯДОК ТЕХНИКИ В ПОДРАЗДЕЛЕНИИ (перетаскивание)
+// ============================================================
+const reorderUnits = async (unitIds) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (let i = 0; i < unitIds.length; i++) {
+            await client.query(
+                `UPDATE units SET sort_order = $1, updated_at = NOW() WHERE id = $2`,
+                [i, unitIds[i]]
+            );
+        }
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
 };
 // ============================================================
 // ИСТОРИЯ КОНКРЕТНОЙ ТЕХНИКИ — курсорная пагинация
@@ -451,6 +486,7 @@ const getGlobalHistory = async (
       h.id, h.unit_id, h.status_id,
       h.status_name, h.status_short_name, h.status_color,
       h.comment, h.changed_at,
+      h.call_id, h.call_code, h.call_color,
       un.name            AS unit_name,
       un.plate_number    AS unit_plate_number,
       un.department_id   AS department_id,
@@ -474,7 +510,20 @@ const getGlobalHistory = async (
     return res.rows;
 };
 // ============================================================
-// СЕТКА "ВСЯ ТЕХНИКА"
+// ИСТОРИЯ ПОКАЗАТЕЛЕЙ (топливо/пена/порошок/пробег)
+// ============================================================
+const getUnitMetricsHistory = async (unitId, metric = null) => {
+    const res = await pool.query(
+        `SELECT mh.id, mh.metric, mh.value, mh.changed_at,
+                u.username AS changed_by_username
+         FROM unit_metrics_history mh
+         LEFT JOIN users u ON u.id = mh.changed_by
+         WHERE mh.unit_id = $1 AND ($2::text IS NULL OR mh.metric = $2)
+         ORDER BY mh.changed_at ASC, mh.id ASC`,
+        [unitId, metric || null]
+    );
+    return res.rows;
+};
 // Возвращает подразделения с техникой внутри, с учётом иерархии
 // sort: 'default' | 'dynamic'
 // ============================================================
@@ -513,6 +562,8 @@ const getGridData = async (userId, canViewAll, departmentIds = [], sort = 'defau
                 u.id, u.name, u.plate_number,
                 u.department_id, u.type_id, u.status_id,
                 u.squad_number, u.updated_at,
+                u.call_id,
+                u.fuel_gasoline, u.fuel_diesel, u.foam_agent, u.powder, u.mileage,
                 t.short_name AS type_short_name,
                 t.name       AS type_name,
                 s.name       AS status_name,
@@ -520,6 +571,9 @@ const getGridData = async (userId, canViewAll, departmentIds = [], sort = 'defau
                 s.color      AS status_color,
                 s.color_name AS status_color_name,
                 d.name       AS department_name,
+                cl.call_code AS call_code,
+                cl.color     AS call_color,
+                cl.type      AS call_type,
                 (
                     SELECT MAX(changed_at)
                     FROM unit_status_history h
@@ -529,9 +583,10 @@ const getGridData = async (userId, canViewAll, departmentIds = [], sort = 'defau
                      LEFT JOIN unit_types t ON u.type_id = t.id
                      LEFT JOIN unit_statuses s ON u.status_id = s.id
                      LEFT JOIN departments d ON d.id = u.department_id
+                     LEFT JOIN calls cl ON cl.id = u.call_id
             WHERE u.department_id = ANY($1::uuid[])
               AND u.show_in_grid = true
-            ORDER BY u.squad_number ASC NULLS LAST, u.name ASC
+            ORDER BY u.sort_order ASC, u.name ASC
         `,
         [deptIds]
     );
@@ -648,8 +703,10 @@ module.exports = {
     updateUnit,
     changeStatus,
     updateMetrics,
+    getUnitMetricsHistory,
     getAvailableCalls,
     deleteUnit,
+    reorderUnits,
     getUnitHistory,
     getGlobalHistory,
     getGridData,

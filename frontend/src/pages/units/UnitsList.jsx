@@ -1,25 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import {
     useUnits,
     useDeleteUnit,
     useChangeUnitStatus,
     useUnitStatuses,
+    useUnitTypes,
     useCreateUnit,
     useUpdateUnit,
+    useReorderUnits,
 } from '../../hooks/useUnits';
 import { useDepartments } from '../../hooks/useDepartments';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import {
     Select,
     SelectContent,
@@ -52,10 +48,15 @@ import {
     Trash2,
     EyeOff,
     X,
-    MoreVertical,
+    History,
+    Gauge,
+    GripVertical,
+    MousePointer2,
 } from 'lucide-react';
 import UnitForm from '../../components/UnitForm';
 import SearchableSelect from '@/components/ui/searchable-select';
+import UnitMetricsHistoryDialog from '../../components/units/UnitMetricsHistoryDialog';
+import UnitMetricsEditDialog from '../../components/units/UnitMetricsEditDialog';
 
 const asArray = (v) => {
     if (Array.isArray(v)) return v;
@@ -63,35 +64,79 @@ const asArray = (v) => {
     return [];
 };
 
+// Перетаскиваемая карточка техники (только внутри своего подразделения)
+const DraggableUnit = ({ unit, deptId, onReorder, canDrag, children }) => {
+    const [{ isDragging }, dragRef] = useDrag(() => ({
+        type: 'UNIT',
+        item: { id: unit.id, deptId },
+        canDrag: () => !!canDrag,
+        collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    }), [unit.id, deptId, canDrag]);
+
+    const [, dropRef] = useDrop(() => ({
+        accept: 'UNIT',
+        drop: (item) => {
+            if (item.deptId === deptId && item.id !== unit.id) onReorder(item.id, unit.id);
+        },
+    }), [unit.id, deptId, onReorder]);
+
+    const ref = (node) => {
+        dragRef(node);
+        dropRef(node);
+    };
+
+    return (
+        <div
+            ref={ref}
+            className={`flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 transition-colors ${
+                isDragging ? 'opacity-40 border-orange-200' : 'hover:bg-slate-50'
+            }`}
+        >
+            {canDrag && (
+                <GripVertical className="h-4 w-4 text-slate-300 cursor-grab flex-shrink-0" title="Перетащить" />
+            )}
+            {children}
+        </div>
+    );
+};
+
 const UnitsList = () => {
     const { has } = usePermissions();
     const { data, isLoading, error } = useUnits();
     const { data: deptData, isLoading: deptsLoading } = useDepartments();
     const { data: statuses } = useUnitStatuses();
+    const { data: typesData } = useUnitTypes();
+
+    const units = asArray(data);
+    const departments = asArray(deptData);
+    const statusList = asArray(statuses);
+    const types = asArray(typesData);
+
+    const canEdit = has('units.update');
+    const canDelete = has('units.delete');
+    const canCreate = has('units.create');
+    const canChangeStatus = has('units.update_status');
+    const canViewHistory = has('units.view_history');
+    const canEditMetrics = has('units.update_metrics');
 
     const createUnit = useCreateUnit();
     const updateUnit = useUpdateUnit();
     const deleteUnit = useDeleteUnit();
     const changeStatus = useChangeUnitStatus();
+    const reorderUnitsMut = useReorderUnits();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deptFilter, setDeptFilter] = useState('all');
+    const [typeFilter, setTypeFilter] = useState('all');
 
     const [selectedUnit, setSelectedUnit] = useState(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [unitToDelete, setUnitToDelete] = useState(null);
     const [formError, setFormError] = useState('');
-
-    const canEdit = has('units.update');
-    const canDelete = has('units.delete');
-    const canCreate = has('units.create');
-    const canChangeStatus = has('units.update_status');
-
-    const units = asArray(data);
-    const departments = asArray(deptData);
-    const statusList = asArray(statuses);
+    const [metricsUnit, setMetricsUnit] = useState(null);
+    const [metricsEditUnit, setMetricsEditUnit] = useState(null);
 
     // Опции для SearchableSelect подразделений
     const deptOptions = useMemo(
@@ -107,6 +152,20 @@ const UnitsList = () => {
         [departments]
     );
 
+    // Опции для SearchableSelect: тип техники (с поиском)
+    const typeOptions = useMemo(
+        () => [
+            { value: 'all', label: 'Все типы', extra: '' },
+            ...types.map((t) => ({
+                value: t.id,
+                label: t.short_name || t.name || t.id,
+                extra: t.name || '',
+                search: `${t.short_name || ''} ${t.name || ''}`.toLowerCase(),
+            })),
+        ],
+        [types]
+    );
+
     const filteredUnits = useMemo(() => {
         return units.filter((unit) => {
             const q = searchTerm.toLowerCase();
@@ -118,9 +177,48 @@ const UnitsList = () => {
                 statusFilter === 'all' || unit.status_id === statusFilter;
             const matchesDept =
                 deptFilter === 'all' || unit.department_id === deptFilter;
-            return matchesSearch && matchesStatus && matchesDept;
+            const matchesType =
+                typeFilter === 'all' || unit.type_id === typeFilter;
+            return matchesSearch && matchesStatus && matchesDept && matchesType;
         });
-    }, [units, searchTerm, statusFilter, deptFilter]);
+    }, [units, searchTerm, statusFilter, deptFilter, typeFilter]);
+
+    // Локальный порядок юнитов (синхронизируется с выборкой, позволяет drag-перестановку)
+    const [localUnits, setLocalUnits] = useState([]);
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLocalUnits(filteredUnits);
+    }, [filteredUnits]);
+
+    const groups = useMemo(() => {
+        const map = new Map();
+        for (const u of localUnits) {
+            if (!map.has(u.department_id)) {
+                map.set(u.department_id, {
+                    id: u.department_id,
+                    name: u.department_name || 'Без подразделения',
+                    units: [],
+                });
+            }
+            map.get(u.department_id).units.push(u);
+        }
+        return [...map.values()];
+    }, [localUnits]);
+
+    const handleReorder = (dragId, overId) => {
+        setLocalUnits((prev) => {
+            const arr = [...prev];
+            const from = arr.findIndex((u) => u.id === dragId);
+            const to = arr.findIndex((u) => u.id === overId);
+            if (from < 0 || to < 0) return prev;
+            const [moved] = arr.splice(from, 1);
+            arr.splice(to, 0, moved);
+            const deptId = moved.department_id;
+            const ids = arr.filter((u) => u.department_id === deptId).map((u) => u.id);
+            reorderUnitsMut.mutate(ids);
+            return arr;
+        });
+    };
 
     const handleCreate = () => {
         setSelectedUnit(null);
@@ -207,9 +305,7 @@ const UnitsList = () => {
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">Техника</h2>
-                    <p className="text-sm text-slate-500">
-                        Всего: {filteredUnits.length}
-                    </p>
+                    <p className="text-sm text-slate-500">Всего: {localUnits.length}</p>
                 </div>
                 {canCreate && (
                     <Button
@@ -234,27 +330,24 @@ const UnitsList = () => {
                     />
                 </div>
 
-                {/* Фильтр по подразделению — SearchableSelect */}
+                <div className="w-[220px]">
+                    <SearchableSelect
+                        options={typeOptions}
+                        value={typeFilter}
+                        onChange={setTypeFilter}
+                        placeholder="Все типы"
+                    />
+                </div>
+
                 <div className="w-[260px]">
                     <SearchableSelect
                         options={deptOptions}
                         value={deptFilter}
                         onChange={setDeptFilter}
                         placeholder="Все подразделения"
-                        renderOption={(opt) => (
-                            <div className="flex flex-col min-w-0">
-                                <span className="text-sm truncate">{opt.label}</span>
-                                {opt.extra && (
-                                    <span className="text-[11px] text-slate-400 truncate">
-                    {opt.extra}
-                  </span>
-                                )}
-                            </div>
-                        )}
                     />
                 </div>
 
-                {/* Фильтр по статусу — оставляем обычный Select */}
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[220px] rounded-lg">
                         <SelectValue placeholder="Все статусы" />
@@ -264,10 +357,10 @@ const UnitsList = () => {
                         {statusList.map((s) => (
                             <SelectItem key={s.id} value={s.id}>
                                 <div className="flex items-center gap-2">
-                  <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: s.color }}
-                  />
+                                    <span
+                                        className="h-3 w-3 rounded-full"
+                                        style={{ backgroundColor: s.color }}
+                                    />
                                     {s.name}
                                 </div>
                             </SelectItem>
@@ -275,14 +368,14 @@ const UnitsList = () => {
                     </SelectContent>
                 </Select>
 
-                {/* Сброс фильтров */}
-                {(deptFilter !== 'all' || statusFilter !== 'all' || searchTerm) && (
+                {(deptFilter !== 'all' || statusFilter !== 'all' || typeFilter !== 'all' || searchTerm) && (
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
                             setDeptFilter('all');
                             setStatusFilter('all');
+                            setTypeFilter('all');
                             setSearchTerm('');
                         }}
                         className="h-9 rounded-lg gap-1.5 text-slate-600"
@@ -292,162 +385,173 @@ const UnitsList = () => {
                     </Button>
                 )}
             </div>
-
-            {/* Таблица */}
-            {filteredUnits.length === 0 ? (
+{/* Группы подразделений */}
+            {groups.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm p-12 text-center text-slate-500">
                     <p>Нет техники, соответствующей фильтрам</p>
                 </div>
             ) : (
-                <div className="bg-white rounded-xl shadow-sm">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Название</TableHead>
-                                <TableHead>Тип</TableHead>
-                                <TableHead>Госномер</TableHead>
-                                <TableHead>Статус</TableHead>
-                                <TableHead>Отделение</TableHead>
-                                <TableHead>Подразделение</TableHead>
-                                <TableHead className="text-right">Действия</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredUnits.map((unit) => (
-                                <TableRow key={unit.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
-                                            {unit.name}
-                                            {unit.show_in_grid === false && (
-                                                <span title="Скрыта из сетки">
-                          <EyeOff className="h-3.5 w-3.5 text-slate-400" />
-                        </span>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {unit.type_short_name ? (
-                                            <Badge
-                                                variant="outline"
-                                                className="font-mono text-xs"
-                                                title={unit.type_name}
-                                            >
-                                                {unit.type_short_name}
-                                            </Badge>
-                                        ) : (
-                                            <span className="text-slate-400">—</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="font-mono text-sm">
-                                        {unit.plate_number || '—'}
-                                    </TableCell>
-                                    <TableCell>
-                                        {unit.status_id ? (
-                                            <DropdownMenu modal={false}>
-                                                <DropdownMenuTrigger
-                                                    asChild
-                                                    disabled={!canChangeStatus}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white transition-opacity ${
-                                                            canChangeStatus
-                                                                ? 'hover:opacity-90 cursor-pointer'
-                                                                : 'cursor-default'
-                                                        }`}
-                                                        style={{ backgroundColor: unit.status_color }}
-                                                        title={
-                                                            canChangeStatus
-                                                                ? 'Нажмите, чтобы сменить статус'
-                                                                : unit.status_name
-                                                        }
-                                                    >
-                                                        <span>{unit.status_short_name}</span>
-                                                        {canChangeStatus && (
-                                                            <MoreVertical className="h-3 w-3 opacity-70" />
+                <DndProvider backend={HTML5Backend}>
+                    <div className="space-y-4">
+                        {groups.map((g) => (
+                            <div key={g.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                                    <h3 className="font-semibold text-slate-800">{g.name}</h3>
+                                    <span className="text-xs text-slate-400">{g.units.length} ед.</span>
+                                </div>
+                                <div className="p-3 space-y-2">
+                                    {g.units.map((unit) => (
+                                        <DraggableUnit
+                                            key={unit.id}
+                                            unit={unit}
+                                            deptId={g.id}
+                                            canDrag={canEdit}
+                                            onReorder={handleReorder}
+                                        >
+                                            <div className="flex-1 flex items-center justify-between gap-3 min-w-0">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium text-slate-800 truncate">
+                                                            {unit.name}
+                                                        </span>
+                                                        {unit.show_in_grid === false && (
+                                                            <span title="Скрыта из сетки">
+                                                                <EyeOff className="h-3.5 w-3.5 text-slate-400" />
+                                                            </span>
                                                         )}
-                                                    </button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent
-                                                    align="start"
-                                                    sideOffset={4}
-                                                    collisionPadding={16}
-                                                    className="min-w-[220px] z-[100]"
-                                                >
-                                                    <DropdownMenuLabel>Сменить статус</DropdownMenuLabel>
-                                                    {statusList.map((s) => {
-                                                        const isCurrent = s.id === unit.status_id;
-                                                        return (
-                                                            <DropdownMenuItem
-                                                                key={s.id}
-                                                                disabled={isCurrent}
-                                                                onClick={() =>
-                                                                    !isCurrent && handleStatusChange(unit, s.id)
-                                                                }
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                        {unit.type_short_name && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="font-mono text-xs"
+                                                                title={unit.type_name}
                                                             >
-                                                                <div className="flex items-center gap-2">
-                                  <span
-                                      className="h-3 w-3 rounded-full flex-shrink-0"
-                                      style={{ backgroundColor: s.color }}
-                                  />
-                                                                    <span className="flex-1">{s.name}</span>
-                                                                    {isCurrent && (
-                                                                        <span className="text-[10px] text-slate-400">
-                                      текущий
-                                    </span>
+                                                                {unit.type_short_name}
+                                                            </Badge>
+                                                        )}
+                                                        <span className="font-mono">{unit.plate_number || '—'}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1 flex-shrink-0">
+{unit.status_id ? (
+                                                        <DropdownMenu modal={false}>
+                                                            <DropdownMenuTrigger
+                                                                asChild
+                                                                disabled={!canChangeStatus}
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white transition-opacity ${
+                                                                        canChangeStatus
+                                                                            ? 'hover:opacity-90 cursor-pointer'
+                                                                            : 'cursor-default'
+                                                                    }`}
+                                                                    style={{ backgroundColor: unit.status_color }}
+                                                                    title={
+                                                                        canChangeStatus
+                                                                            ? 'Нажмите, чтобы сменить статус'
+                                                                            : unit.status_name
+                                                                    }
+                                                                >
+                                                                    <span>{unit.status_short_name}</span>
+                                                                    {canChangeStatus && (
+                                                                        <MousePointer2 className="h-3 w-3 opacity-70" />
                                                                     )}
-                                                                </div>
-                                                            </DropdownMenuItem>
-                                                        );
-                                                    })}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        ) : (
-                                            <span className="text-slate-400">—</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {unit.squad_number ? (
-                                            <Badge variant="outline">{unit.squad_number}</Badge>
-                                        ) : (
-                                            <span className="text-slate-400">—</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-sm text-slate-600">
-                                        {unit.department_name || '—'}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        {canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleEdit(unit)}
-                                                className="h-8 w-8 p-0"
-                                                title="Редактировать"
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                        {canDelete && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleDelete(unit.id)}
-                                                className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                                title="Удалить"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
+                                                                </button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent
+                                                                align="start"
+                                                                sideOffset={4}
+                                                                collisionPadding={16}
+                                                                className="min-w-[220px] z-[100]"
+                                                            >
+                                                                <DropdownMenuLabel>Сменить статус</DropdownMenuLabel>
+                                                                {statusList.map((s) => {
+                                                                    const isCurrent = s.id === unit.status_id;
+                                                                    return (
+                                                                        <DropdownMenuItem
+                                                                            key={s.id}
+                                                                            disabled={isCurrent}
+                                                                            onClick={() =>
+                                                                                !isCurrent && handleStatusChange(unit, s.id)
+                                                                            }
+                                                                        >
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span
+                                                                                    className="h-3 w-3 rounded-full flex-shrink-0"
+                                                                                    style={{ backgroundColor: s.color }}
+                                                                                />
+                                                                                <span className="flex-1">{s.name}</span>
+                                                                                {isCurrent && (
+                                                                                    <span className="text-[10px] text-slate-400">
+                                                                                        текущий
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </DropdownMenuItem>
+                                                                    );
+                                                                })}
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    ) : (
+                                                        <span className="text-slate-400 text-sm">—</span>
+                                                    )}
+{canEditMetrics && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => setMetricsEditUnit(unit)}
+                                                            className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50"
+                                                            title="Редактировать показатели"
+                                                        >
+                                                            <Gauge className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canViewHistory && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => setMetricsUnit(unit)}
+                                                            className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50"
+                                                            title="История показателей"
+                                                        >
+                                                            <History className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canEdit && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleEdit(unit)}
+                                                            className="h-8 w-8 p-0"
+                                                            title="Редактировать"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(unit.id)}
+                                                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                                                            title="Удалить"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </DraggableUnit>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </DndProvider>
             )}
-
-            <UnitForm
+<UnitForm
                 open={isFormOpen}
                 onOpenChange={(open) => {
                     setIsFormOpen(open);
@@ -464,10 +568,7 @@ const UnitsList = () => {
                 departments={departments}
             />
 
-            <AlertDialog
-                open={isDeleteDialogOpen}
-                onOpenChange={setIsDeleteDialogOpen}
-            >
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <AlertDialogContent className="rounded-2xl">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Удаление техники</AlertDialogTitle>
@@ -488,6 +589,22 @@ const UnitsList = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <UnitMetricsHistoryDialog
+                open={!!metricsUnit}
+                onOpenChange={(open) => {
+                    if (!open) setMetricsUnit(null);
+                }}
+                unit={metricsUnit}
+            />
+
+            <UnitMetricsEditDialog
+                open={!!metricsEditUnit}
+                onOpenChange={(open) => {
+                    if (!open) setMetricsEditUnit(null);
+                }}
+                unit={metricsEditUnit}
+            />
         </div>
     );
 };
