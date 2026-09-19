@@ -136,9 +136,12 @@ const getCalls = asyncHandler(async (req, res) => {
         const filters = {
             status: req.query.status || 'all',
             type: req.query.type || 'all',
+            municipality: req.query.municipality || 'all',
             search: req.query.search || '',
             date_from: req.query.date_from || null,
             date_to: req.query.date_to || null,
+            created_from: req.query.created_from || null,
+            created_to: req.query.created_to || null,
             page: req.query.page,
             pageSize: req.query.pageSize,
         };
@@ -153,6 +156,27 @@ const getCalls = asyncHandler(async (req, res) => {
             user: req.user?.id,
         });
         res.status(500).json({ error: 'Ошибка получения вызовов' });
+    }
+});
+
+// ============================================================
+// GET /api/calls/monitor — мониторинг вызовов в обработке
+// ============================================================
+const getMonitorCalls = asyncHandler(async (req, res) => {
+    try {
+        const depts = await callService.getUserDepartmentIds(req.user.id);
+        const rows = await callService.getMonitorCalls(
+            req.user.id,
+            req.user.can_view_all,
+            depts
+        );
+        res.json(rows);
+    } catch (err) {
+        logger.error('Ошибка мониторинга вызовов: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка мониторинга вызовов' });
     }
 });
 
@@ -494,6 +518,7 @@ const setCallDepartments = asyncHandler(async (req, res) => {
 
 module.exports = {
     getCalls,
+    getMonitorCalls,
     getMunicipalities,
     getCallById,
     createCall,

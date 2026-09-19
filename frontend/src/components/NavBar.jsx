@@ -3,7 +3,6 @@ import {
     Flame,
     Siren,
     Truck,
-    Users,
     ChevronDown,
     LogOut,
     List,
@@ -15,7 +14,6 @@ import {
     Settings as SettingsIcon,
     MessageCircle,
     LayoutGrid,
-    BookOpen,
     FolderTree,
     Ban,
 } from 'lucide-react';
@@ -30,6 +28,7 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { useChatUnreadCounts } from '../hooks/useChat';
 
@@ -49,12 +48,17 @@ const NavBar = () => {
     const isUsersSection =
         isActive('/users') || isActive('/online') || isActive('/roles');
 
-    // Пункт "Техника" активен на всех 4 страницах раздела
-    const isUnitsSection =
-        isActive('/units') ||
-        isActive('/units-grid') ||
-        isActive('/unit-types') ||
-        isActive('/unit-statuses');
+    // Пункт "Дополнительно" активен на страницах разделов
+    const isAdditionalSection =
+        isUsersSection ||
+        isActive('/departments') ||
+        isActive('/municipalities') ||
+        isActive('/dictionaries') ||
+        isActive('/unit-types');
+
+    // Пункт "Мониторинг" активен на страницах мониторинга
+    const isMonitoringSection =
+        isActive('/calls-monitor') || isActive('/units-grid');
 
     return (
         <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 sticky top-0 z-40 navMenu">
@@ -78,103 +82,74 @@ const NavBar = () => {
                     {/* Меню */}
                     <div className="flex items-center gap-1">
                         {has('calls.view') && (
-                            <Link to="/calls">
-                                <Button
-                                    variant="ghost"
-                                    className={`rounded-lg transition-all ${
-                                        isActive('/calls')
-                                            ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
-                                            : 'text-slate-600 hover:bg-slate-100'
-                                    }`}
-                                >
-                                    <Siren className="h-4 w-4 mr-2" />
-                                    Вызовы
-                                </Button>
-                            </Link>
+                            <Button
+                                variant="ghost"
+                                onClick={() => navigate('/calls')}
+                                className={`rounded-lg transition-all ${
+                                    isActive('/calls')
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                        : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                                <Siren className="h-4 w-4 mr-2" />
+                                Вызовы
+                            </Button>
                         )}
 
                         {has('units.view') && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        className={`rounded-lg transition-all ${
-                                            isUnitsSection
-                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
-                                                : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <Truck className="h-4 w-4 mr-2" />
-                                        Техника
-                                        <ChevronDown
-                                            className={`h-3 w-3 ml-1 transition-transform ${
-                                                isUnitsSection ? 'rotate-180' : ''
-                                            }`}
-                                        />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                    <DropdownMenuItem
-                                        icon={LayoutGrid}
-                                        onClick={() => navigate('/units-grid')}
-                                    >
-                                        Вся техника
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        icon={Truck}
-                                        onClick={() => navigate('/units')}
-                                    >
-                                        Список техники
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        icon={Truck}
-                                        onClick={() => navigate('/unit-types')}
-                                    >
-                                        Типы техники
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            <Button
+                                variant="ghost"
+                                onClick={() => navigate('/units')}
+                                className={`rounded-lg transition-all ${
+                                    isActive('/units')
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                        : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                                <Truck className="h-4 w-4 mr-2" />
+                                Техника
+                            </Button>
                         )}
-                        {(has('users.view') || has('users.view_online') || has('roles.view')) && (
+
+                        {(has('calls.view') || has('units.view')) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
                                         variant="ghost"
                                         className={`rounded-lg transition-all ${
-                                            isUsersSection
+                                            isMonitoringSection
                                                 ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                         }`}
                                     >
-                                        <Users className="h-4 w-4 mr-2" />
-                                        Пользователи
+                                        <Activity className="h-4 w-4 mr-2" />
+                                        Мониторинг
                                         <ChevronDown
                                             className={`h-3 w-3 ml-1 transition-transform ${
-                                                isUsersSection ? 'rotate-180' : ''
+                                                isMonitoringSection ? 'rotate-180' : ''
                                             }`}
                                         />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
-                                    {has('users.view') && (
-                                        <DropdownMenuItem icon={List} onClick={() => navigate('/users')}>
-                                            Список пользователей
+                                    {has('calls.view') && (
+                                        <DropdownMenuItem
+                                            icon={Activity}
+                                            onClick={() => navigate('/calls-monitor')}
+                                        >
+                                            Мониторинг вызовов
                                         </DropdownMenuItem>
                                     )}
-                                    {has('users.view_online') && (
-                                        <DropdownMenuItem icon={Activity} onClick={() => navigate('/online')}>
-                                            Онлайн пользователи
-                                        </DropdownMenuItem>
-                                    )}
-                                    {has('roles.view') && (
+                                    {has('units.view') && (
                                         <>
-                                            {(has('users.view') || has('users.view_online')) && (
+                                            {has('calls.view') && (
                                                 <DropdownMenuSeparator />
                                             )}
-                                            <DropdownMenuItem icon={Shield} onClick={() => navigate('/roles')}>
-                                                Роли
+                                            <DropdownMenuItem
+                                                icon={LayoutGrid}
+                                                onClick={() => navigate('/units-grid')}
+                                            >
+                                                Мониторинг техники
                                             </DropdownMenuItem>
                                         </>
                                     )}
@@ -182,72 +157,89 @@ const NavBar = () => {
                             </DropdownMenu>
                         )}
 
-                        {has('departments.view') && (
+                        {(has('users.view') ||
+                            has('users.view_online') ||
+                            has('roles.view') ||
+                            has('departments.view') ||
+                            has('units.view') ||
+                            has('calls.view') ||
+                            has('dictionaries.manage')) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
                                         variant="ghost"
                                         className={`rounded-lg transition-all ${
-                                            isActive('/departments') || isActive('/municipalities')
+                                            isAdditionalSection
                                                 ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                         }`}
                                     >
-                                        <Building2 className="h-4 w-4 mr-2" />
-                                        Структура
-                                        <ChevronDown
-                                            className={`h-3 w-3 ml-1 transition-transform ${
-                                                isActive('/departments') || isActive('/municipalities') ? 'rotate-180' : ''
-                                            }`}
-                                        />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                    <DropdownMenuItem
-                                        icon={Building2}
-                                        onClick={() => navigate('/departments')}
-                                    >
-                                        Подразделения
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        icon={MapPin}
-                                        onClick={() => navigate('/municipalities')}
-                                    >
-                                        Округа
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
-
-                        {(has('calls.view') || has('dictionaries.manage')) && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        className={`rounded-lg transition-all ${
-                                            isActive('/dictionaries')
-                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
-                                                : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <BookOpen className="h-4 w-4 mr-2" />
-                                        Справочники
+                                        <LayoutGrid className="h-4 w-4 mr-2" />
+                                        Дополнительно
                                         <ChevronDown className="h-3 w-3 ml-1" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
-                                    <DropdownMenuItem icon={FolderTree} onClick={() => navigate('/dictionaries/fire-categories')}>
-                                        Категории пожаров
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem icon={Flame} onClick={() => navigate('/dictionaries/fire-causes')}>
-                                        Причины пожаров
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem icon={Ban} onClick={() => navigate('/dictionaries/fire-nonaccount')}>
-                                        Пожар не подлежит учёту — причины
-                                    </DropdownMenuItem>
+                                    {(has('users.view') ||
+                                        has('users.view_online') ||
+                                        has('roles.view')) && (
+                                        <>
+                                            <DropdownMenuLabel>Пользователи</DropdownMenuLabel>
+                                            {has('users.view') && (
+                                                <DropdownMenuItem icon={List} onClick={() => navigate('/users')}>
+                                                    Список пользователей
+                                                </DropdownMenuItem>
+                                            )}
+                                            {has('users.view_online') && (
+                                                <DropdownMenuItem icon={Activity} onClick={() => navigate('/online')}>
+                                                    Онлайн пользователи
+                                                </DropdownMenuItem>
+                                            )}
+                                            {has('roles.view') && (
+                                                <DropdownMenuItem icon={Shield} onClick={() => navigate('/roles')}>
+                                                    Роли
+                                                </DropdownMenuItem>
+                                            )}
+                                        </>
+                                    )}
+                                    {has('departments.view') && (
+                                        <>
+                                            <DropdownMenuLabel>Структура</DropdownMenuLabel>
+                                            <DropdownMenuItem
+                                                icon={Building2}
+                                                onClick={() => navigate('/departments')}
+                                            >
+                                                Подразделения
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                icon={MapPin}
+                                                onClick={() => navigate('/municipalities')}
+                                            >
+                                                Округа
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                    {(has('calls.view') ||
+                                        has('dictionaries.manage') ||
+                                        has('units.view')) && (
+                                        <>
+                                            <DropdownMenuLabel>Справочники</DropdownMenuLabel>
+                                            <DropdownMenuItem icon={FolderTree} onClick={() => navigate('/dictionaries/fire-categories')}>
+                                                Категории пожаров
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem icon={Flame} onClick={() => navigate('/dictionaries/fire-causes')}>
+                                                Причины пожаров
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem icon={Ban} onClick={() => navigate('/dictionaries/fire-nonaccount')}>
+                                                Пожар не подлежит учёту — причины
+                                            </DropdownMenuItem>
+                                            {has('units.view') && (
+                                                <DropdownMenuItem icon={Truck} onClick={() => navigate('/unit-types')}>
+                                                    Типы техники
+                                                </DropdownMenuItem>
+                                            )}
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}

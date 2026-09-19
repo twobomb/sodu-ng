@@ -371,7 +371,7 @@ const getAvailableCalls = async (userId, canViewAll) => {
          LEFT JOIN departments d ON c.department_id = d.id
          LEFT JOIN municipalities m ON c.municipality_id = m.id
          WHERE ${where}
-         ORDER BY c.incident_at DESC`,
+         ORDER BY c.created_at DESC`,
         params
     );
     return res.rows.map(decorateCall);

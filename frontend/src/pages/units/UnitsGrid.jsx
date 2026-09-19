@@ -211,16 +211,15 @@ const UnitsGrid = () => {
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-120px)] -mx-8 -my-6">
+        <div className="flex flex-col h-[calc(100vh-65px)] -mx-8 -my-6">
             {/* Верхняя панель */}
             <div className="bg-white border-b border-slate-200 px-8 py-4 flex flex-wrap items-center gap-3 flex-shrink-0">
                 <div className="flex-1 min-w-[200px]">
-                    <h1 className="text-2xl font-bold text-slate-800">Вся техника</h1>
+                    <h1 className="text-1xl font-bold text-slate-800">Мониторинг техники</h1>
                     <p className="text-xs text-slate-500 mt-0.5">
-                        {stats.depts} подразделений · {stats.units} ед. техники
+                        {stats.depts} подразделений<br/> {stats.units} ед. техники<br/>
                         {stats.active > 0 && (
                             <>
-                                {' · '}
                                 <span className="text-orange-600 font-medium">
                   {stats.active} с активным выездом
                 </span>

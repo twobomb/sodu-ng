@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCalls, useCreateCall } from '../../hooks/useCalls';
+import { useCalls, useCreateCall, useMunicipalities } from '../../hooks/useCalls';
 import { usePermissions } from '../../hooks/usePermissions';
 import {
     CALL_TYPES,
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
     Table,
     TableBody,
@@ -23,7 +24,7 @@ import {
     NativeSelect,
     NativeSelectOption,
 } from '@/components/ui/native-select';
-import { Loader2, Plus, Search, Siren } from 'lucide-react';
+import { FilterX, Loader2, Plus, Search, Siren } from 'lucide-react';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -36,15 +37,23 @@ const CallsList = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
+    const [municipalityFilter, setMunicipalityFilter] = useState('all');
+    const [createdFrom, setCreatedFrom] = useState('');
+    const [createdTo, setCreatedTo] = useState('');
 
     // Пагинация
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(25);
 
+    const munisQuery = useMunicipalities();
+
     const { data, isLoading, error } = useCalls({
         search: searchTerm || undefined,
         status: statusFilter,
         type: typeFilter,
+        municipality: municipalityFilter,
+        created_from: createdFrom || undefined,
+        created_to: createdTo || undefined,
         page,
         pageSize,
     });
@@ -52,6 +61,14 @@ const CallsList = () => {
     const calls = data?.items || [];
     const total = data?.total || 0;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    const munisList = Array.isArray(munisQuery.data)
+        ? munisQuery.data
+        : (munisQuery.data?.data || []);
+    const municipalityOptions = [
+        { value: 'all', label: 'Все округа' },
+        ...munisList.map((m) => ({ value: m.id, label: m.name })),
+    ];
 
     const handleCreate = () => {
         if (createCall.isPending) return;
@@ -65,6 +82,24 @@ const CallsList = () => {
 
     const changePageSize = (val) => {
         setPageSize(Number(val));
+        setPage(1);
+    };
+
+    const hasActiveFilters =
+        searchTerm !== '' ||
+        statusFilter !== 'all' ||
+        typeFilter !== 'all' ||
+        municipalityFilter !== 'all' ||
+        createdFrom !== '' ||
+        createdTo !== '';
+
+    const resetFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('all');
+        setTypeFilter('all');
+        setMunicipalityFilter('all');
+        setCreatedFrom('');
+        setCreatedTo('');
         setPage(1);
     };
 
@@ -115,6 +150,20 @@ const CallsList = () => {
                     </div>
                 </div>
                 <div className="space-y-2">
+                    <Label>Округ</Label>
+                    <SearchableSelect
+                        options={municipalityOptions}
+                        value={municipalityFilter}
+                        onChange={(v) => {
+                            setMunicipalityFilter(v);
+                            setPage(1);
+                        }}
+                        placeholder="Выберите округ..."
+                        emptyText="Округов не найдено"
+                        className="w-full"
+                    />
+                </div>
+                <div className="space-y-2">
                     <Label>Статус</Label>
                     <NativeSelect
                         value={statusFilter}
@@ -148,6 +197,45 @@ const CallsList = () => {
                         ))}
                     </NativeSelect>
                 </div>
+                <div className="space-y-2">
+                    <Label>Создан от</Label>
+                    <Input
+                        type="date"
+                        value={createdFrom}
+                        max={createdTo || undefined}
+                        onChange={(e) => {
+                            setCreatedFrom(e.target.value);
+                            setPage(1);
+                        }}
+                        className="rounded-lg"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Создан до</Label>
+                    <Input
+                        type="date"
+                        value={createdTo}
+                        min={createdFrom || undefined}
+                        onChange={(e) => {
+                            setCreatedTo(e.target.value);
+                            setPage(1);
+                        }}
+                        className="rounded-lg"
+                    />
+                </div>
+            </div>
+
+            <div className="flex justify-end">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!hasActiveFilters}
+                    onClick={resetFilters}
+                    className="rounded-lg"
+                >
+                    <FilterX className="h-4 w-4 mr-2" />
+                    Сбросить фильтры
+                </Button>
             </div>
 
             {isLoading ? (

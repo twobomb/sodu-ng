@@ -164,6 +164,10 @@ const getCalls = async (filters = {}, opts = {}) => {
         conds.push(`c.type = $${i++}`);
         params.push(filters.type);
     }
+    if (filters.municipality && filters.municipality !== 'all') {
+        conds.push(`c.municipality_id = $${i++}`);
+        params.push(filters.municipality);
+    }
     if (filters.search) {
         conds.push(
             `(c.address ILIKE $${i} OR m.name ILIKE $${i} OR c.description ILIKE $${i} OR c.call_code ILIKE $${i})`
@@ -178,6 +182,18 @@ const getCalls = async (filters = {}, opts = {}) => {
     if (filters.date_to) {
         conds.push(`c.incident_at <= $${i++}`);
         params.push(filters.date_to);
+    }
+    // Фильтр по дате создания (created_at) — начало дня включительно
+    if (filters.created_from) {
+        conds.push(`c.created_at >= $${i}::date`);
+        params.push(filters.created_from);
+        i++;
+    }
+    // Фильтр по дате создания (created_at) — вся дата включительно (< следующего дня)
+    if (filters.created_to) {
+        conds.push(`c.created_at < ($${i}::date + interval '1 day')`);
+        params.push(filters.created_to);
+        i++;
     }
 
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
@@ -206,6 +222,39 @@ const getCalls = async (filters = {}, opts = {}) => {
     );
 
     return { items: dataRes.rows.map(decorateCall), total, page, pageSize };
+};
+
+// ============================================================
+// МОНИТОРИНГ: вызовы в обработке (с техникой и ходом событий)
+// ============================================================
+const getMonitorCalls = async (userId, canViewAll, departmentIds = []) => {
+    const conds = ["c.status = 'processing'"];
+    const params = [];
+    let i = 1;
+
+    // Видимость по привязанным подразделениям (как в списке)
+    if (!canViewAll) {
+        if (!departmentIds.length) return [];
+        conds.push(
+            `EXISTS (SELECT 1 FROM call_departments cd WHERE cd.call_id = c.id AND cd.department_id = ANY($${i++}))`
+        );
+        params.push(departmentIds);
+    }
+
+    const where = `WHERE ${conds.join(' AND ')}`;
+
+    const res = await pool.query(
+        `SELECT ${SELECT_CALL_BASE} ${FROM_CALL_BASE} ${where}
+         ORDER BY c.created_at DESC`,
+        params
+    );
+
+    const calls = res.rows.map(decorateCall);
+    for (const call of calls) {
+        call.units = await getCallUnits(call.id);
+        call.events = await getCallEvents(call.id);
+    }
+    return calls;
 };
 
 const getCallById = async (id) => {
@@ -448,6 +497,7 @@ module.exports = {
     getUserDepartmentIds,
     getAccessibleMunicipalities,
     getCalls,
+    getMonitorCalls,
     getCallById,
     getCallUnits,
     getCallEvents,

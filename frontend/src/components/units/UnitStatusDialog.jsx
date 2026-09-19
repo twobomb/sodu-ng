@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Loader2, ChevronDown, X } from 'lucide-react';
@@ -45,7 +45,7 @@ const InlineCallSelect = ({ options, value, onChange, disabled }) => {
                 onClick={() => setOpen(!open)}
                 className={`w-full text-left rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-                <span className={`flex items-center gap-2 truncate ${selected ? 'text-slate-700' : 'text-slate-400'}`}>
+                <span className={`flex items-center gap-2 min-w-0 ${selected ? 'text-slate-700' : 'text-slate-400'}`}>
                     {selected && selected.color ? (
                         <span
                             className="inline-block h-3 w-3 shrink-0 rounded-sm border border-slate-300"
@@ -55,7 +55,7 @@ const InlineCallSelect = ({ options, value, onChange, disabled }) => {
                     {selected && selected.code ? (
                         <span className="shrink-0 text-slate-400">{selected.code}</span>
                     ) : null}
-                    <span className={`truncate ${selected ? 'text-slate-600' : 'text-slate-400'}`}>{selected ? selected.label : 'Выберите вызов...'}</span>
+                    <span className={`whitespace-normal break-words line-clamp-2 min-w-0 flex-1 ${selected ? 'text-slate-600' : 'text-slate-400'}`}>{selected ? selected.label : 'Выберите вызов...'}</span>
                 </span>
                 {selected ? (
                     <span
@@ -125,6 +125,15 @@ const UnitStatusDialog = ({
     const [statusId, setStatusId] = useState(currentStatusId || '');
     const [callId, setCallId] = useState(defaultCallId || '');
     const [addEvent, setAddEvent] = useState(true);
+
+    // При каждом открытии подставляем текущий статус и текущий вызов техники
+    useEffect(() => {
+        if (open) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setStatusId(currentStatusId || '');
+            setCallId(defaultCallId || '');
+        }
+    }, [open, currentStatusId, defaultCallId]);
 
     const selStatus = statuses.find((s) => s.id === statusId);
     const isDispatch = selStatus?.group_kind === 'dispatch';

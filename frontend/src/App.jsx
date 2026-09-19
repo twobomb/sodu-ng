@@ -10,6 +10,7 @@ import Layout from './pages/Layout';
 
 import CallsList from './pages/calls/CallsList';
 import CallDetail from './pages/calls/CallDetail';
+import CallMonitor from './pages/calls/CallMonitor';
 import UnitsList from './pages/units/UnitsList';
 import UsersList from './pages/users/UsersList';
 import OnlineUsers from './pages/users/OnlineUsers';
@@ -85,6 +86,14 @@ const router = createBrowserRouter([
                 element: (
                     <PermissionRoute permission="units.view">
                         <UnitsList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'calls-monitor',
+                element: (
+                    <PermissionRoute permission="calls.view">
+                        <CallMonitor />
                     </PermissionRoute>
                 ),
             },

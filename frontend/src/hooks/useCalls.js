@@ -15,7 +15,7 @@ const invalidateCalls = (queryClient) =>
 // ============================================================
 export const useCalls = (filters = {}) => {
     const clean = {};
-    for (const k of ['status', 'type', 'search', 'date_from', 'date_to', 'page', 'pageSize']) {
+    for (const k of ['status', 'type', 'municipality', 'search', 'date_from', 'date_to', 'created_from', 'created_to', 'page', 'pageSize']) {
         if (filters[k] !== undefined && filters[k] !== '' && filters[k] !== null) {
             clean[k] = filters[k];
         }
@@ -26,6 +26,18 @@ export const useCalls = (filters = {}) => {
         refetchOnWindowFocus: true,
     });
 };
+
+// ============================================================
+// МОНИТОРИНГ: вызовы в обработке (реальное время)
+// ============================================================
+export const useMonitorCalls = () =>
+    useQuery({
+        queryKey: ['calls', 'monitor'],
+        queryFn: () => api.getMonitorCalls().then((r) => r.data),
+        refetchInterval: 10 * 1000,
+        refetchIntervalInBackground: false,
+        staleTime: 5 * 1000,
+    });
 
 // Округа, доступные текущему пользователю
 export const useMunicipalities = () =>
