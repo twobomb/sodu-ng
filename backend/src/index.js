@@ -24,6 +24,7 @@ const unitStatusRoutes = require('./routes/unitStatusRoutes');
 const fireCategoryRoutes = require('./routes/fireCategoryRoutes');
 const fireCauseRoutes = require('./routes/fireCauseRoutes');
 const fireNonaccountRoutes = require('./routes/fireNonaccountRoutes');
+const addressRoutes = require('./routes/addressRoutes');
 const onlineService = require('./services/onlineService');
 const reportRoutes = require('./routes/reportRoutes');
 
@@ -55,6 +56,7 @@ app.use('/api/unit-statuses', unitStatusRoutes);
 app.use('/api/fire-categories', fireCategoryRoutes);
 app.use('/api/fire-causes', fireCauseRoutes);
 app.use('/api/fire-nonaccount-reasons', fireNonaccountRoutes);
+app.use('/api/address', addressRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/municipalities', municipalityRoutes);
 app.use('/api/online', onlineRoutes);

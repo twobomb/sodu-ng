@@ -20,5 +20,6 @@ yarn-error.log*
 /backend/uploads/
 /backend/uploads_avatars/
 
+
 # NB: .env (backend/.env, frontend/.env) сознательно ОСТАВЛЕН под git —
 # в закрытом контуре он раздаётся вместе с архивом репозитория.

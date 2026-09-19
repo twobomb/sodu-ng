@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import SearchableSelect from '@/components/ui/searchable-select';
 import UnitStatusDialog from '@/components/units/UnitStatusDialog';
+import AddressAutocomplete from '@/components/calls/AddressAutocomplete';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import VictimsGroup from '../../components/calls/VictimsGroup';
 import {
@@ -761,9 +762,15 @@ const CallDetail = () => {
                                     <div className="flex flex-col min-w-0"><span className="text-sm truncate">{o.label}</span>{o.extra && <span className="text-[11px] text-slate-400 truncate">{o.extra}</span>}</div>
                                 )} />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-2 sm:col-span-2">
                                 <Label htmlFor="address">Адрес места происшествия</Label>
-                                <Input id="address" placeholder="Адрес" value={formData.address} onChange={(e) => setField('address', e.target.value)} disabled={!canEdit} className="rounded-lg" />
+                                <AddressAutocomplete
+                                    id="address"
+                                    placeholder="Адрес"
+                                    value={formData.address}
+                                    onChange={(v) => setField('address', v)}
+                                    disabled={!canEdit}
+                                />
                             </div>
                             <DateTimeField id="dispatch_at" label="Время высылки сил и средств" value={formData.dispatch_at} onChange={(v) => setField('dispatch_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('dispatch_at')} />
                             <DateTimeField id="arrival_at" label="Время прибытия" value={formData.arrival_at} onChange={(v) => setField('arrival_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('arrival_at')} />
