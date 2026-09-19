@@ -2,6 +2,8 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
+import { useServerAvailability } from './hooks/useServerAvailability';
+import ConnectionOverlay from './components/ConnectionOverlay';
 
 import LoginPage from './pages/LoginPage';
 import Layout from './pages/Layout';
@@ -173,16 +175,21 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
+    const offline = useServerAvailability();
+
     return (
-        <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-                <ChatProvider>
-                    <MaintenanceGuard>
-                        <RouterProvider router={router} />
-                    </MaintenanceGuard>
-                </ChatProvider>
-            </AuthProvider>
-        </QueryClientProvider>
+        <>
+            {offline && <ConnectionOverlay />}
+            <QueryClientProvider client={queryClient}>
+                <AuthProvider>
+                    <ChatProvider>
+                        <MaintenanceGuard>
+                            <RouterProvider router={router} />
+                        </MaintenanceGuard>
+                    </ChatProvider>
+                </AuthProvider>
+            </QueryClientProvider>
+        </>
     );
 }
 
