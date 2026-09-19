@@ -16,7 +16,10 @@ import {
     LayoutGrid,
     FolderTree,
     Ban,
+    Moon,
+    Sun,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 import { useAuth } from '../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -40,6 +43,8 @@ const NavBar = () => {
     const unread = useChatUnreadCounts();
     const { data: onlineUsers = [] } = useOnlineUsers();
     const onlineCount = Array.isArray(onlineUsers) ? onlineUsers.length : 0;
+    const { setTheme, resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === 'dark';
 
 
     const isActive = (path) =>
@@ -61,7 +66,7 @@ const NavBar = () => {
         isActive('/calls-monitor') || isActive('/units-grid');
 
     return (
-        <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 sticky top-0 z-40 navMenu">
+        <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-white/10 sticky top-0 z-40 navMenu">
             <div className="px-8 shadow-[1px_14px_20px_1px_#0000001a]">
                 <div className="flex items-center justify-between h-16">
                     {/* Логотип */}
@@ -87,7 +92,7 @@ const NavBar = () => {
                                 onClick={() => navigate('/calls')}
                                 className={`rounded-lg transition-all ${
                                     isActive('/calls')
-                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
                                         : 'text-slate-600 hover:bg-slate-100'
                                 }`}
                             >
@@ -102,7 +107,7 @@ const NavBar = () => {
                                 onClick={() => navigate('/units')}
                                 className={`rounded-lg transition-all ${
                                     isActive('/units')
-                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
                                         : 'text-slate-600 hover:bg-slate-100'
                                 }`}
                             >
@@ -118,7 +123,7 @@ const NavBar = () => {
                                         variant="ghost"
                                         className={`rounded-lg transition-all ${
                                             isMonitoringSection
-                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                         }`}
                                     >
@@ -170,7 +175,7 @@ const NavBar = () => {
                                         variant="ghost"
                                         className={`rounded-lg transition-all ${
                                             isAdditionalSection
-                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                         }`}
                                     >
@@ -249,7 +254,7 @@ const NavBar = () => {
                                 variant="ghost"
                                 className={`rounded-lg transition-all ${
                                     isActive('/help')
-                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100'
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
                                         : 'text-slate-600 hover:bg-slate-100'
                                 }`}
                             >
@@ -260,7 +265,7 @@ const NavBar = () => {
                     </div>
 
                     <Link to="/online" title="Онлайн-пользователи">
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 hover:border-green-300 transition-colors cursor-pointer">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 hover:bg-green-100 dark:hover:bg-green-500/20 hover:border-green-300 dark:hover:border-green-500/40 transition-colors cursor-pointer">
     <span className="relative flex h-2.5 w-2.5">
       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
@@ -298,6 +303,16 @@ const NavBar = () => {
                                 )}
                             </Button>
                         )}
+                        <Button
+                            variant="outline"
+                            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                            className="relative rounded-lg border-slate-200 dark:border-white/15 hover:bg-orange-50 dark:hover:bg-white/10 hover:text-orange-600 dark:hover:text-orange-400"
+                            title={isDark ? 'Светлая тема' : 'Тёмная тема'}
+                            aria-label="Переключить тему"
+                        >
+                            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                        </Button>
                         <Button
                             variant="outline"
                             onClick={logout}

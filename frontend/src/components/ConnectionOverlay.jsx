@@ -2,7 +2,7 @@ import { Loader2, WifiOff } from 'lucide-react';
 
 // Полноэкранная блокирующая заглушка при потере соединения с сервером
 const ConnectionOverlay = () => (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 dark:bg-black/60 backdrop-blur-sm">
         <div className="flex flex-col items-center gap-3 max-w-sm w-[90%] text-center px-8 py-8 bg-white rounded-2xl shadow-2xl">
             <WifiOff className="h-10 w-10 text-orange-500" />
             <div className="text-lg font-semibold text-slate-800">

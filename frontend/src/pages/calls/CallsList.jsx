@@ -270,13 +270,13 @@ const CallsList = () => {
                                     </TableRow>
                                 )}
                                 {calls.map((call) => {
-                                    const statusMeta = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500' };
+                                    const statusMeta = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500 dark:bg-slate-500/40' };
                                     const rowClass =
                                         call.status === 'error'
-                                            ? 'bg-red-100 hover:bg-red-200'
+                                            ? 'bg-red-100 hover:bg-red-200 dark:bg-red-500/10 dark:hover:bg-red-500/20'
                                             : call.status === 'closed'
-                                                ? 'bg-green-100 hover:bg-green-200'
-                                                : 'bg-blue-100 hover:bg-blue-200';
+                                                ? 'bg-green-100 hover:bg-green-200 dark:bg-green-500/10 dark:hover:bg-green-500/20'
+                                                : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-500/10 dark:hover:bg-blue-500/20';
                                     return (
                                         <TableRow
                                             key={call.id}

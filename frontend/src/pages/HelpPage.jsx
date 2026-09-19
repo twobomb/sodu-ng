@@ -32,7 +32,7 @@ const HelpPage = () => {
             </div>
 
             {/* Карточка "Сообщить об ошибке" — главная фича */}
-            <Card className="rounded-2xl border-orange-200 bg-gradient-to-br from-orange-50 to-red-50 shadow-sm">
+            <Card className="rounded-2xl border-orange-200 dark:border-orange-500/30 bg-gradient-to-br from-orange-50 dark:from-orange-500/15 to-red-50 dark:to-red-500/15 shadow-sm">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                         <Bug className="h-5 w-5 text-orange-600" />

@@ -111,3 +111,41 @@
     color: hsl(var(--foreground));
   }
 }
+
+/*
+ * Тёмная тема.
+ * Проект широко использует «жёсткие» утилиты slate/white (например
+ * text-slate-600, bg-white). В Tailwind v4 утилиты ссылаются на CSS-переменные
+ * --color-slate-* и --color-white, поэтому достаточно переопределить их внутри
+ * .dark, чтобы всё приложение автоматически адаптировалось без перебора файлов.
+ */
+.dark {
+  color-scheme: dark;
+  /* Инвертированная шкала slate: тёмные номера становятся светлыми.
+     !important гарантирует приоритет над { --color-slate-* } из :root. */
+  --color-slate-50: #0f172a !important;  /* slate-900 — фоны-плашки */
+  --color-slate-100: #1e293b !important; /* slate-800 — hover/панели */
+  --color-slate-200: #334155 !important; /* slate-700 — границы */
+  --color-slate-300: #475569 !important; /* slate-600 */
+  --color-slate-400: #64748b !important; /* slate-500 — приглушённый текст */
+  --color-slate-500: #94a3b8 !important; /* slate-400 */
+  --color-slate-600: #cbd5e1 !important; /* slate-300 — основной текст */
+  --color-slate-700: #e2e8f0 !important; /* slate-200 */
+  --color-slate-800: #f1f5f9 !important; /* slate-100 */
+  --color-slate-900: #f8fafc !important; /* slate-50 */
+  --color-slate-950: #f8fafc !important;
+}
+
+/* Гарантируем тёмный фон оболочки, даже если какой-то контейнер остался белым. */
+.dark body,
+.dark html,
+.dark #root {
+  background-color: hsl(var(--background)) !important;
+}
+
+/* Белые поверхности (карточки/панели) в тёмной теме становятся карточками. */
+.dark .bg-white { background-color: hsl(var(--card) / 1) !important; }
+.dark .bg-white\/95 { background-color: hsl(var(--card) / 0.95) !important; }
+.dark .bg-white\/80 { background-color: hsl(var(--card) / 0.8) !important; }
+.dark .bg-white\/70 { background-color: hsl(var(--card) / 0.7) !important; }
+.dark .bg-white\/60 { background-color: hsl(var(--card) / 0.6) !important; }

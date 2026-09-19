@@ -419,7 +419,7 @@ const UnitsGrid = () => {
                                     key={dept.department_id}
                                     className={`flex items-stretch gap-3 rounded-lg transition-colors ${
                                         dept.has_active_call
-                                            ? 'bg-orange-50/50 border border-orange-200'
+                                            ? 'bg-orange-50/50 dark:bg-[#291d02] border border-orange-200 dark:border-orange-500/30'
                                             : 'bg-white border border-slate-200'
                                     }`}
                                 >
@@ -436,7 +436,7 @@ const UnitsGrid = () => {
                                                 {dept.department_name}
                                             </div>
                                             {dept.has_active_call && (
-                                                <div className="text-[10px] text-orange-600 font-medium">
+                                                <div className="text-[10px] text-orange-600 dark:text-orange-300 font-medium">
                                                     есть выезд
                                                 </div>
                                             )}

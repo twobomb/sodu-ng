@@ -240,7 +240,7 @@ const UsersList = () => {
                                         {user.username}
                                     </TableCell>
                                     <TableCell>
-                                        <Badge className="bg-slate-600 text-white">
+                                        <Badge className="bg-slate-600 text-white dark:bg-zinc-700 dark:text-white dark:border-white/15">
                                             {roleMap[user.role]?.name || user.role}
                                         </Badge>
                                     </TableCell>
@@ -272,7 +272,7 @@ const UsersList = () => {
                                     </TableCell>
                                     <TableCell>
                                         {user.can_view_all ? (
-                                            <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30">
                                                 Полный
                                             </Badge>
                                         ) : (
@@ -283,18 +283,18 @@ const UsersList = () => {
                                     </TableCell>
                                     <TableCell>
                                         {user.role === 'developer' && (
-                                            <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                                            <Badge className="bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/30">
                                                 <Lock className="h-3 w-3 mr-1" />
                                                 Защищён
                                             </Badge>
                                         )}
                                         {user.is_blocked ? (
-                                            <Badge className="bg-red-100 text-red-700 border-red-200">
+                                            <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30">
                                                 <Lock className="h-3 w-3 mr-1" />
                                                 Заблокирован
                                             </Badge>
                                         ) : (
-                                            <Badge className="bg-green-100 text-green-700 border-green-200">
+                                            <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30">
                                                 <CheckCircle2 className="h-3 w-3 mr-1" />
                                                 Активен
                                             </Badge>

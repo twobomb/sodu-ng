@@ -634,7 +634,7 @@ const CallDetail = () => {
         );
     }
 
-    const statusMeta = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500' };
+    const statusMeta = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500 dark:bg-slate-500/40' };
     const transitions = CALL_STATUS_TRANSITIONS[call.status] || [];
 
     const munisList = Array.isArray(munisQuery.data) ? munisQuery.data : (munisQuery.data?.data || []);

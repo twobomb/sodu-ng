@@ -34,9 +34,9 @@ export const AREA_TYPE_LABEL = (v) =>
     (AREA_TYPES.find((a) => a.value === v) || {}).label || '—';
 
 export const CALL_STATUS_META = {
-    processing: { label: 'Обрабатывается', badge: 'bg-blue-500' },
-    closed: { label: 'Закрыт', badge: 'bg-green-600' },
-    error: { label: 'Ошибочный', badge: 'bg-red-600' },
+    processing: { label: 'Обрабатывается', badge: 'bg-blue-500 dark:bg-blue-500/40' },
+    closed: { label: 'Закрыт', badge: 'bg-green-600 dark:bg-green-600/40' },
+    error: { label: 'Ошибочный', badge: 'bg-red-600 dark:bg-red-600/40' },
 };
 
 // Возможные переходы статуса (для кнопок смены с подтверждением)

@@ -219,11 +219,11 @@ const CallMonitor = () => {
                     {calls.map((call) => {
                         const units = Array.isArray(call.units) ? call.units : [];
                         const events = Array.isArray(call.events) ? call.events : [];
-                        const sm = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500' };
+                        const sm = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500 dark:bg-slate-500/40' };
                         const rowBg = call.status === 'error' ? 'bg-red-50' : call.status === 'closed' ? 'bg-green-50' : 'bg-orange-50/40';
                         const f = (field) => flash.has(`${call.id}|${field}`);
                         return (
-                            <div key={call.id} className={`rounded-xl border border-slate-200 overflow-hidden ${rowBg}`} style={{ boxShadow: '4px 11px 20px #00000030' }}>
+                            <div key={call.id} className={`rounded-xl border border-slate-200 overflow-hidden ${rowBg} dark:bg-[#1717179e]`} style={{ boxShadow: '4px 11px 20px #00000030' }}>
                                 <div className="px-4 py-2 flex flex-wrap items-center gap-2">
                                     <CallPanelHeader call={call} />
                                     <Badge className={`${sm.badge} text-white`}>{sm.label}</Badge>

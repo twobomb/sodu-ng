@@ -131,7 +131,7 @@ const DropdownMenuContent = ({
               'min-w-[200px] z-[9999]',
               'bg-white/95 backdrop-blur-sm rounded-xl',
               'shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5',
-              'border border-slate-100 py-1.5',
+              'border border-slate-100 dark:border-white/10 py-1.5',
               className
           )}
       >
@@ -163,8 +163,8 @@ const DropdownMenuItem = ({ children, onClick, className, icon: Icon, danger }) 
               'group/item w-full flex items-center gap-3 px-3 py-2 mx-1.5 rounded-lg',
               'text-sm font-medium text-left transition-all duration-150',
               danger
-                  ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                  : 'text-slate-700 hover:bg-gradient-to-r hover:from-orange-50 hover:to-red-50 hover:text-orange-700',
+                  ? 'text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/15'
+                  : 'text-slate-700 hover:bg-gradient-to-r hover:from-orange-50 hover:to-red-50 hover:text-orange-700 dark:hover:from-orange-500/15 dark:hover:to-red-500/15 dark:hover:text-orange-300',
               'focus:outline-none'
           )}
           style={{ width: 'calc(100% - 12px)' }}
