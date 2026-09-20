@@ -22,6 +22,7 @@ const createSchema = Joi.object({
     short_name: Joi.string().min(1).max(50).required(),
     category: Joi.string().valid(...UNIT_CATEGORIES).required(),
     sort_order: Joi.number().integer().min(0).max(10000),
+    show_in_line_note: Joi.boolean().default(true),
 });
 
 const updateSchema = Joi.object({
@@ -29,6 +30,12 @@ const updateSchema = Joi.object({
     short_name: Joi.string().min(1).max(50),
     category: categoryField,
     sort_order: Joi.number().integer().min(0).max(10000),
+    show_in_line_note: Joi.boolean(),
+});
+
+const reorderSchema = Joi.object({
+    category: Joi.string().valid(...UNIT_CATEGORIES).required(),
+    unit_type_ids: Joi.array().items(Joi.string().uuid()).required(),
 });
 
 // GET /api/unit-types
@@ -115,6 +122,31 @@ const update = asyncHandler(async (req, res) => {
     }
 });
 
+// PUT /api/unit-types/reorder — сортировка внутри категории
+const reorder = asyncHandler(async (req, res) => {
+    const { error, value } = reorderSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    const unitTypeIds = [...new Set(value.unit_type_ids)];
+    if (!unitTypeIds.length) {
+        return res.status(400).json({ error: 'Нет типов для сортировки' });
+    }
+
+    try {
+        await unitTypeService.reorder({ category: value.category, unitTypeIds });
+        const io = req.app.get('io');
+        emitForceRefresh(io);
+        res.json({ ok: true });
+    } catch (err) {
+        logger.error('Ошибка сортировки типов: ' + err.message, {
+            stack: err.stack,
+            category: value.category,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка сортировки типов' });
+    }
+});
+
 // DELETE /api/unit-types/:id
 const remove = asyncHandler(async (req, res) => {
     try {
@@ -141,4 +173,4 @@ const remove = asyncHandler(async (req, res) => {
     }
 });
 
-module.exports = { getAll, getById, create, update, remove };
+module.exports = { getAll, getById, create, update, reorder, remove };

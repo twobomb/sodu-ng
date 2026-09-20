@@ -27,6 +27,7 @@ const fireNonaccountRoutes = require('./routes/fireNonaccountRoutes');
 const addressRoutes = require('./routes/addressRoutes');
 const onlineService = require('./services/onlineService');
 const reportRoutes = require('./routes/reportRoutes');
+const lineNoteRoutes = require('./routes/lineNoteRoutes');
 
 const { verifyToken } = require('./utils/jwt');
 const { touchSession } = require('./services/authService');
@@ -65,6 +66,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/chat', messageRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/line-notes', lineNoteRoutes);
 
 
 app.get('/api/health', async (req, res, next) => {

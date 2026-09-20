@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Truck, Loader2 } from 'lucide-react';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const UNIT_CATEGORIES = [
     'Основная техника',
@@ -33,6 +34,7 @@ const UnitTypeForm = ({
         short_name: '',
         category: '',
         sort_order: '',
+        show_in_line_note: true,
     });
     const [localError, setLocalError] = useState('');
 
@@ -43,9 +45,10 @@ const UnitTypeForm = ({
                 short_name: initialData.short_name || '',
                 category: initialData.category || '',
                 sort_order: initialData.sort_order ?? '',
+                show_in_line_note: initialData.show_in_line_note !== false,
             });
         } else {
-            setFormData({ name: '', short_name: '', category: '', sort_order: '' });
+            setFormData({ name: '', short_name: '', category: '', sort_order: '', show_in_line_note: true });
         }
         setLocalError('');
     }, [initialData, open]);
@@ -73,6 +76,7 @@ const UnitTypeForm = ({
             name: formData.name.trim(),
             short_name: formData.short_name.trim(),
             category: formData.category || null,
+            show_in_line_note: !!formData.show_in_line_note,
         };
 
         if (formData.sort_order !== '' && formData.sort_order !== null) {
@@ -156,6 +160,24 @@ const UnitTypeForm = ({
                                 placeholder="Оставьте пустым для авто"
                                 className="rounded-lg"
                             />
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="show_in_line_note"
+                                checked={formData.show_in_line_note}
+                                onCheckedChange={(checked) =>
+                                    setFormData((p) => ({ ...p, show_in_line_note: !!checked }))
+                                }
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="show_in_line_note" className="leading-tight">
+                                    Отображать тип в строевой записке
+                                </Label>
+                                <p className="text-xs text-slate-400">
+                                    Будет использоваться при формировании строевой записки
+                                </p>
+                            </div>
                         </div>
 
                         {(localError || error) && (

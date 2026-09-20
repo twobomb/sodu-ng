@@ -99,6 +99,33 @@ const PERMISSIONS_CATALOG = [
         ],
     },
     {
+        key: 'line_notes',
+        name: 'Строевая записка',
+        description: 'Отчёты: строевая записка',
+        permissions: [
+            {
+                key: 'line_notes.view',
+                name: 'Просмотр',
+                description: 'Видеть раздел «Отчёты → Строевая записка»',
+            },
+            {
+                key: 'line_notes.manage',
+                name: 'Редактирование',
+                description: 'Создавать записки и редактировать черновики',
+            },
+            {
+                key: 'line_notes.approve',
+                name: 'Утверждение',
+                description: 'Переводить записку в статус «Утверждённая»',
+            },
+            {
+                key: 'line_notes.edit_approved',
+                name: 'Редактирование утверждённых',
+                description: 'Редактировать утверждённые записки и возвращать их в черновик',
+            },
+        ],
+    },
+    {
         key: 'chat',
         name: 'Чат',
         description: 'Модуль обмена сообщениями',

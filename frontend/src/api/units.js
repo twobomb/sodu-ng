@@ -27,6 +27,11 @@ export const createUnitType = (data) => apiClient.post('/unit-types', data);
 export const updateUnitType = (id, data) =>
     apiClient.put(`/unit-types/${id}`, data);
 export const deleteUnitType = (id) => apiClient.delete(`/unit-types/${id}`);
+export const reorderUnitTypes = (category, unitTypeIds) =>
+    apiClient.put('/unit-types/reorder', {
+        category,
+        unit_type_ids: unitTypeIds,
+    });
 
 // ----- Статусы техники -----
 export const getUnitStatuses = () => apiClient.get('/unit-statuses');

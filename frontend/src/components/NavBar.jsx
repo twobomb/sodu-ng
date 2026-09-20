@@ -18,6 +18,7 @@ import {
     Ban,
     Moon,
     Sun,
+    FileText,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -64,6 +65,9 @@ const NavBar = () => {
     // Пункт "Мониторинг" активен на страницах мониторинга
     const isMonitoringSection =
         isActive('/calls-monitor') || isActive('/units-grid');
+
+    // Пункт "Отчёты" активен на страницах отчётов
+    const isReportsSection = isActive('/reports');
 
     return (
         <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-white/10 sticky top-0 z-40 navMenu">
@@ -249,6 +253,33 @@ const NavBar = () => {
                             </DropdownMenu>
                         )}
 
+                        {has('line_notes.view') && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className={`rounded-lg transition-all ${
+                                            isReportsSection
+                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Отчёты
+                                        <ChevronDown className="h-3 w-3 ml-1" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    <DropdownMenuItem
+                                        icon={FileText}
+                                        onClick={() => navigate('/reports/line-notes')}
+                                    >
+                                        Строевая записка
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+
                         <Link to="/help">
                             <Button
                                 variant="ghost"
@@ -310,8 +341,8 @@ const NavBar = () => {
                             title={isDark ? 'Светлая тема' : 'Тёмная тема'}
                             aria-label="Переключить тему"
                         >
-                            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                            <Moon className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                            <Sun className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
                         </Button>
                         <Button
                             variant="outline"

@@ -92,6 +92,19 @@ export const useDeleteUnitType = () => {
     });
 };
 
+export const useReorderUnitTypes = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ category, unitTypeIds }) =>
+            api.reorderUnitTypes(category, unitTypeIds),
+        onSuccess: () => {
+            qc.invalidateQueries(['unit-types']);
+            qc.invalidateQueries(['units']);
+            qc.invalidateQueries(['units-grid']);
+        },
+    });
+};
+
 // ============================================================
 // СТАТУСЫ ТЕХНИКИ
 // ============================================================

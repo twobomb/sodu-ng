@@ -7,6 +7,7 @@ const {
     getById,
     create,
     update,
+    reorder,
     remove,
 } = require('../controllers/unitTypeController');
 
@@ -18,6 +19,7 @@ router.get('/:id', requirePermission('units.view'), getById);
 
 // Управление справочником — отдельное право
 router.post('/', requirePermission('units.manage_dictionaries'), create);
+router.put('/reorder', requirePermission('units.manage_dictionaries'), reorder);
 router.put('/:id', requirePermission('units.manage_dictionaries'), update);
 router.delete('/:id', requirePermission('units.manage_dictionaries'), remove);
 

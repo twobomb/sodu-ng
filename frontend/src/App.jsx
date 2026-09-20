@@ -29,6 +29,8 @@ import MaintenanceGuard from './components/MaintenanceGuard';
 import UnitTypesList from './components/units/UnitTypesList';
 import UnitsGrid from './pages/units/UnitsGrid';
 import HelpPage from './pages/HelpPage';
+import LineNotesPage from './pages/reports/LineNotesPage';
+import { Toaster } from '@/components/ui/sonner';
 
 const queryClient = new QueryClient();
 
@@ -178,6 +180,14 @@ const router = createBrowserRouter([
                     </DeveloperRoute>
                 ),
             },
+            {
+                path: 'reports/line-notes',
+                element: (
+                    <PermissionRoute permission="line_notes.view">
+                        <LineNotesPage />
+                    </PermissionRoute>
+                ),
+            },
             { path: '*', element: <Navigate to="/" replace /> },
         ],
     },
@@ -198,6 +208,7 @@ function App() {
                     </ChatProvider>
                 </AuthProvider>
             </QueryClientProvider>
+            <Toaster />
         </>
     );
 }
