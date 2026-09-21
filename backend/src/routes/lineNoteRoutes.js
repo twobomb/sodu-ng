@@ -9,6 +9,7 @@ const {
     update,
     copy,
     statusByDate,
+    exportFile,
 } = require('../controllers/lineNoteController');
 
 router.use(authenticate);
@@ -31,6 +32,9 @@ router.post('/', requirePermission('line_notes.manage'), create);
 
 // Копирование на другую дату (черновик) — правом «редактирование»
 router.post('/copy', requirePermission('line_notes.manage'), copy);
+
+// Выгрузка в Excel по шаблону (доступ ко всем подразделениям — проверяется в контроллере)
+router.post('/export', requirePermission('line_notes.view'), exportFile);
 
 // Обновление — правом «редактирование», «утверждение» или «редактирование утверждённых»
 // (детальная проверка по текущему статусу — в контроллере)

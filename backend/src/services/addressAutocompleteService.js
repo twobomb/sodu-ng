@@ -1,34 +1,124 @@
 const path = require('path');
+const fs = require('fs');
 
-// ---------- Подключение к SQLite (встроенный модуль node:sqlite) ----------
-// Дело встроенное, отдельная зависимость не нужна. Путь к БД настраивается
-// через переменную окружения ADDRESS_DB_PATH, по умолчанию — backend/data/fias_94.db
-const DB_PATH = process.env.ADDRESS_DB_PATH || path.join(__dirname, '..', '..', 'data', 'fias_94.db');
+// ---------- Подключение к SQLite ----------
+// Путь к БД настраивается через переменную окружения ADDRESS_DB_PATH,
+// по умолчанию — backend/data/fias_94.db
+const DB_PATH = (() => {
+    const p = process.env.ADDRESS_DB_PATH;
+    return p ? path.resolve(p) : path.join(__dirname, '..', '..', 'data', 'fias_94.db');
+})();
 
 let db = null;
+let dbError = null;
+let dbTried = false;
 
-function openDb() {
+// Драйвер 1: встроенный node:sqlite (Node >= 24, без флагов).
+// ВАЖНО: node:sqlite при отсутствии файла СОЗДАЁТ пустую БД, а не падает,
+// поэтому файл проверяем отдельно до вызова (см. openDb).
+function tryNodeSqlite() {
     try {
-        const {DatabaseSync} = require('node:sqlite');
-        const instance = new DatabaseSync(DB_PATH);
-        instance.exec('PRAGMA cache_size = -20000;');
-        instance.exec('PRAGMA temp_store = MEMORY;');
-        // Автомиграция: заполняем нормализованные колонки, если их ещё нет
-        ensureLowerColumns(instance);
-        return instance;
+        const { DatabaseSync } = require('node:sqlite');
+        return { inst: new DatabaseSync(DB_PATH), name: 'node:sqlite', err: null };
     } catch (err) {
-        // Файл БД отсутствует или модуль sqlite недоступен — сервис деградирует
-        // до пустого ответа, не роняя весь сервер.
-        console.error('[addressAutocomplete] Не удалось открыть БД: ' + err.message);
-        return null;
+        return { inst: null, name: 'node:sqlite', err };
     }
 }
 
+// Драйвер 2 (запасной): better-sqlite3 (Node >= 20).
+// fileMustExist:true — не создаём пустую БД, а честно сообщаем об отсутствии файла.
+function tryBetterSqlite() {
+    try {
+        const Database = require('better-sqlite3');
+        return { inst: new Database(DB_PATH, { fileMustExist: true }), name: 'better-sqlite3', err: null };
+    } catch (err) {
+        return { inst: null, name: 'better-sqlite3', err };
+    }
+}
+
+function openDb() {
+    const exists = fs.existsSync(DB_PATH);
+
+    // Отсутствующий файл не пытаемся открывать: node:sqlite создал бы пустую БД,
+    // что привело бы к падению запросов. Сразу диагностируем проблему.
+    const attempts = exists ? [tryNodeSqlite(), tryBetterSqlite()] : [];
+
+    let chosen = null;
+    const errs = [];
+    if (!exists) {
+        errs.push('файл БД не найден');
+    }
+    for (const attempt of attempts) {
+        if (attempt.inst) {
+            chosen = attempt;
+            break;
+        }
+        errs.push(`${attempt.name}: ${attempt.err?.message || 'недоступен'}`);
+    }
+
+    if (!chosen) {
+        dbError = errs.join(' | ');
+        console.error('[addressAutocomplete] ОШИБКА: не удалось открыть базу ФИАС. ' + dbError);
+        console.error(`[addressAutocomplete] Путь к БД: ${DB_PATH} (файл найден: ${exists})`);
+        if (!exists) {
+            console.error(`[addressAutocomplete] Файл БД отсутствует! Скопируйте fias_94.db в каталог ${path.join(__dirname, '..', '..', 'data')} ` +
+                `либо задайте ADDRESS_DB_PATH (например /opt/sodu-ng/backend/data/fias_94.db).`);
+        }
+        return null;
+    }
+
+    const instance = chosen.inst;
+    try {
+        instance.exec('PRAGMA cache_size = -20000;');
+        instance.exec('PRAGMA temp_store = MEMORY;');
+
+        // Проверяем, что это настоящая база ФИАС с нужными таблицами
+        const tbl = instance.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='addrobj'").get();
+        if (!tbl) {
+            dbError = `файл не является базой ФИАС (нет таблицы addrobj): ${DB_PATH}`;
+            console.error('[addressAutocomplete] ' + dbError);
+            console.error('[addressAutocomplete] Удалите повреждённый/пустой файл и скопируйте настоящий fias_94.db.');
+            try { instance.close?.(); } catch (_) { /* игнорируем */ }
+            return null;
+        }
+    } catch (err) {
+        dbError = 'ошибка чтения БД: ' + err.message;
+        console.error('[addressAutocomplete] ' + dbError);
+        return null;
+    }
+
+    // Миграция вынесена в отдельный try/catch: если БД только для чтения или
+    // запись невозможна, сервер продолжает работать (важно для неизменяемого ФИАС).
+    let migrated = false;
+    try {
+        migrated = ensureLowerColumns(instance);
+    } catch (err) {
+        dbError = 'ошибка автомиграции: ' + err.message;
+        console.error('[addressAutocomplete] Не удалось выполнить автомиграцию: ' + err.message);
+        console.error(`[addressAutocomplete] Возможно, файл ${DB_PATH} в режиме «только для чтения» или у процесса нет прав на запись в каталог.`);
+    }
+
+    db = instance;
+    console.log(`[addressAutocomplete] База ФИАС готова: ${DB_PATH} (драйвер: ${chosen.name}${migrated ? ', выполнена миграция' : ''})`);
+    return instance;
+}
+
 function isDbAvailable() {
-    if (db) return true;
-    db = openDb();
+    // Пытаемся открыть БД только один раз — при неудаче не дёргаем диск на каждый запрос
+    if (!db && !dbTried) {
+        dbTried = true;
+        db = openDb();
+    }
     return !!db;
 }
+
+function getDbError() {
+    return dbError || null;
+}
+
+// Открываем БД сразу при старте сервера, чтобы ошибка была видна в логах (и заранее)
+// выполнилась однократная автомиграция загрузки name_lower/number_lower.
+isDbAvailable();
 
 // ---------- Нормализация ----------
 function normalize(s) {
@@ -554,4 +644,4 @@ function autocomplete(input, {limit = 10, showRegion = false} = {}) {
     return results;
 }
 
-module.exports = {autocomplete, tokenize, normalize};
+module.exports = { autocomplete, tokenize, normalize, getDbError, getDbPath: () => DB_PATH, isDbAvailable };

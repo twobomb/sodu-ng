@@ -40,3 +40,14 @@ export const useDeleteMunicipality = () => {
         },
     });
 };
+
+export const useReorderMunicipalities = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: api.reorderMunicipalities,
+        onSuccess: () => {
+            qc.invalidateQueries(['municipalities']);
+            qc.invalidateQueries(['departments']);
+        },
+    });
+};

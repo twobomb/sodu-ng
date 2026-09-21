@@ -15,20 +15,23 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "node-pg-migrate": "^9.0.0",
     "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "joi": "^18.2.8",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.3.0",
+    "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.0",
     "secure-role-guard": "^1.1.1",
     "sharp": "^0.35.4",
     "socket.io": "^4.8.3",
     "uuid": "^14.0.2",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

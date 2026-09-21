@@ -1,4 +1,5 @@
 const lineNoteService = require('../services/lineNoteService');
+const lineNoteExportService = require('../services/lineNoteExportService');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const { emitForceRefresh } = require('../utils/socketEvents');
@@ -170,6 +171,47 @@ const statusByDate = asyncHandler(async (req, res) => {
     }
 });
 
+// POST /api/line-notes/export
+const exportSchema = Joi.object({
+    date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+    federal_district: Joi.string().trim().max(200).default('Южный ФО'),
+    mchs_org_name: Joi.string()
+        .trim()
+        .max(300)
+        .default('ГУ МЧС России по Луганской Народной Республике'),
+});
+
+const exportFile = asyncHandler(async (req, res) => {
+    if (!req.user.can_view_all && req.user.role !== 'developer') {
+        return res
+            .status(403)
+            .json({ error: 'Выгрузка доступна только при доступе ко всем подразделениям' });
+    }
+
+    const { error, value } = exportSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    try {
+        const result = await lineNoteExportService.exportLineNotes({
+            date: value.date,
+            federalDistrict: value.federal_district,
+            mchsOrg: value.mchs_org_name,
+        });
+
+        res.json({
+            filename: result.filename,
+            base64: result.buffer.toString('base64'),
+            ignored: result.ignored,
+        });
+    } catch (err) {
+        logger.error('Ошибка выгрузки строевой записки: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка выгрузки' });
+    }
+});
+
 // POST /api/line-notes/copy
 const copy = asyncHandler(async (req, res) => {
     const { error, value } = copySchema.validate(req.body);
@@ -269,4 +311,12 @@ const update = asyncHandler(async (req, res) => {
     }
 });
 
-module.exports = { listByDepartment, getByDate, create, update, copy, statusByDate };
+module.exports = {
+    listByDepartment,
+    getByDate,
+    create,
+    update,
+    copy,
+    statusByDate,
+    exportFile,
+};

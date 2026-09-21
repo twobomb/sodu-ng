@@ -18,3 +18,6 @@ export const updateLineNote = (id, data) => apiClient.put(`/line-notes/${id}`, d
 
 // Копирование записки с одной даты на другую (цель — только черновик/пустая дата)
 export const copyLineNote = (data) => apiClient.post('/line-notes/copy', data);
+
+// Выгрузка всех строевых в Excel по шаблону
+export const exportLineNotes = (data) => apiClient.post('/line-notes/export', data);

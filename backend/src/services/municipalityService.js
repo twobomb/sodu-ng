@@ -3,9 +3,9 @@ const { v4: uuidv4 } = require('uuid');
 
 const getAll = async () => {
     const res = await pool.query(
-        `SELECT id, name, created_at, updated_at
+        `SELECT id, name, sort_order, created_at, updated_at
          FROM municipalities
-         ORDER BY name`
+         ORDER BY sort_order ASC, name ASC`
     );
     return res.rows;
 };
@@ -18,6 +18,26 @@ const create = async ({ name }) => {
         [id, name]
     );
     return res.rows[0];
+};
+
+const reorder = async ({ municipalityIds }) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (let i = 0; i < municipalityIds.length; i++) {
+            await client.query(
+                `UPDATE municipalities SET sort_order = $1, updated_at = NOW()
+                 WHERE id = $2`,
+                [i, municipalityIds[i]]
+            );
+        }
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
 };
 
 const remove = async (id) => {
@@ -37,4 +57,4 @@ const update = async (id, { name }) => {
     return res.rows[0] || null;
 };
 
-module.exports = { getAll, create, update, remove };
+module.exports = { getAll, create, update, reorder, remove };

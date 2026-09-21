@@ -33,9 +33,10 @@ import {
     useCreateLineNote,
     useUpdateLineNote,
     useCopyLineNote,
+    useExportLineNotes,
 } from '../../hooks/useLineNotes';
 import { usePermissions } from '../../hooks/usePermissions';
-import { Loader2, Save, FileText, Truck, CheckCircle2, RotateCcw, Search, Building2, Copy } from 'lucide-react';
+import { Loader2, Save, FileText, Truck, CheckCircle2, RotateCcw, Search, Building2, Copy, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ------------------------------------------------------------
@@ -120,6 +121,13 @@ const toDateStr = (d) => {
     return `${y}-${m}-${dd}`;
 };
 
+// 'YYYY-MM-DD' -> 'DD.MM.YYYY'
+const toDotDate = (iso) => {
+    if (!iso) return '';
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+};
+
 const fromIso = (v) => {
     if (!v) return null;
     // Если пришёл объект Date (так pg отдаёт колонку DATE) — берём локальную дату
@@ -182,6 +190,25 @@ const composePersonnel = (saved) => {
     return out;
 };
 
+const blankExtinguishing = () => ({
+    on_vehicle: { foam: 0, powder: 0 },
+    reserve: { foam: 0, powder: 0 },
+});
+
+const composeExtinguishing = (saved) => {
+    const src = saved?.data?.extinguishing || {};
+    return {
+        on_vehicle: {
+            foam: num(src.on_vehicle?.foam),
+            powder: num(src.on_vehicle?.powder),
+        },
+        reserve: {
+            foam: num(src.reserve?.foam),
+            powder: num(src.reserve?.powder),
+        },
+    };
+};
+
 // ------------------------------------------------------------
 // Поле ввода числа
 // ------------------------------------------------------------
@@ -203,16 +230,27 @@ const NumCell = ({ value }) => (
 // ------------------------------------------------------------
 // Вкладка «Техника» — блоки по категориям
 // ------------------------------------------------------------
-const TechniqueTab = ({ note, onChangeRow, disabled }) => {
+const TechniqueTab = ({ note, onChangeRow, onChangeExtinguishing, disabled }) => {
     const rows = note?.technique || [];
-    const setCell = (unitTypeId, key, value) =>
-        onChangeRow(unitTypeId, key, num(value));
+    const ext = note?.extinguishing || blankExtinguishing();
+    const setCell = (unitTypeId, key, value) => onChangeRow(unitTypeId, key, num(value));
+    const setExt = (category, key, value) => onChangeExtinguishing?.(category, key, num(value));
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {CATEGORY_ORDER.map((category) => {
                 const columns = COLUMNS_BY_CATEGORY[category] || [];
                 const categoryRows = rows.filter((r) => r.category === category);
+                const hasCatCols = columns.some(
+                    (c) => c.key === 'maintenance' || c.key === 'repair'
+                );
+                const catCols = columns.filter(
+                    (c) => c.key === 'maintenance' || c.key === 'repair'
+                );
+                const singleCols = columns.filter(
+                    (c) => c.key !== 'maintenance' && c.key !== 'repair'
+                );
 
                 return (
                     <section
@@ -225,13 +263,39 @@ const TechniqueTab = ({ note, onChangeRow, disabled }) => {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-slate-50 text-slate-600">
-                                    <th className="px-2 py-1.5 text-left text-xs">Тип</th>
-                                    {columns.map((c) => (
-                                        <th key={c.key} className="px-1.5 py-1.5 text-center text-xs">
+                                    <th
+                                        className="px-2 py-1.5 text-left text-xs"
+                                        rowSpan={hasCatCols ? 2 : 1}
+                                    >
+                                        Тип
+                                    </th>
+                                    {singleCols.map((c) => (
+                                        <th
+                                            key={c.key}
+                                            className="px-1.5 py-1.5 text-center text-xs"
+                                            rowSpan={hasCatCols ? 2 : 1}
+                                        >
                                             {c.label}
                                         </th>
                                     ))}
+                                    {hasCatCols && (
+                                        <th
+                                            colSpan={catCols.length}
+                                            className="px-1.5 py-1 text-center text-xs"
+                                        >
+                                            Не в расчете
+                                        </th>
+                                    )}
                                 </tr>
+                                {hasCatCols && (
+                                    <tr className="bg-slate-50 text-slate-600">
+                                        {catCols.map((c) => (
+                                            <th key={c.key} className="px-1.5 py-1 text-center text-xs">
+                                                {c.label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                )}
                             </thead>
                             <tbody className="divide-y divide-slate-200">
                                 {categoryRows.length === 0 ? (
@@ -274,6 +338,66 @@ const TechniqueTab = ({ note, onChangeRow, disabled }) => {
                     </section>
                 );
             })}
+
+
+
+                {/* Огнетушащие */}
+                <section className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+                    <h4 className="px-2.5 py-1.5 bg-slate-100 text-sm font-semibold text-slate-700">
+                        Огнетушащие
+                    </h4>
+                    <table className="w-full text-sm">
+                        <thead>
+                        <tr className="bg-slate-50 text-slate-600">
+                            <th className="px-2 py-1.5 text-left text-xs">Средство</th>
+                            <th className="px-1.5 py-1.5 text-center text-xs">Возимые на ПА</th>
+                            <th className="px-1.5 py-1.5 text-center text-xs">В резерве</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                        <tr className="hover:bg-slate-50">
+                            <td className="px-2 py-1 font-medium text-slate-800 text-xs">
+                                Пенообразователь (л.)
+                            </td>
+                            <td className="px-1.5 py-1 text-center">
+                                <NumberInput
+                                    value={ext.on_vehicle.foam}
+                                    disabled={disabled}
+                                    onChange={(v) => setExt('on_vehicle', 'foam', v)}
+                                />
+                            </td>
+                            <td className="px-1.5 py-1 text-center">
+                                <NumberInput
+                                    value={ext.reserve.foam}
+                                    disabled={disabled}
+                                    onChange={(v) => setExt('reserve', 'foam', v)}
+                                />
+                            </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50">
+                            <td className="px-2 py-1 font-medium text-slate-800 text-xs">
+                                Порошок (кг.)
+                            </td>
+                            <td className="px-1.5 py-1 text-center">
+                                <NumberInput
+                                    value={ext.on_vehicle.powder}
+                                    disabled={disabled}
+                                    onChange={(v) => setExt('on_vehicle', 'powder', v)}
+                                />
+                            </td>
+                            <td className="px-1.5 py-1 text-center">
+                                <NumberInput
+                                    value={ext.reserve.powder}
+                                    disabled={disabled}
+                                    onChange={(v) => setExt('reserve', 'powder', v)}
+                                />
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+
         </div>
     );
 };
@@ -457,6 +581,7 @@ const composeNote = (saved, types) => {
         status: saved?.status || 'draft',
         technique,
         personnel: composePersonnel(saved),
+        extinguishing: composeExtinguishing(saved),
     };
 };
 
@@ -559,6 +684,7 @@ const LineNotesPage = () => {
             status: snap.status ?? base.status,
             technique,
             personnel: { ...base.personnel, ...snap.personnel },
+            extinguishing: { ...base.extinguishing, ...snap.extinguishing },
         };
     }, []);
 
@@ -617,6 +743,55 @@ const LineNotesPage = () => {
         }
     };
 
+    // —— Выгрузка в Excel по шаблону (для всех подразделений) ——
+    const canViewAll = !!user?.can_view_all || user?.role === 'developer';
+    const exportMut = useExportLineNotes();
+    const [exportOpen, setExportOpen] = useState(false);
+    const [exportDistrict, setExportDistrict] = useState('Южный ФО');
+    const [exportOrg, setExportOrg] = useState(
+        'ГУ МЧС России по Луганской Народной Республике'
+    );
+    const [exportWarning, setExportWarning] = useState('');
+
+    const handleExportSave = async () => {
+        try {
+            const res = await exportMut.mutateAsync({
+                date: dateStr,
+                federal_district: exportDistrict.trim(),
+                mchs_org_name: exportOrg.trim(),
+            });
+            const { base64, filename, ignored } = res.data;
+
+            // Декодируем base64 и скачиваем файл
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'application/vnd.ms-excel' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || `Строевая_${dateStr}.xls`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            if (ignored && ignored.length) {
+                setExportWarning(
+                    `Без гарнизона или вида игнорируются подразделения: ${ignored.join(', ')}`
+                );
+            } else {
+                setExportWarning('');
+                setExportOpen(false);
+                toast.success('Файл сформирован');
+            }
+        } catch (e) {
+            toast.error(e?.response?.data?.error || 'Не удалось сформировать выгрузку');
+        }
+    };
+
     const modifiers = useMemo(() => {
         const draft = [];
         const approved = [];
@@ -647,6 +822,19 @@ const LineNotesPage = () => {
 
     const setPersonnel = (personnel) => setNote((n) => (n ? { ...n, personnel } : n));
 
+    const setExtinguishing = (category, key, value) =>
+        setNote((n) =>
+            n
+                ? {
+                      ...n,
+                      extinguishing: {
+                          ...n.extinguishing,
+                          [category]: { ...n.extinguishing[category], [key]: num(value) },
+                      },
+                  }
+                : n
+        );
+
     // Сохранение (создание или обновление) записки. statusOverride позволяет
     // сразу перевести в другой статус (утверждение/возврат в черновик).
     const persist = async (statusOverride) => {
@@ -656,7 +844,11 @@ const LineNotesPage = () => {
         }
         if (!note) return;
         const status = statusOverride ?? note.status;
-        const payload = { technique: note.technique, personnel: note.personnel };
+        const payload = {
+            technique: note.technique,
+            personnel: note.personnel,
+            extinguishing: note.extinguishing,
+        };
         try {
             if (note.id) {
                 await updateMut.mutateAsync({
@@ -835,7 +1027,30 @@ const LineNotesPage = () => {
                                 Копировать
                             </Button>
                         </div>
+                        {canViewAll && (
+                            <div className="w-72 shrink-0 space-y-3 border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setExportWarning('');
+                                    setExportOpen(true);
+                                }}
+                                disabled={exportMut.isPending}
+                                className="w-full h-auto whitespace-normal text-left leading-tight rounded-lg"
+                            >
+                                {exportMut.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-2 shrink-0 animate-spin" />
+                                ) : (
+                                    <Download className="h-4 w-4 mr-2 shrink-0" />
+                                )}
+                                <span>
+                                    Выгрузить строевые подразделений на {toDotDate(dateStr)}
+                                </span>
+                            </Button>
+                            </div>
+                        )}
                     </div>
+
                 </CardContent>
             </Card>
 
@@ -924,6 +1139,7 @@ const LineNotesPage = () => {
                                     <TechniqueTab
                                         note={note}
                                         onChangeRow={setTechniqueCell}
+                                        onChangeExtinguishing={setExtinguishing}
                                         disabled={!canEdit}
                                     />
                                 </TabsContent>
@@ -1007,6 +1223,69 @@ const LineNotesPage = () => {
                                 {copyMut.isPending ? 'Копирование...' : 'Копировать'}
                             </AlertDialogAction>
                         </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={exportOpen} onOpenChange={setExportOpen}>
+                    <AlertDialogContent className="lg:max-w-2xl rounded-2xl">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Выгрузка строевых в Excel</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Формируется выгрузка за{' '}
+                                <span className="font-semibold">{toDotDate(dateStr)}</span> по
+                                всем подразделениям по шаблону.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="space-y-3 py-2">
+                            <div className="space-y-1">
+                                <Label className="text-sm text-slate-600">
+                                    Наименование федерального округа
+                                </Label>
+                                <input
+                                    type="text"
+                                    value={exportDistrict}
+                                    onChange={(e) => setExportDistrict(e.target.value)}
+                                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-sm text-slate-600">
+                                    Наименование территориального органа МЧС России
+                                </Label>
+                                <input
+                                    type="text"
+                                    value={exportOrg}
+                                    onChange={(e) => setExportOrg(e.target.value)}
+                                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleExportSave}
+                                disabled={exportMut.isPending}
+                                className="bg-orange-600 hover:bg-orange-700 rounded-lg"
+                            >
+                                {exportMut.isPending ? 'Формирование...' : 'Сохранить'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                        {exportWarning && (
+                            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+                                <span className="font-medium">Внимание:</span>
+                                <span>{exportWarning}</span>
+                            </div>
+                        )}
+                        {!exportWarning && (
+                            <p className="mt-3 text-xs text-slate-500">
+                                Подразделения без указанного гарнизона или вида будут пропущены
+                                в выгрузке.
+                            </p>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">
+                            Если у подразделения строевая записка в статусе «Черновик» или
+                            отсутствует — её поля в выгрузке будут выделены красным.
+                        </p>
                     </AlertDialogContent>
                 </AlertDialog>
         </div>

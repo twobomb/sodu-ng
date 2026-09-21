@@ -16,7 +16,9 @@ import UsersList from './pages/users/UsersList';
 import OnlineUsers from './pages/users/OnlineUsers';
 import RolesList from './pages/roles/RolesList';
 import DepartmentsList from './pages/departments/DepartmentsList.jsx';
+import DepartmentTypesList from './pages/departments/DepartmentTypesList.jsx';
 import MunicipalitiesList from './pages/municipalities/MunicipalitiesList.jsx';
+import GarrisonsList from './pages/garrisons/GarrisonsList.jsx';
 import FireCategoriesList from './pages/dictionaries/FireCategoriesList.jsx';
 import FireCausesList from './pages/dictionaries/FireCausesList.jsx';
 import FireNonaccountList from './pages/dictionaries/FireNonaccountList.jsx';
@@ -121,6 +123,22 @@ const router = createBrowserRouter([
                 element: (
                     <PermissionRoute permission="departments.view">
                         <MunicipalitiesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'department-types',
+                element: (
+                    <PermissionRoute permission="departments.view">
+                        <DepartmentTypesList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'garrisons',
+                element: (
+                    <PermissionRoute permission="departments.view">
+                        <GarrisonsList />
                     </PermissionRoute>
                 ),
             },

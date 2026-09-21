@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useAllMunicipalities } from '../hooks/useMunicipalities';
+import { useAllDepartmentTypes } from '../hooks/useDepartmentTypes';
+import { useAllGarrisons } from '../hooks/useGarrisons';
 import {Building2, Loader2} from 'lucide-react';
 
 const DepartmentForm = ({
@@ -29,12 +31,22 @@ const DepartmentForm = ({
         phone: '',
         parent_id: '',
         municipality_id: '',
+        department_type_id: '',
+        garrison_id: '',
     });
     const [localError, setLocalError] = useState('');
 
     const municipalityQuery = useAllMunicipalities();
     const muniData = municipalityQuery.data;
     const muniList = Array.isArray(muniData) ? muniData : (muniData?.data || []);
+
+    const departmentTypeQuery = useAllDepartmentTypes();
+    const dtData = departmentTypeQuery.data;
+    const dtList = Array.isArray(dtData) ? dtData : (dtData?.data || []);
+
+    const garrisonQuery = useAllGarrisons();
+    const garrisonData = garrisonQuery.data;
+    const garrisonList = Array.isArray(garrisonData) ? garrisonData : (garrisonData?.data || []);
 
     useEffect(() => {
         if (initialData) {
@@ -45,6 +57,8 @@ const DepartmentForm = ({
                 phone: initialData.phone || '',
                 parent_id: initialData.parent_id || '',
                 municipality_id: initialData.municipality_id || '',
+                department_type_id: initialData.department_type_id || '',
+                garrison_id: initialData.garrison_id || '',
             });
         } else {
             setFormData({
@@ -54,6 +68,8 @@ const DepartmentForm = ({
                 phone: '',
                 parent_id: '',
                 municipality_id: '',
+                department_type_id: '',
+                garrison_id: '',
             });
         }
         setLocalError('');
@@ -100,6 +116,34 @@ const DepartmentForm = ({
         [muniList]
     );
 
+    // Опции видов подразделений: "Без вида" + список видов
+    const deptTypeOptions = useMemo(
+        () => [
+            {value: '', label: 'Без вида', extra: '', search: 'без вида'},
+            ...dtList.map((t) => ({
+                value: t.id,
+                label: t.name,
+                extra: '',
+                search: `${t.name}`.toLowerCase(),
+            })),
+        ],
+        [dtList]
+    );
+
+    // Опции гарнизонов: "Без гарнизона" + список гарнизонов
+    const garrisonOptions = useMemo(
+        () => [
+            {value: '', label: 'Без гарнизона', extra: '', search: 'без гарнизона'},
+            ...garrisonList.map((g) => ({
+                value: g.id,
+                label: g.name,
+                extra: '',
+                search: `${g.name}`.toLowerCase(),
+            })),
+        ],
+        [garrisonList]
+    );
+
     const handleChange = (e) => {
         const {name, value} = e.target;
         setFormData((prev) => ({...prev, [name]: value}));
@@ -125,6 +169,8 @@ const DepartmentForm = ({
             phone: formData.phone.trim() || null,
             parent_id: formData.parent_id === '' ? null : formData.parent_id,
             municipality_id: formData.municipality_id === '' ? null : formData.municipality_id,
+            department_type_id: formData.department_type_id === '' ? null : formData.department_type_id,
+            garrison_id: formData.garrison_id === '' ? null : formData.garrison_id,
         };
 
         onSubmit(payload);
@@ -207,6 +253,36 @@ const DepartmentForm = ({
                                 onChange={(v) => handleSelectChange('municipality_id', v)}
                                 placeholder="Без округа"
                                 emptyText="Округов не добавлено. Создайте их на странице «Округа»."
+                                renderOption={(opt) => (
+                                    <span className="text-sm truncate">{opt.label}</span>
+                                )}
+                            />
+                        </div>
+
+                        {/* Вид подразделения */}
+                        <div className="space-y-2">
+                            <Label>Вид подразделения</Label>
+                            <SearchableSelect
+                                options={deptTypeOptions}
+                                value={formData.department_type_id || ''}
+                                onChange={(v) => handleSelectChange('department_type_id', v)}
+                                placeholder="Без вида"
+                                emptyText="Видов не добавлено. Создайте их на странице «Виды подразделений»."
+                                renderOption={(opt) => (
+                                    <span className="text-sm truncate">{opt.label}</span>
+                                )}
+                            />
+                        </div>
+
+                        {/* Гарнизон */}
+                        <div className="space-y-2">
+                            <Label>Гарнизон</Label>
+                            <SearchableSelect
+                                options={garrisonOptions}
+                                value={formData.garrison_id || ''}
+                                onChange={(v) => handleSelectChange('garrison_id', v)}
+                                placeholder="Без гарнизона"
+                                emptyText="Гарнизонов не добавлено. Создайте их на странице «Гарнизоны»."
                                 renderOption={(opt) => (
                                     <span className="text-sm truncate">{opt.label}</span>
                                 )}

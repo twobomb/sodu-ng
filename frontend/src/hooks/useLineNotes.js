@@ -6,6 +6,7 @@ import {
     createLineNote,
     updateLineNote,
     copyLineNote,
+    exportLineNotes,
 } from '../api/lineNotes';
 
 export const useLineNotesByDepartment = (departmentId) =>
@@ -68,3 +69,5 @@ export const useCopyLineNote = () => {
         },
     });
 };
+
+export const useExportLineNotes = () => useMutation({ mutationFn: exportLineNotes });

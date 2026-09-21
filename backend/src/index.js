@@ -28,6 +28,8 @@ const addressRoutes = require('./routes/addressRoutes');
 const onlineService = require('./services/onlineService');
 const reportRoutes = require('./routes/reportRoutes');
 const lineNoteRoutes = require('./routes/lineNoteRoutes');
+const departmentTypeRoutes = require('./routes/departmentTypeRoutes');
+const garrisonRoutes = require('./routes/garrisonRoutes');
 
 const { verifyToken } = require('./utils/jwt');
 const { touchSession } = require('./services/authService');
@@ -60,6 +62,8 @@ app.use('/api/fire-nonaccount-reasons', fireNonaccountRoutes);
 app.use('/api/address', addressRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/municipalities', municipalityRoutes);
+app.use('/api/department-types', departmentTypeRoutes);
+app.use('/api/garrisons', garrisonRoutes);
 app.use('/api/online', onlineRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/settings', settingsRoutes);

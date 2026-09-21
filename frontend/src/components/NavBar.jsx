@@ -10,6 +10,8 @@ import {
     Shield,
     Building2,
     MapPin,
+    ShieldCheck,
+    Building,
     HelpCircle,
     Settings as SettingsIcon,
     MessageCircle,
@@ -59,6 +61,8 @@ const NavBar = () => {
         isUsersSection ||
         isActive('/departments') ||
         isActive('/municipalities') ||
+        isActive('/department-types') ||
+        isActive('/garrisons') ||
         isActive('/dictionaries') ||
         isActive('/unit-types');
 
@@ -225,6 +229,18 @@ const NavBar = () => {
                                                 onClick={() => navigate('/municipalities')}
                                             >
                                                 Округа
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                icon={ShieldCheck}
+                                                onClick={() => navigate('/department-types')}
+                                            >
+                                                Виды подразделений
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                icon={Building}
+                                                onClick={() => navigate('/garrisons')}
+                                            >
+                                                Гарнизоны
                                             </DropdownMenuItem>
                                         </>
                                     )}

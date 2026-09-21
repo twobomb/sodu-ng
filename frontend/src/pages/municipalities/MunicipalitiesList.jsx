@@ -1,10 +1,13 @@
 import { useState, useMemo } from 'react';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { usePermissions } from '../../hooks/usePermissions';
 import {
     useAllMunicipalities,
     useCreateMunicipality,
     useUpdateMunicipality,
     useDeleteMunicipality,
+    useReorderMunicipalities,
 } from '../../hooks/useMunicipalities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,12 +37,51 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, Pencil, Trash2, MapPin } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, MapPin, GripVertical, Info } from 'lucide-react';
 
 const asArray = (v) => {
     if (Array.isArray(v)) return v;
     if (v && Array.isArray(v.data)) return v.data;
     return [];
+};
+
+// Перетаскиваемая строка округа
+const DraggableMunicipality = ({ m, onReorder, canDrag, children }) => {
+    const [{ isDragging }, dragRef] = useDrag(
+        () => ({
+            type: 'MUNICIPALITY',
+            item: { id: m.id },
+            canDrag: () => !!canDrag,
+            collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+        }),
+        [m.id, canDrag]
+    );
+
+    const [, dropRef] = useDrop(
+        () => ({
+            accept: 'MUNICIPALITY',
+            drop: (item) => {
+                if (item.id !== m.id) onReorder(item.id, m.id);
+            },
+        }),
+        [m.id, onReorder]
+    );
+
+    const ref = (node) => {
+        dragRef(node);
+        dropRef(node);
+    };
+
+    return (
+        <tr
+            ref={ref}
+            className={`border-b border-slate-100 transition-colors ${
+                isDragging ? 'opacity-40 bg-orange-50' : 'hover:bg-slate-50'
+            }`}
+        >
+            {children}
+        </tr>
+    );
 };
 
 const MunicipalitiesList = () => {
@@ -51,7 +93,9 @@ const MunicipalitiesList = () => {
     const createM = useCreateMunicipality();
     const updateM = useUpdateMunicipality();
     const deleteM = useDeleteMunicipality();
+    const reorderM = useReorderMunicipalities();
 
+    const [orderState, setOrderState] = useState({ sig: null, ids: null });
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState(null); // округ на редактирование
     const [formName, setFormName] = useState('');
@@ -59,6 +103,13 @@ const MunicipalitiesList = () => {
     const [toDelete, setToDelete] = useState(null);
 
     const list = useMemo(() => asArray(data), [data]);
+
+    // Отображаемый порядок: серверный по умолчанию, либо оптимистичный после перетаскивания.
+    const listSig = list.map((i) => i.id).join('|');
+    const effectiveIds = orderState.sig === listSig ? orderState.ids : list.map((i) => i.id);
+    const items = (effectiveIds || [])
+        .map((id) => list.find((i) => i.id === id))
+        .filter(Boolean);
 
     const openCreate = () => {
         setEditing(null);
@@ -99,8 +150,21 @@ const MunicipalitiesList = () => {
         }
     };
 
+    // Переместить draggedId на место targetId (оптимистично + сохранение)
+    const handleReorder = (draggedId, targetId) => {
+        const next = [...items];
+        const from = next.findIndex((i) => i.id === draggedId);
+        const to = next.findIndex((i) => i.id === targetId);
+        if (from < 0 || to < 0) return;
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        setOrderState({ sig: listSig, ids: next.map((i) => i.id) });
+        reorderM.mutate(next.map((i) => i.id));
+    };
+
     return (
-        <div className="space-y-4">
+        <DndProvider backend={HTML5Backend}>
+            <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -132,26 +196,46 @@ const MunicipalitiesList = () => {
                 </div>
             ) : (
                 <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    {canUpdate && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-xs text-slate-500 border-b border-slate-200">
+                            <Info className="h-3.5 w-3.5" />
+                            Перетаскивайте строки за ручку, чтобы изменить порядок
+                        </div>
+                    )}
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                {canUpdate && <TableHead className="w-10" />}
                                 <TableHead>Округ</TableHead>
                                 {canUpdate && <TableHead className="w-16">Действия</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {list.length === 0 && (
+                            {items.length === 0 && (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={canUpdate ? 2 : 1}
+                                        colSpan={canUpdate ? 3 : 1}
                                         className="text-center text-slate-400 py-6"
                                     >
                                         Округов не добавлено
                                     </TableCell>
                                 </TableRow>
                             )}
-                            {list.map((m) => (
-                                <TableRow key={m.id}>
+                            {items.map((m) => (
+                                <DraggableMunicipality
+                                    key={m.id}
+                                    m={m}
+                                    onReorder={handleReorder}
+                                    canDrag={canUpdate}
+                                >
+                                    {canUpdate && (
+                                        <TableCell>
+                                            <GripVertical
+                                                className="h-4 w-4 text-slate-300 cursor-grab"
+                                                title="Перетащить"
+                                            />
+                                        </TableCell>
+                                    )}
                                     <TableCell className="font-medium">{m.name}</TableCell>
                                     {canUpdate && (
                                         <TableCell className="text-right">
@@ -175,7 +259,7 @@ const MunicipalitiesList = () => {
                                             </Button>
                                         </TableCell>
                                     )}
-                                </TableRow>
+                                </DraggableMunicipality>
                             ))}
                         </TableBody>
                     </Table>
@@ -252,7 +336,8 @@ const MunicipalitiesList = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+            </div>
+        </DndProvider>
     );
 };
 
