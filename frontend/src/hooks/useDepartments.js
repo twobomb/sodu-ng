@@ -11,7 +11,7 @@ export const useDepartments = () => {
     return useQuery({
         queryKey: ['departments'],
         queryFn: getDepartments,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
     });
 };
 

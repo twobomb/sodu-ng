@@ -223,10 +223,28 @@ export const useCreateDirect = () => {
     });
 };
 
+// «Прочитано». Защита от спама: если для того же чата/того же последнего
+// сообщения read уже ушёл недавно — пропускаем повторную отправку. Иначе
+// каждый римонтаж ChatWindow / каждая смена messages.length шлют POST /read,
+// что порождает каскад инвалидаций (GET conversations/messages/...).
+let lastSentRead = null; // { id, messageId, at }
+
 export const useMarkAsRead = () => {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, messageId }) => api.markAsRead(id, messageId),
+        mutationFn: async ({ id, messageId }) => {
+            const now = Date.now();
+            if (
+                lastSentRead &&
+                lastSentRead.id === id &&
+                (lastSentRead.messageId ?? null) === (messageId ?? null) &&
+                now - lastSentRead.at < 5000
+            ) {
+                return { skipped: true };
+            }
+            lastSentRead = { id, messageId: messageId ?? null, at: now };
+            return api.markAsRead(id, messageId).then((r) => r.data);
+        },
         onSuccess: () => {
             qc.invalidateQueries(['chat', 'conversations']);
         },

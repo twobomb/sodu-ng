@@ -26,7 +26,7 @@ const create = asyncHandler(async (req, res) => {
 
     try {
         const row = await departmentTypeService.create(value);
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'department-types');
         res.status(201).json(row);
     } catch (err) {
         logger.error('Ошибка создания вида подразделения: ' + err.message, {
@@ -45,7 +45,7 @@ const update = asyncHandler(async (req, res) => {
     try {
         const row = await departmentTypeService.update(req.params.id, value);
         if (!row) return res.status(404).json({ error: 'Вид подразделения не найден' });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'department-types');
         res.json(row);
     } catch (err) {
         logger.error(`Ошибка обновления вида подразделения ${req.params.id}: ` + err.message, {
@@ -68,7 +68,7 @@ const remove = asyncHandler(async (req, res) => {
             const status = result.reason === 'not_found' ? 404 : 400;
             return res.status(status).json({ error: messages[result.reason] });
         }
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'department-types');
         res.json({ ok: true });
     } catch (err) {
         logger.error(`Ошибка удаления вида подразделения ${req.params.id}: ` + err.message, {

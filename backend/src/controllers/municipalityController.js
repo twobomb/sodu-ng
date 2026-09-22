@@ -27,7 +27,7 @@ const create = asyncHandler(async (req, res) => {
     }
     try {
         const row = await municipalityService.create(value);
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'municipalities');
         res.status(201).json(row);
     } catch (err) {
         logger.error('Ошибка создания округа: ' + err.message, {
@@ -43,7 +43,7 @@ const remove = asyncHandler(async (req, res) => {
     try {
         const ok = await municipalityService.remove(req.params.id);
         if (!ok) return res.status(404).json({ error: 'Округ не найден' });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'municipalities');
         res.json({ ok: true });
     } catch (err) {
         logger.error(`Ошибка удаления округа ${req.params.id}: ` + err.message, {
@@ -72,7 +72,7 @@ const reorder = asyncHandler(async (req, res) => {
 
     try {
         await municipalityService.reorder({ municipalityIds });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'municipalities');
         res.json({ ok: true });
     } catch (err) {
         logger.error('Ошибка сортировки округов: ' + err.message, {
@@ -92,7 +92,7 @@ const update = asyncHandler(async (req, res) => {
     try {
         const row = await municipalityService.update(req.params.id, value);
         if (!row) return res.status(404).json({ error: 'Округ не найден' });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'municipalities');
         res.json(row);
     } catch (err) {
         logger.error(`Ошибка обновления округа ${req.params.id}: ` + err.message, {

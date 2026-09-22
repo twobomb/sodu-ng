@@ -123,7 +123,7 @@ const create = asyncHandler(async (req, res) => {
         });
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'line-notes');
         res.status(201).json(note);
     } catch (err) {
         logger.error('Ошибка создания строевой записки: ' + err.message, {
@@ -245,7 +245,7 @@ const copy = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'line-notes');
         res.json(result.note);
     } catch (err) {
         logger.error('Ошибка копирования строевой записки: ' + err.message, {
@@ -299,7 +299,7 @@ const update = asyncHandler(async (req, res) => {
 
         const updated = await lineNoteService.update(req.params.id, value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'line-notes');
         res.json(updated);
     } catch (err) {
         logger.error('Ошибка обновления строевой записки: ' + err.message, {

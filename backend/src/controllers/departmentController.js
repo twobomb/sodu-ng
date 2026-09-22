@@ -52,7 +52,7 @@ const reorderDepartments = asyncHandler(async (req, res) => {
         await departmentService.reorderDepartments(updates);
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'departments');
 
         res.json({ success: true });
     } catch (err) {
@@ -106,7 +106,7 @@ const createDepartment = asyncHandler(async (req, res) => {
     try {
         const newDept = await departmentService.createDepartment(value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'departments');
         res.status(201).json(newDept);
     } catch (err) {
         logger.error('Ошибка создания подразделения: ' + err.message, {
@@ -139,7 +139,7 @@ const updateDepartment = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'departments');
 
         res.json(updated);
     } catch (err) {
@@ -171,7 +171,7 @@ const deleteDepartment = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'departments');
 
         res.json({ message: 'Подразделение удалено' });
     } catch (err) {

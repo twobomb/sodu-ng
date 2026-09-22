@@ -140,7 +140,7 @@ const createUser = asyncHandler(async (req, res) => {
         const { password_hash, ...userWithoutPassword } = newUser;
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'users');
 
         logger.info(`Пользователь создан: ${newUser.username} (${newUser.role})`, {
             by: req.user?.id,
@@ -214,7 +214,7 @@ const updateUser = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'users');
 
         logger.info(`Пользователь обновлён: ${updated.username}`, {
             userId: id,
@@ -268,7 +268,7 @@ const deleteUser = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'users');
 
         logger.info(`Пользователь удалён: ${target.username}`, {
             userId: id,
@@ -319,7 +319,7 @@ const blockUser = asyncHandler(async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.to(`user:${id}`).emit('force_logout', { reason: 'blocked' });
-            io.emit('force_refresh');
+            io.emit('force_refresh', { domains: ['users'] });
         }
 
         logger.info(`Пользователь заблокирован: ${blocked.username}`, {
@@ -362,7 +362,7 @@ const unblockUser = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'users');
 
         logger.info(`Пользователь разблокирован: ${unblocked.username}`, {
             userId: id,

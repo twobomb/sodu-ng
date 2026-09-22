@@ -34,7 +34,22 @@ import HelpPage from './pages/HelpPage';
 import LineNotesPage from './pages/reports/LineNotesPage';
 import { Toaster } from '@/components/ui/sonner';
 
-const queryClient = new QueryClient();
+// Глобальные умолчания запросов.
+// refetchOnMount / refetchOnWindowFocus / refetchOnReconnect = false — иначе при
+// каждом монтировании/фокусе/реконнекте ВСЕ активные useQuery перезапрашивают
+// данные, что на одно сокет-событие (например, сообщение в чате) давало «пачку»
+// из одинаковых GET-запросов (когда виджет перерисовывается многократно).
+// Первичная загрузка при этом НЕ ломается: если данных в кеше ещё нет — запрос
+// выполнится. Актуальность держим через инвалидации (socket) и refetchInterval.
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnMount: false,
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
+        },
+    },
+});
 
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth();

@@ -44,7 +44,7 @@ const create = asyncHandler(async (req, res) => {
     try {
         const created = await fireCategoryService.create(value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'fire-categories');
         res.status(201).json(created);
     } catch (err) {
         logger.error('Ошибка создания категории: ' + err.message, { stack: err.stack, body: req.body });
@@ -62,7 +62,7 @@ const update = asyncHandler(async (req, res) => {
         }
         if (!updated) return res.status(404).json({ error: 'Категория не найдена' });
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'fire-categories');
         res.json(updated);
     } catch (err) {
         logger.error('Ошибка обновления категории: ' + err.message, { stack: err.stack, body: req.body });
@@ -83,7 +83,7 @@ const remove = asyncHandler(async (req, res) => {
             return res.status(status).json({ error: messages[result.reason] });
         }
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'fire-categories');
         res.json({ message: 'Категория удалена' });
     } catch (err) {
         logger.error('Ошибка удаления категории: ' + err.message, { stack: err.stack });

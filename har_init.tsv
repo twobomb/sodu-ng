@@ -1,0 +1,60 @@
+﻿http://localhost:5000/api/health => check @ src/hooks/useServerAvailability.js:17
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/read =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/settings/public => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/chat/conversations?filter=all => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/online => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/calls/municipalities => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/calls?status=all&type=all&municipality=all&page=1&pageSize=25 => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/chat/attachments/b9a1d8c1-bc03-4156-ada9-3ba507a2b525/preview => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5 => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/members => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 => handleKeyDown @ src/components/chat/MessageInput.jsx:148
+http://localhost:5000/api/settings/public =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations?filter=all =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/online =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/calls/municipalities =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/calls?status=all&type=all&municipality=all&page=1&pageSize=25 =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/attachments/b9a1d8c1-bc03-4156-ada9-3ba507a2b525/preview =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5 =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/members =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/settings/public =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations?filter=all =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/online =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/calls/municipalities =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/calls?status=all&type=all&municipality=all&page=1&pageSize=25 =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/attachments/b9a1d8c1-bc03-4156-ada9-3ba507a2b525/preview =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5 =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/members =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/components/chat/ChatWindow.jsx:101
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/settings/public =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations?filter=all =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/online =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/calls/municipalities =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/calls?status=all&type=all&municipality=all&page=1&pageSize=25 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/attachments/b9a1d8c1-bc03-4156-ada9-3ba507a2b525/preview =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/members =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/settings/public =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations?filter=all =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/online =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/calls/municipalities =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/calls?status=all&type=all&municipality=all&page=1&pageSize=25 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/attachments/b9a1d8c1-bc03-4156-ada9-3ba507a2b525/preview =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/members =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/settings/public =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations?filter=all =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/online =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/calls/municipalities =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/calls?status=all&type=all&municipality=all&page=1&pageSize=25 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/attachments/b9a1d8c1-bc03-4156-ada9-3ba507a2b525/preview =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/members =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/chat/conversations/10a2a3b1-77ed-4d88-8349-888790b9a0d5/messages?limit=30 =>  @ src/hooks/useSocket.js:318
+http://localhost:5000/api/health => check @ src/hooks/useServerAvailability.js:17

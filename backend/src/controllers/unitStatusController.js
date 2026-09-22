@@ -73,7 +73,7 @@ const create = asyncHandler(async (req, res) => {
     try {
         const created = await unitStatusService.create(value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-statuses');
         logger.info(`Статус создан: ${created.short_name}`, {
             by: req.user?.id,
         });
@@ -98,7 +98,7 @@ const update = asyncHandler(async (req, res) => {
         if (!updated) return res.status(404).json({ error: 'Статус не найден' });
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-statuses');
         res.json(updated);
     } catch (err) {
         logger.error('Ошибка обновления статуса: ' + err.message, {
@@ -125,7 +125,7 @@ const remove = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-statuses');
         logger.info(`Статус удалён: ${req.params.id}`, { by: req.user?.id });
         res.json({ message: 'Статус удалён' });
     } catch (err) {

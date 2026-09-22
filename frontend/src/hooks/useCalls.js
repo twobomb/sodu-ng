@@ -23,7 +23,7 @@ export const useCalls = (filters = {}) => {
     return useQuery({
         queryKey: ['calls', clean],
         queryFn: () => api.getCalls(clean).then((r) => r.data),
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -55,7 +55,7 @@ export const useCall = (id) =>
         queryKey: ['call', id],
         queryFn: () => api.getCall(id).then((r) => r.data),
         enabled: !!id,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
     });
 
 // ============================================================

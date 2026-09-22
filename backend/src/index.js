@@ -72,14 +72,42 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/line-notes', lineNoteRoutes);
 
+// Кэшированная проверка БД — реальный запрос уходит в Postgres не чаще, чем раз в 10 сек,
+// независимо от числа клиентов.
+let dbHealthy = false;
+let lastCheck = 0;
+const CHECK_INTERVAL = 10_000;
+const CHECK_TIMEOUT = 2_000;
 
-app.get('/api/health', async (req, res, next) => {
+async function checkDb() {
+    const client = await pool.connect();
     try {
-        const result = await pool.query('SELECT NOW()');
-        res.json({ status: 'ok', time: result.rows[0].now });
-    } catch (err) {
-        next(err);
+        await client.query(`SET LOCAL statement_timeout = ${CHECK_TIMEOUT}`);
+        await client.query('SELECT 1');
+        dbHealthy = true;
+    } catch {
+        dbHealthy = false;
+    } finally {
+        client.release();
     }
+    lastCheck = Date.now();
+}
+
+// Фоновый чек — клиенты вообще не триггерят SQL.
+setInterval(() => {
+    checkDb().catch(() => { dbHealthy = false; });
+}, CHECK_INTERVAL).unref();
+
+app.get('/api/health', async (req, res) => {
+    // Первый запрос после старта — форсируем проверку.
+    if (!lastCheck) {
+        try { await checkDb(); } catch {}
+    }
+
+    if (!dbHealthy) {
+        return res.status(503).json({ status: 'down' });
+    }
+    res.json({ status: 'ok', uptime: process.uptime() });
 });
 
 // ============================================================

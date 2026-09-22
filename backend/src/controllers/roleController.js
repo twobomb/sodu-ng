@@ -64,7 +64,7 @@ const createRole = asyncHandler(async (req, res) => {
     try {
         const newRole = await roleService.createRole(value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'roles');
         res.status(201).json(newRole);
     } catch (err) {
         logger.error('Ошибка создания роли: ' + err.message, {
@@ -94,7 +94,7 @@ const updateRole = asyncHandler(async (req, res) => {
 
         const updated = await roleService.updateRole(code, value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'roles');
         res.json(updated);
     } catch (err) {
         logger.error(`Ошибка обновления роли ${code}: ` + err.message, {
@@ -119,7 +119,7 @@ const deleteRole = asyncHandler(async (req, res) => {
             return res.status(status).json({ error: messages[result.reason] });
         }
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'roles');
         res.json({ message: 'Роль удалена' });
     } catch (err) {
         logger.error(`Ошибка удаления роли ${code}: ` + err.message, {

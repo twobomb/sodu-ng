@@ -130,10 +130,10 @@ const createMessage = asyncHandler(async (req, res) => {
                 );
         if (io) {
             io.to(`conversation:${conversationId}`).emit('chat:message', full);
-            io.to(`conversation:${conversationId}`).emit('chat:conversation_updated', {
-                conversation_id: conversationId,
-            });
-            // Обновляем список чатов у всех, кто не в комнате
+            // Обновляем список чатов у всех, кто не в комнате.
+            // Отдельное chat:conversation_updated в комнату не слаем — у членов
+            // комнаты список и так обновится через chat:message (на фронте он
+            // помечает список "грязным"), а ради нечленов комнаты broadcast ниже.
             io.emit('chat:conversation_list_dirty', { conversation_id: conversationId });
         }
 

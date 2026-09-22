@@ -32,7 +32,7 @@ const create = asyncHandler(async (req, res) => {
     if (error) return res.status(400).json({ error: error.details[0].message });
     try {
         const created = await fireCauseService.create(value);
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'fire-causes');
         res.status(201).json(created);
     } catch (err) {
         logger.error('Ошибка создания причины: ' + err.message, { stack: err.stack, body: req.body });
@@ -49,7 +49,7 @@ const update = asyncHandler(async (req, res) => {
             return res.status(400).json({ error: 'Системную причину «Иные причины (указать причину)» нельзя редактировать' });
         }
         if (!updated) return res.status(404).json({ error: 'Причина не найдена' });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'fire-causes');
         res.json(updated);
     } catch (err) {
         logger.error('Ошибка обновления причины: ' + err.message, { stack: err.stack, body: req.body });
@@ -69,7 +69,7 @@ const remove = asyncHandler(async (req, res) => {
             const status = result.reason === 'not_found' ? 404 : 400;
             return res.status(status).json({ error: messages[result.reason] });
         }
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'fire-causes');
         res.json({ message: 'Причина удалена' });
     } catch (err) {
         logger.error('Ошибка удаления причины: ' + err.message, { stack: err.stack });

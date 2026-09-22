@@ -24,7 +24,7 @@ const create = asyncHandler(async (req, res) => {
 
     try {
         const row = await garrisonService.create(value);
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'garrisons');
         res.status(201).json(row);
     } catch (err) {
         logger.error('Ошибка создания гарнизона: ' + err.message, {
@@ -43,7 +43,7 @@ const update = asyncHandler(async (req, res) => {
     try {
         const row = await garrisonService.update(req.params.id, value);
         if (!row) return res.status(404).json({ error: 'Гарнизон не найден' });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'garrisons');
         res.json(row);
     } catch (err) {
         logger.error(`Ошибка обновления гарнизона ${req.params.id}: ` + err.message, {
@@ -69,7 +69,7 @@ const reorder = asyncHandler(async (req, res) => {
 
     try {
         await garrisonService.reorder({ garrisonIds });
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'garrisons');
         res.json({ ok: true });
     } catch (err) {
         logger.error('Ошибка сортировки гарнизонов: ' + err.message, {
@@ -91,7 +91,7 @@ const remove = asyncHandler(async (req, res) => {
             const status = result.reason === 'not_found' ? 404 : 400;
             return res.status(status).json({ error: messages[result.reason] });
         }
-        emitForceRefresh(req.app.get('io'));
+        emitForceRefresh(req.app.get('io'), 'garrisons');
         res.json({ ok: true });
     } catch (err) {
         logger.error(`Ошибка удаления гарнизона ${req.params.id}: ` + err.message, {

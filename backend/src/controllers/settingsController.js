@@ -98,7 +98,7 @@ const updateSettings = asyncHandler(async (req, res) => {
                             reason: 'maintenance_mode',
                         });
                     }
-                    io.emit('force_refresh');
+                    io.emit('force_refresh', { domains: ['settings'] });
                 }
 
                 logger.warn(
@@ -108,7 +108,7 @@ const updateSettings = asyncHandler(async (req, res) => {
             } else {
                 if (io) {
                     io.emit('maintenance_mode_off');
-                    io.emit('force_refresh');
+                    io.emit('force_refresh', { domains: ['settings'] });
                 }
                 logger.info('Режим ТО выключен', { by: req.user.id });
             }
@@ -116,7 +116,7 @@ const updateSettings = asyncHandler(async (req, res) => {
 
         // Если поменяли размер файла — уведомим фронт
         if (updates.chat_max_file_size_mb !== undefined && io) {
-            io.emit('force_refresh');
+            io.emit('force_refresh', { domains: ['settings'] });
         }
 
         res.json(updates);

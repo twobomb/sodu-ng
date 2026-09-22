@@ -12,7 +12,7 @@ export const useUsers = () => {
     return useQuery({
         queryKey: ['users'],
         queryFn: getUsers,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
     });
 };
 

@@ -4,7 +4,7 @@ import {
 } from '../api/roles';
 
 export const useRoles = () =>
-    useQuery({ queryKey: ['roles'], queryFn: getRoles, refetchOnWindowFocus: true });
+    useQuery({ queryKey: ['roles'], queryFn: getRoles, refetchOnWindowFocus: false });
 
 export const usePermissionsCatalog = () =>
     useQuery({ queryKey: ['permissionsCatalog'], queryFn: getPermissionsCatalog, staleTime: 5 * 60 * 1000 });

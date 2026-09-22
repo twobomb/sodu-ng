@@ -138,7 +138,7 @@ const createUnit = asyncHandler(async (req, res) => {
         const newUnit = await unitService.createUnit(value, user.id);
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'units');
 
         logger.info(`Техника создана: ${newUnit.name}`, {
             unitId: newUnit.id,
@@ -193,7 +193,7 @@ const updateUnit = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'units');
 
         res.json(updated);
     } catch (err) {
@@ -303,7 +303,7 @@ const changeStatus = asyncHandler(async (req, res) => {
                 .to('depts:all')
                 .emit('unit:status_changed', payload);
 
-            emitForceRefresh(io);
+            emitForceRefresh(io, 'units');
         }
 
         logger.info(
@@ -350,7 +350,7 @@ const deleteUnit = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'units');
 
         logger.info(`Техника удалена: ${existing.name}`, {
             unitId: id,
@@ -526,7 +526,7 @@ const updateMetrics = asyncHandler(async (req, res) => {
 
         const updated = await unitService.updateMetrics(id, value, user.id);
         const io = req.app.get('io');
-        if (io) emitForceRefresh(io);
+        if (io) emitForceRefresh(io, 'units');
         res.json(updated);
     } catch (err) {
         logger.error(`Ошибка обновления показателей техники ${id}: ` + err.message, {
@@ -573,7 +573,7 @@ const reorderUnits = asyncHandler(async (req, res) => {
 
         await unitService.reorderUnits(unitIds);
         const io = req.app.get('io');
-        if (io) emitForceRefresh(io);
+        if (io) emitForceRefresh(io, 'units');
         res.json({ ok: true });
     } catch (err) {
         logger.error(`Ошибка сортировки техники: ` + err.message, {

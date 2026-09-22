@@ -238,7 +238,7 @@ const createCall = asyncHandler(async (req, res) => {
     try {
         const call = await callService.createCall(req.user.id, req.user.can_view_all);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.status(201).json(call);
     } catch (err) {
         logger.error('Ошибка создания вызова: ' + err.message, {
@@ -273,7 +273,7 @@ const updateCall = asyncHandler(async (req, res) => {
 
         const updated = await callService.updateCall(id, value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.json(updated);
     } catch (err) {
         if (err.status === 403 || err.status === 400) {
@@ -316,7 +316,7 @@ const setCallStatus = asyncHandler(async (req, res) => {
 
         const updated = await callService.setCallStatus(id, value.status);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.json(updated);
     } catch (err) {
         logger.error(`Ошибка смены статуса вызова ${id}: ` + err.message, {
@@ -374,7 +374,7 @@ const setCallUnits = asyncHandler(async (req, res) => {
         const updated = await callService.getCallById(id);
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.json(updated);
     } catch (err) {
         if (err.status === 403 || err.status === 400) {
@@ -412,7 +412,7 @@ const addCallEvent = asyncHandler(async (req, res) => {
 
         const event = await callService.addCallEvent(id, req.user.id, value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.status(201).json(event);
     } catch (err) {
         logger.error(`Ошибка добавления события вызова ${id}: ` + err.message, {
@@ -445,7 +445,7 @@ const deleteCallEvent = asyncHandler(async (req, res) => {
         if (!deleted) return res.status(404).json({ error: 'Событие не найдено' });
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.json({ ok: true });
     } catch (err) {
         logger.error(`Ошибка удаления события вызова ${id}: ` + err.message, {
@@ -504,7 +504,7 @@ const setCallDepartments = asyncHandler(async (req, res) => {
 
         await callService.setCallDepartments(id, unique);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'calls');
         res.json(await callService.getCallDepartments(id));
     } catch (err) {
         logger.error(`Ошибка обновления доступа вызова ${id}: ` + err.message, {

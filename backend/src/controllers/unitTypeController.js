@@ -85,7 +85,7 @@ const create = asyncHandler(async (req, res) => {
     try {
         const created = await unitTypeService.create(value);
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-types');
         logger.info(`Тип техники создан: ${created.short_name}`, {
             by: req.user?.id,
         });
@@ -110,7 +110,7 @@ const update = asyncHandler(async (req, res) => {
         if (!updated) return res.status(404).json({ error: 'Тип не найден' });
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-types');
         res.json(updated);
     } catch (err) {
         logger.error('Ошибка обновления типа: ' + err.message, {
@@ -135,7 +135,7 @@ const reorder = asyncHandler(async (req, res) => {
     try {
         await unitTypeService.reorder({ category: value.category, unitTypeIds });
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-types');
         res.json({ ok: true });
     } catch (err) {
         logger.error('Ошибка сортировки типов: ' + err.message, {
@@ -161,7 +161,7 @@ const remove = asyncHandler(async (req, res) => {
         }
 
         const io = req.app.get('io');
-        emitForceRefresh(io);
+        emitForceRefresh(io, 'unit-types');
         logger.info(`Тип техники удалён: ${req.params.id}`, { by: req.user?.id });
         res.json({ message: 'Тип удалён' });
     } catch (err) {
