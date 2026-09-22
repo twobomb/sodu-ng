@@ -83,7 +83,8 @@ const loadDepartments = async () => {
     const res = await pool.query(
         `SELECT d.id, d.name AS short_name,
                 d.garrison_id, g.name AS garrison_name,
-                d.department_type_id, dt.name AS department_type_name
+                d.department_type_id, dt.name AS department_type_name,
+                d.show_in_line_note
          FROM departments d
          LEFT JOIN garrisons g ON d.garrison_id = g.id
          LEFT JOIN department_types dt ON d.department_type_id = dt.id
@@ -92,6 +93,8 @@ const loadDepartments = async () => {
     const rows = [];
     const ignored = [];
     for (const d of res.rows) {
+        // подразделение с выключенным «Отображать в строевой записке» — не попадает вообще
+        if (d.show_in_line_note === false) continue;
         if (!d.garrison_name || !d.department_type_name) {
             ignored.push(d.short_name || d.id);
             continue;

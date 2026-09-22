@@ -14,6 +14,7 @@ const createDepartmentSchema = Joi.object({
     municipality_id: Joi.string().uuid().allow(null).optional(),
     department_type_id: Joi.string().uuid().allow(null).optional(),
     garrison_id: Joi.string().uuid().allow(null).optional(),
+    show_in_line_note: Joi.boolean().default(true),
 });
 
 const updateDepartmentSchema = Joi.object({
@@ -25,6 +26,7 @@ const updateDepartmentSchema = Joi.object({
     municipality_id: Joi.string().uuid().allow(null).optional(),
     department_type_id: Joi.string().uuid().allow(null).optional(),
     garrison_id: Joi.string().uuid().allow(null).optional(),
+    show_in_line_note: Joi.boolean(),
 });
 
 // ---------- Массовая перестановка подразделений ----------

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 
 export const SearchableSelect = ({
                                      options = [],
+                                     groups,
                                      value,
                                      onChange,
                                      placeholder = 'Выберите...',
@@ -21,18 +22,39 @@ export const SearchableSelect = ({
     const inputRef = React.useRef(null);
     const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
 
-    const selected = options.find((o) => o.value === value) || null;
+    // Плоский список опций (без заголовков групп) — для поиска и выбранного значения
+    const flatOptions = React.useMemo(
+        () => (groups ? groups.flatMap((g) => g.options) : options),
+        [groups, options]
+    );
 
-    const filtered = React.useMemo(() => {
-        if (!search.trim()) return options;
-        const q = search.toLowerCase();
-        return options.filter((o) => {
+    const selected = flatOptions.find((o) => o.value === value) || null;
+
+    const matchesQuery = React.useCallback(
+        (o) => {
+            if (!search.trim()) return true;
+            const q = search.toLowerCase();
             const label = (o.label || '').toString().toLowerCase();
             const extra = (o.extra || '').toString().toLowerCase();
             const s = (o.search || '').toString().toLowerCase();
             return label.includes(q) || extra.includes(q) || s.includes(q);
-        });
-    }, [options, search]);
+        },
+        [search]
+    );
+
+    // Плоский отфильтрованный список (используется, когда группы не заданы)
+    const filtered = React.useMemo(
+        () => flatOptions.filter(matchesQuery),
+        [flatOptions, matchesQuery]
+    );
+
+    // Отфильтрованные группы: скрываем пустые (в т.ч. при поиске)
+    const filteredGroups = React.useMemo(() => {
+        if (!groups) return null;
+        return groups
+            .map((g) => ({ ...g, options: g.options.filter(matchesQuery) }))
+            .filter((g) => g.options.length > 0);
+    }, [groups, matchesQuery]);
 
     // Клик вне и Escape
     React.useEffect(() => {
@@ -91,6 +113,38 @@ export const SearchableSelect = ({
         onChange(optionValue);
         setOpen(false);
     };
+
+    // Общий рендер одной опции (используется и в плоском списке, и в группах)
+    const optionButton = (option, isSelected) => (
+        <button
+            key={option.value}
+            type="button"
+            onClick={() => handleSelect(option.value)}
+            className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors',
+                isSelected
+                    ? 'bg-orange-200 text-orange-900'
+                    : 'text-slate-700 hover:bg-slate-300'
+            )}
+        >
+                  <span className="flex-1 min-w-0">
+                    {renderOption ? (
+                        renderOption(option)
+                    ) : (
+                        <span className="truncate">{option.label}</span>
+                    )}
+                  </span>
+            {isSelected && (
+                <Check className="h-4 w-4 text-orange-600 flex-shrink-0" />
+            )}
+        </button>
+    );
+
+    const emptyBlock = (
+        <div className="px-3 py-6 text-center text-xs text-slate-500">
+            {emptyText}
+        </div>
+    );
 
     return (
         <>
@@ -170,39 +224,29 @@ export const SearchableSelect = ({
 
                         {/* Список опций */}
                         <div className="max-h-[280px] overflow-y-auto py-1 bg-slate-100">
-                            {filtered.length === 0 ? (
-                                <div className="px-3 py-6 text-center text-xs text-slate-500">
-                                    {emptyText}
-                                </div>
-                            ) : (
-                                filtered.map((option) => {
-                                    const isSelected = option.value === value;
-                                    return (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            onClick={() => handleSelect(option.value)}
-                                            className={cn(
-                                                'w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors',
-                                                isSelected
-                                                    ? 'bg-orange-200 text-orange-900'
-                                                    : 'text-slate-700 hover:bg-slate-300'
+                            {filteredGroups
+                                ? filteredGroups.length === 0 ? (
+                                    emptyBlock
+                                ) : (
+                                    filteredGroups.map((group) => (
+                                        <div key={group.key || group.label}>
+                                            <div className="flex items-center gap-2 px-3 py-2 text-[12px] font-bold uppercase tracking-wide text-slate-700 bg-gradient-to-r from-slate-200 to-slate-100/60 sticky top-0 z-10">
+                                                {group.label}
+                                            </div>
+                                            <div className="h-px bg-slate-300" aria-hidden="true" />
+                                            {group.options.map((option) =>
+                                                optionButton(option, option.value === value)
                                             )}
-                                        >
-                      <span className="flex-1 min-w-0">
-                        {renderOption ? (
-                            renderOption(option)
-                        ) : (
-                            <span className="truncate">{option.label}</span>
-                        )}
-                      </span>
-                                            {isSelected && (
-                                                <Check className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                                            )}
-                                        </button>
-                                    );
-                                })
-                            )}
+                                        </div>
+                                    ))
+                                )
+                                : filtered.length === 0 ? (
+                                    emptyBlock
+                                ) : (
+                                    filtered.map((option) =>
+                                        optionButton(option, option.value === value)
+                                    )
+                                )}
                         </div>
                     </div>,
                     document.body

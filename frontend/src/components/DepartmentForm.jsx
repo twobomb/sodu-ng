@@ -10,6 +10,7 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAllMunicipalities } from '../hooks/useMunicipalities';
 import { useAllDepartmentTypes } from '../hooks/useDepartmentTypes';
 import { useAllGarrisons } from '../hooks/useGarrisons';
@@ -33,6 +34,7 @@ const DepartmentForm = ({
         municipality_id: '',
         department_type_id: '',
         garrison_id: '',
+        show_in_line_note: true,
     });
     const [localError, setLocalError] = useState('');
 
@@ -59,6 +61,7 @@ const DepartmentForm = ({
                 municipality_id: initialData.municipality_id || '',
                 department_type_id: initialData.department_type_id || '',
                 garrison_id: initialData.garrison_id || '',
+                show_in_line_note: initialData.show_in_line_note !== false,
             });
         } else {
             setFormData({
@@ -70,6 +73,7 @@ const DepartmentForm = ({
                 municipality_id: '',
                 department_type_id: '',
                 garrison_id: '',
+                show_in_line_note: true,
             });
         }
         setLocalError('');
@@ -171,6 +175,7 @@ const DepartmentForm = ({
             municipality_id: formData.municipality_id === '' ? null : formData.municipality_id,
             department_type_id: formData.department_type_id === '' ? null : formData.department_type_id,
             garrison_id: formData.garrison_id === '' ? null : formData.garrison_id,
+            show_in_line_note: formData.show_in_line_note !== false,
         };
 
         onSubmit(payload);
@@ -287,6 +292,25 @@ const DepartmentForm = ({
                                     <span className="text-sm truncate">{opt.label}</span>
                                 )}
                             />
+                        </div>
+
+                        {/* Отображение в строевой записке */}
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="show_in_line_note"
+                                checked={formData.show_in_line_note !== false}
+                                onCheckedChange={(checked) =>
+                                    setFormData((p) => ({ ...p, show_in_line_note: !!checked }))
+                                }
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="show_in_line_note" className="leading-tight">
+                                    Отображать в строевой записке
+                                </Label>
+                                <p className="text-xs text-slate-400">
+                                    Подразделение будет доступно на странице «Строевая записка».
+                                </p>
+                            </div>
                         </div>
 
                         {/* Родительское подразделение */}

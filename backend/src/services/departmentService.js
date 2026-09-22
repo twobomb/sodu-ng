@@ -27,6 +27,7 @@ const getAllDepartments = async () => {
                d.municipality_id, m.name AS municipality_name,
                d.department_type_id, dt.name AS department_type_name,
                d.garrison_id, g.name AS garrison_name,
+               d.show_in_line_note,
                d.created_at, d.updated_at
         FROM departments d
         LEFT JOIN municipalities m ON d.municipality_id = m.id
@@ -119,7 +120,7 @@ const getDepartmentById = async (id) => {
  * Создать новое подразделение
  * @param {Object} data - { name, parent_id }
  */
-const createDepartment = async ({ name, full_name, address, phone, parent_id, municipality_id, department_type_id, garrison_id }) => {
+const createDepartment = async ({ name, full_name, address, phone, parent_id, municipality_id, department_type_id, garrison_id, show_in_line_note }) => {
     const check = await validateParentIsRoot(parent_id);
     if (!check.ok) {
         if (check.reason === 'parent_not_found') {
@@ -138,10 +139,10 @@ const createDepartment = async ({ name, full_name, address, phone, parent_id, mu
 
     const id = uuidv4();
     const res = await pool.query(
-        `INSERT INTO departments (id, name, full_name, address, phone, parent_id, municipality_id, department_type_id, garrison_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO departments (id, name, full_name, address, phone, parent_id, municipality_id, department_type_id, garrison_id, show_in_line_note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING id, name, full_name, address, phone, parent_id, sort_order,
-               municipality_id, department_type_id, garrison_id, created_at, updated_at`,
+               municipality_id, department_type_id, garrison_id, show_in_line_note, created_at, updated_at`,
         [
             id,
             name,
@@ -152,6 +153,7 @@ const createDepartment = async ({ name, full_name, address, phone, parent_id, mu
             municipality_id || null,
             department_type_id || null,
             garrison_id || null,
+            show_in_line_note !== undefined ? Boolean(show_in_line_note) : true,
         ]
     );
     return res.rows[0];
@@ -160,7 +162,7 @@ const createDepartment = async ({ name, full_name, address, phone, parent_id, mu
  * Обновить подразделение (проверка на циклическую ссылку)
  */
 const updateDepartment = async (id, data) => {
-    const { name, full_name, address, phone, parent_id, municipality_id, department_type_id, garrison_id } = data;
+    const { name, full_name, address, phone, parent_id, municipality_id, department_type_id, garrison_id, show_in_line_note } = data;
 
     // ...существующая валидация parent_id без изменений...
 
@@ -200,6 +202,10 @@ const updateDepartment = async (id, data) => {
         fields.push(`garrison_id = $${idx++}`);
         values.push(garrison_id || null);
     }
+    if (show_in_line_note !== undefined) {
+        fields.push(`show_in_line_note = $${idx++}`);
+        values.push(Boolean(show_in_line_note));
+    }
 
     if (!fields.length) {
         const cur = await pool.query(
@@ -216,7 +222,7 @@ const updateDepartment = async (id, data) => {
         `UPDATE departments SET ${fields.join(', ')}
          WHERE id = $${idx}
              RETURNING id, name, full_name, address, phone, parent_id, sort_order,
-               municipality_id, department_type_id, garrison_id, created_at, updated_at`,
+               municipality_id, department_type_id, garrison_id, show_in_line_note, created_at, updated_at`,
         values
     );
     return res.rows[0] || null;

@@ -520,9 +520,7 @@ const CallDetail = () => {
     const attachedUnits = call?.units || [];
     const attachedIds = new Set(attachedUnits.map((u) => u.unit_id));
     const availableUnits = Array.isArray(unitsQuery.data) ? unitsQuery.data : (unitsQuery.data?.data || []);
-    const unitOptions = availableUnits
-        .filter((u) => !attachedIds.has(u.id))
-        .map((u) => ({ value: u.id, label: u.name, extra: [u.type_short_name, u.plate_number, u.department_name].filter(Boolean).join(' · ') }));
+    const availableUnitList = availableUnits.filter((u) => !attachedIds.has(u.id));
 
     const allStatuses = Array.isArray(unitStatusesQuery.data) ? unitStatusesQuery.data : [];
     const availableCallsRows = Array.isArray(availableCallsQuery.data) ? availableCallsQuery.data : [];
@@ -533,9 +531,91 @@ const CallDetail = () => {
     const accessibleDepts = user?.can_view_all
         ? allDepts
         : allDepts.filter((d) => userDeptIds.includes(d.id));
-    const filteredDepts = accessibleDepts.filter(
+    // Подразделения имеют 2 уровня. Разворачиваем иерархию в flat-массив
+    // правильного порядка: каждое корневое → сразу его дети.
+    // allDepts уже отсортирован по родителю/sort_order/имени (см. departmentService),
+    // поэтому порядок детей и корневых сохраняется.
+    const flatAccessDepts = useMemo(() => {
+        const childrenMap = new Map();
+        const deptSet = new Set(accessibleDepts.map((d) => d.id));
+        const roots = [];
+        for (const d of accessibleDepts) {
+            if (d.parent_id && deptSet.has(d.parent_id)) {
+                if (!childrenMap.has(d.parent_id)) childrenMap.set(d.parent_id, []);
+                childrenMap.get(d.parent_id).push(d);
+            } else {
+                roots.push(d);
+            }
+        }
+        const flat = [];
+        for (const r of roots) {
+            flat.push(r);
+            flat.push(...(childrenMap.get(r.id) || []));
+        }
+        return flat;
+    }, [accessibleDepts]);
+    const filteredDepts = flatAccessDepts.filter(
         (d) => !accessSearch.trim() || String(d.name || '').toLowerCase().includes(accessSearch.toLowerCase())
     );
+
+    // ---------- Селект техники: группировка по подразделениям ----------
+    // Порядок подразделений — как в «Списке подразделений» (иерархия: родитель → дети,
+    // внутри уровня по sort_order/имени, как отдаёт useDepartments()).
+    const deptOrder = useMemo(() => {
+        const childrenMap = new Map();
+        const deptSet = new Set(allDepts.map((d) => d.id));
+        const roots = [];
+        for (const d of allDepts) {
+            if (d.parent_id && deptSet.has(d.parent_id)) {
+                if (!childrenMap.has(d.parent_id)) childrenMap.set(d.parent_id, []);
+                childrenMap.get(d.parent_id).push(d);
+            } else {
+                roots.push(d);
+            }
+        }
+        const order = [];
+        const walk = (nodes) => {
+            for (const n of nodes) {
+                order.push(n);
+                walk(childrenMap.get(n.id) || []);
+            }
+        };
+        // allDepts уже отсортирован по sort_order/имени (см. departmentService)
+        for (const c of childrenMap.values()) c.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
+        walk(roots);
+        return order;
+    }, [allDepts]);
+
+    // Группы техники по подразделениям. Порядок техники внутри группы сохраняется —
+    // useUnits() уже возвращает её отсортированной (sort_order, created_at), как в «Списке техники».
+    const unitOptionGroups = useMemo(() => {
+        const map = new Map();
+        for (const u of availableUnitList) {
+            if (!map.has(u.department_id)) {
+                map.set(u.department_id, {
+                    key: u.department_id || '__none__',
+                    label: u.department_name || 'Без подразделения',
+                    options: [],
+                });
+            }
+            map.get(u.department_id).options.push({
+                value: u.id,
+                label: u.name,
+                extra: [u.type_short_name, u.plate_number, u.department_name].filter(Boolean).join(' · '),
+            });
+        }
+        const ordered = [];
+        for (const d of deptOrder) {
+            const g = map.get(d.id);
+            if (g) {
+                ordered.push(g);
+                map.delete(d.id);
+            }
+        }
+        // Подразделения, которых нет в справочнике прав пользователя — в конец списка
+        for (const g of map.values()) ordered.push(g);
+        return ordered;
+    }, [availableUnitList, deptOrder]);
 
     const handleApplyUnitStatus = (payload) => {
         const { unit_id, ...data } = payload;
@@ -722,7 +802,7 @@ const CallDetail = () => {
                     <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
                         <h2 className="text-base font-semibold text-slate-700 mb-3">Привлекаемая техника</h2>
                         {canEdit && (
-                            <SearchableSelect options={unitOptions} value="" onChange={handleAddUnit} placeholder="Добавить технику..." emptyText="Нет доступной техники" renderOption={(o) => (
+                            <SearchableSelect groups={unitOptionGroups} value="" onChange={handleAddUnit} placeholder="Добавить технику..." emptyText="Нет доступной техники" renderOption={(o) => (
                                 <div className="flex flex-col min-w-0"><span className="text-sm truncate">{o.label}</span>{o.extra && <span className="text-[11px] text-slate-400 truncate">{o.extra}</span>}</div>
                             )} />
                         )}

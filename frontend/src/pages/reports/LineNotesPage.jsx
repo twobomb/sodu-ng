@@ -626,13 +626,49 @@ const LineNotesPage = () => {
     const [deptQuery, setDeptQuery] = useState('');
     const dateStr = toDateStr(selectedDate);
 
-    // Только подразделения, доступные пользователю
-    const accessibleDepts = useMemo(() => {
+    // Полный плоский список в иерархическом порядке: корневое → его дети →
+    // внуки, в любую глубину. Строим дерево ПЕРВЫМ из всех подразделений,
+    // затем просто отфильтровываем (порядок сохраняется) — скрытые просто
+    // «пропускаются», их подчинённые не теряются и не переезжают в конец.
+    const allFlatDepts = useMemo(() => {
         if (!departments.length) return [];
-        if (user?.can_view_all) return departments;
+        const deptSet = new Set(departments.map((d) => d.id));
+        const byParent = new Map();
+        const roots = [];
+        for (const d of departments) {
+            if (d.parent_id && deptSet.has(d.parent_id)) {
+                if (!byParent.has(d.parent_id)) byParent.set(d.parent_id, []);
+                byParent.get(d.parent_id).push(d);
+            } else {
+                roots.push(d);
+            }
+        }
+        const sortNodes = (list) =>
+            [...list].sort(
+                (a, b) =>
+                    (a.sort_order || 0) - (b.sort_order || 0) ||
+                    String(a.name || '').localeCompare(String(b.name || ''), 'ru')
+            );
+        const flat = [];
+        const walk = (list) => {
+            for (const n of sortNodes(list)) {
+                flat.push(n);
+                walk(byParent.get(n.id) || []);
+            }
+        };
+        walk(roots);
+        return flat;
+    }, [departments]);
+
+    // Только подразделения, доступные пользователю и отображаемые в строевой записке.
+    // Порядок сохраняется: скрытые (show_in_line_note=false) просто «пропускаются»,
+    // их дети не переезжают в конец списка.
+    const accessibleDepts = useMemo(() => {
         const ids = user?.department_ids || [];
-        return departments.filter((d) => ids.includes(d.id));
-    }, [departments, user]);
+        const visible = allFlatDepts.filter((d) => d.show_in_line_note !== false);
+        if (user?.can_view_all) return visible;
+        return visible.filter((d) => ids.includes(d.id));
+    }, [allFlatDepts, user]);
 
     // Автовыбор, если доступно ровно одно подразделение
     const activeDeptId =
