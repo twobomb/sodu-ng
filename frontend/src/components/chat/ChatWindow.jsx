@@ -38,6 +38,7 @@ import {
     useDeleteChannel,
     useLeaveConversation,
 } from '../../hooks/useChat';
+import * as api from '../../api/chat';
 import { usePermissions } from '../../hooks/usePermissions';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
@@ -59,13 +60,7 @@ const formatDayLabel = (date) => {
 const ChatWindow = ({ conversationId, onBack, isVisible = true }) => {
     const { data: conversation } = useConversation(conversationId);
     const { data: members } = useMembers(conversationId);
-    const {
-        data,
-        isLoading,
-        fetchNextPage,
-        hasNextPage,
-        isFetchingNextPage,
-    } = useMessages(conversationId);
+    const { data, isLoading } = useMessages(conversationId);
     const markAsRead = useMarkAsRead();
     const deleteChannel = useDeleteChannel();
     const leaveConversation = useLeaveConversation();
@@ -81,11 +76,36 @@ const ChatWindow = ({ conversationId, onBack, isVisible = true }) => {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmLeave, setConfirmLeave] = useState(false);
 
-    // Плоский список сообщений
-    const messages = useMemo(() => {
-        if (!data?.pages) return [];
-        return [...data.pages].reverse().flatMap((page) => page.messages);
-    }, [data]);
+    // --- Подгрузка старых сообщений (скролл вверх) вне react-query ----------
+    // Состояние сбрасывается автоматически: ChatWidget рендерит ChatWindow с
+    // key={conversationId}, т.е. при смене чата окно монтируется заново.
+    const [olderMessages, setOlderMessages] = useState([]); // старые, в хронологии
+    const [olderCursor, setOlderCursor] = useState(null); // курсор для след. порции
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+
+    const messages = useMemo(
+        () => [...olderMessages, ...(data?.messages ?? [])],
+        [olderMessages, data]
+    );
+
+    const loadOlder = async () => {
+        const cursor =
+            olderMessages.length > 0 ? olderCursor : data?.nextCursor;
+        if (isLoadingOlder || !cursor || !conversationId) return;
+        setIsLoadingOlder(true);
+        try {
+            const res = await api.getMessages(conversationId, {
+                before: cursor.created_at,
+                before_id: cursor.id,
+                limit: 30,
+            });
+            const page = res.data; // { messages, nextCursor }
+            setOlderMessages((prev) => [...(page.messages ?? []), ...prev]);
+            setOlderCursor(page.nextCursor ?? null);
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    };
 
     // Группировка по датам
     const grouped = useMemo(() => {
@@ -125,9 +145,11 @@ const ChatWindow = ({ conversationId, onBack, isVisible = true }) => {
     const handleScroll = () => {
         const el = scrollRef.current;
         if (!el) return;
-        if (el.scrollTop < 100 && hasNextPage && !isFetchingNextPage) {
+        const cursor =
+            olderMessages.length > 0 ? olderCursor : data?.nextCursor;
+        if (el.scrollTop < 100 && cursor && !isLoadingOlder) {
             const prevHeight = el.scrollHeight;
-            fetchNextPage().then(() => {
+            loadOlder().then(() => {
                 requestAnimationFrame(() => {
                     el.scrollTop = el.scrollHeight - prevHeight;
                 });
@@ -280,7 +302,7 @@ const ChatWindow = ({ conversationId, onBack, isVisible = true }) => {
                 onScroll={handleScroll}
                 className="flex-1 overflow-y-auto px-3 py-4 bg-slate-50"
             >
-                {isFetchingNextPage && (
+                {isLoadingOlder && (
                     <div className="flex justify-center py-2">
                         <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
                     </div>

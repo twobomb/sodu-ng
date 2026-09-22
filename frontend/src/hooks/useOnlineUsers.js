@@ -14,7 +14,10 @@ export const useOnlineUsers = () =>
         queryFn: () => getOnlineUsers().then((r) => r.data),
         staleTime: 25 * 1000,
         refetchInterval: 30 * 1000,
-        refetchOnMount: true,
+        // refetchOnMount: false — наследуем глобальное (App.jsx). Локальный true
+        // заставлял перезапрашивать /online при каждом перемонтировании NavBar,
+        // что добавляло лишний GET в «волну» после чат-событий.
+        refetchOnMount: false,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
     });

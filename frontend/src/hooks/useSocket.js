@@ -184,21 +184,6 @@ export const useSocket = () => {
             scheduleFlush();
         };
 
-        // Инвалидирует ТОЛЬКО первую страницу сообщений (без ?before=...).
-        // Прочтение не меняет содержимое старых страниц истории, поэтому
-        // перезапрашивать их при каждом chat:read незачем — это и давало
-        // поток .../messages?limit=30&before=... в логах.
-        const scheduleInvalidateMessagesFirstPage = (conversationId) => {
-            if (!conversationId) return;
-            dirtyPredicates.push((q) =>
-                q.queryKey[0] === 'chat' &&
-                q.queryKey[1] === 'messages' &&
-                q.queryKey[2] === conversationId &&
-                !(q.variables && q.variables.pageParam)
-            );
-            scheduleFlush();
-        };
-
         // ============================================================
         // ОБЩИЕ
         // ============================================================
@@ -302,23 +287,45 @@ export const useSocket = () => {
         // ============================================================
         // ЧАТ: СООБЩЕНИЯ
         // ============================================================
+        // Обновить списки чатов (['chat', 'conversations', <filter>]) на месте:
+        // новый last_message, счётчик непрочитанного (+1, если не своё сообщение),
+        // порядок (вверх). БЕЗ refetch — это то, что позволяет обновлять «значок
+        // непрочитанного» у ВСЕХ онлайн-участников (в т.ч. тех, кто не открыл чат)
+        // без шторма GET на каждое сообщение при росте числа пользователей.
+        const updateConversationLists = (message) => {
+            queryClient.getQueryCache()
+                .findAll({ queryKey: ['chat', 'conversations'] })
+                .forEach((q) => {
+                    const qk = q.queryKey;
+                    queryClient.setQueryData(qk, (old) => {
+                        if (!Array.isArray(old)) return old;
+                        const idx = old.findIndex((c) => c.id === message.conversation_id);
+                        if (idx === -1) return old;
+                        const prev = old[idx];
+                        const isOwn = message.user_id === user?.id;
+                        const isSystem = message.content_type === 'system';
+                        const next = {
+                            ...prev,
+                            last_message: message,
+                            last_message_at: message.created_at,
+                            updated_at: message.created_at,
+                            unread_count: (prev.unread_count || 0) + ((isOwn || isSystem) ? 0 : 1),
+                        };
+                        const arr = [...old];
+                        arr.splice(idx, 1);
+                        arr.unshift(next);
+                        return arr;
+                    });
+                });
+        };
+
         socket.on('chat:message', (message) => {
             queryClient.setQueryData(
                 ['chat', 'messages', message.conversation_id],
                 (old) => {
-                    if (!old) return old;
-                    const exists = old.pages.some((page) =>
-                        page.messages.some((m) => m.id === message.id)
-                    );
-                    if (exists) return old;
-
-                    const newPages = [...old.pages];
-                    const lastIdx = newPages.length - 1;
-                    newPages[lastIdx] = {
-                        ...newPages[lastIdx],
-                        messages: [...newPages[lastIdx].messages, message],
-                    };
-                    return { ...old, pages: newPages };
+                    if (!old || !Array.isArray(old.messages)) return old;
+                    if (old.messages.some((m) => m.id === message.id)) return old;
+                    return { ...old, messages: [...old.messages, message] };
                 }
             );
 
@@ -335,23 +342,23 @@ export const useSocket = () => {
                 playNotificationSound();
             }
 
-            scheduleInvalidate(['chat', 'conversations']);
-            scheduleInvalidate(['chat', 'conversation']);
+            // Обновляем только список чатов (непрочитанные/порядок). Сообщение уже
+            // добавлено в кеш через setQueryData выше; контент/детали чата от
+            // получения сообщения не меняются — conversation НЕ инвалидируем
+            // (это убирало лишний refetch и веер запросов на получателе).
+            updateConversationLists(message);
         });
 
         socket.on('chat:message_edited', (message) => {
             queryClient.setQueryData(
                 ['chat', 'messages', message.conversation_id],
                 (old) => {
-                    if (!old) return old;
+                    if (!old || !Array.isArray(old.messages)) return old;
                     return {
                         ...old,
-                        pages: old.pages.map((page) => ({
-                            ...page,
-                            messages: page.messages.map((m) =>
-                                m.id === message.id ? message : m
-                            ),
-                        })),
+                        messages: old.messages.map((m) =>
+                            m.id === message.id ? message : m
+                        ),
                     };
                 }
             );
@@ -361,26 +368,22 @@ export const useSocket = () => {
             queryClient.setQueryData(
                 ['chat', 'messages', conversation_id],
                 (old) => {
-                    if (!old) return old;
+                    if (!old || !Array.isArray(old.messages)) return old;
                     return {
                         ...old,
-                        pages: old.pages.map((page) => ({
-                            ...page,
-                            messages: page.messages.map((m) =>
-                                m.id === id
-                                    ? {
-                                        ...m,
-                                        deleted_at: new Date().toISOString(),
-                                        content: null,
-                                    }
-                                    : m
-                            ),
-                        })),
+                        messages: old.messages.map((m) =>
+                            m.id === id
+                                ? {
+                                    ...m,
+                                    deleted_at: new Date().toISOString(),
+                                    content: null,
+                                }
+                                : m
+                        ),
                     };
                 }
             );
             scheduleInvalidate(['chat', 'conversations']);
-            scheduleInvalidate(['chat', 'conversation']);
         });
 
         // ============================================================
@@ -417,12 +420,26 @@ export const useSocket = () => {
                 // первую страницу (без ?before=...), чтобы не гнать старые
                 // страницы бесконечного запроса заново. Деталь разговора
                 // (conversation) от прочтения не меняется — её не инвалидируем.
-                scheduleInvalidateMessagesFirstPage(payload.conversation_id);
-                scheduleInvalidate([
-                    'chat',
-                    'members',
-                    payload.conversation_id,
-                ]);
+                queryClient.setQueryData(
+                    ['chat', 'messages', payload.conversation_id],
+                    (old) => {
+                        if (!old || !Array.isArray(old.messages)) return old;
+                        return {
+                            ...old,
+                            messages: old.messages.map((m) =>
+                                payload.last_read_message_id &&
+                                m.id === payload.last_read_message_id &&
+                                !(m.read_by || []).includes(payload.user_id)
+                                    ? {
+                                        ...m,
+                                        read_by: [...(m.read_by || []), payload.user_id],
+                                        read_count: (m.read_count || 0) + 1,
+                                    }
+                                    : m
+                            ),
+                        };
+                    }
+                );
             }
         });
 

@@ -141,6 +141,7 @@ const ChatWidget = () => {
                         <ChatSettings />
                     ) : activeConversationId ? (
                         <ChatWindow
+                            key={activeConversationId}
                             conversationId={activeConversationId}
                             onBack={() => setActiveConversationId(null)}
                             isVisible={isOpen}

@@ -7,12 +7,31 @@ import { Code2 } from 'lucide-react';
 const DisplayName = ({ name, role, isOwn = false, size = 'md' }) => {
     const isDeveloper = role === 'developer';
 
+    // Размер: системные имена меньше, чтобы не сливались с текстом сообщения.
+    const sizeCls =
+        size === 'sm'
+            ? 'text-[11px]'
+            : size === 'lg'
+                ? 'text-sm'
+                : 'text-xs';
+
     if (!isDeveloper) {
-        return <span>{name}</span>;
+        // Обычный пользователь: полужирный, меньшего размера и другого цвета,
+        // чем тело сообщения (text-slate-800 text-sm), чтобы имя явно читалось
+        // как «заголовок» и не визуально сливалось с текстом.
+        return (
+            <span
+                className={`font-semibold ${sizeCls} ${
+                    isOwn ? 'text-white/90' : 'text-slate-500'
+                }`}
+            >
+                {name}
+            </span>
+        );
     }
 
     // Для developer — градиентный текст + иконка
-    const sizeCls =
+    const devSizeCls =
         size === 'sm'
             ? 'text-[11px]'
             : size === 'lg'
@@ -21,7 +40,7 @@ const DisplayName = ({ name, role, isOwn = false, size = 'md' }) => {
 
     return (
         <span
-            className={`inline-flex items-center gap-1 font-semibold ${sizeCls} ${
+            className={`inline-flex items-center gap-1 font-semibold ${devSizeCls} ${
                 isOwn ? 'text-white/95' : ''
             }`}
             title="Разработчик"

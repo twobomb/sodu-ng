@@ -235,7 +235,7 @@ const MessageBubble = ({ message, conversation, members, onReply, onEdit }) => {
                     >
                         {/* Автор */}
                         {!isOwn && isGroupOrChannel && (
-                            <div className="mb-0.5">
+                            <div className="mb-1">
                                 <DisplayName
                                     name={displayName}
                                     role={message.user_role}

@@ -129,12 +129,12 @@ const createMessage = asyncHandler(async (req, res) => {
                     [conversationId, userId]
                 );
         if (io) {
-            io.to(`conversation:${conversationId}`).emit('chat:message', full);
+            io.emit('chat:message', full);
             // Обновляем список чатов у всех, кто не в комнате.
             // Отдельное chat:conversation_updated в комнату не слаем — у членов
             // комнаты список и так обновится через chat:message (на фронте он
             // помечает список "грязным"), а ради нечленов комнаты broadcast ниже.
-            io.emit('chat:conversation_list_dirty', { conversation_id: conversationId });
+            // список чатов клиент обновляет сам из chat:message (setQueryData, без refetch — меньше шторма при росте числа пользователей)
         }
 
         res.status(201).json(full);

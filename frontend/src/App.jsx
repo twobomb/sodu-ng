@@ -51,6 +51,39 @@ const queryClient = new QueryClient({
     },
 });
 
+// ============================================================
+// Предохранитель против «циклов refetch» (баг при обмене между 2 клиентами).
+// Классический источник «шторма»: серия invalidateQueries за короткий срок
+// вызывает refetchQueries, который (см. стек @tanstack_react-query.js:2434)
+// прогоняет ВСЕ затронутые query через Array.map → десятки одинаковых GET.
+// Здесь мы ограничиваем частоту рефетчей по ИНВАЛИДАЦИЯМ: глобально не чаще
+// одного запланированного прогона за REFETCH_QUERIES_THROTTLE_MS. Актуальность
+// НЕ страдает: свежие данные чата и так приходят мгновенно через
+// queryClient.setQueryData (real-time), а инвалидации лишь подтверждают/догоняют.
+const REFETCH_QUERIES_THROTTLE_MS = 1500;
+const _refetchQueries = queryClient.refetchQueries.bind(queryClient);
+let _lastRefetchAt = 0;
+let _pendingRefetch = null;
+const _runRefetch = (filters, options) => {
+    _lastRefetchAt = Date.now();
+    return _refetchQueries(filters, options);
+};
+queryClient.refetchQueries = (filters, options) => {
+    const now = Date.now();
+    if (now - _lastRefetchAt >= REFETCH_QUERIES_THROTTLE_MS) {
+        return _runRefetch(filters, options);
+    }
+    // Уже недавно рефетчили (шторм) — откладываем один финальный прогон.
+    if (_pendingRefetch === null) {
+        const wait = REFETCH_QUERIES_THROTTLE_MS - (now - _lastRefetchAt) + 1;
+        _pendingRefetch = setTimeout(() => {
+            _pendingRefetch = null;
+            _runRefetch(filters, options);
+        }, wait);
+    }
+    return Promise.resolve();
+};
+
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth();
     if (loading) {

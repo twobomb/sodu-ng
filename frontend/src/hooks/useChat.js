@@ -2,7 +2,6 @@ import {
     useQuery,
     useMutation,
     useQueryClient,
-    useInfiniteQuery,
 } from '@tanstack/react-query';
 import * as api from '../api/chat';
 export const useChatProfile = () =>
@@ -120,21 +119,18 @@ export const useConversation = (id) =>
         queryKey: ['chat', 'conversation', id],
         queryFn: () => api.getConversation(id).then((r) => r.data),
         enabled: !!id,
+        // staleTime вместо 0: детали чата меняются редко, и «вечно протухший»
+        // кеш заставлял refetch при каждом observer-проходе (источник циклов).
+        staleTime: 30 * 1000,
     });
 
 export const useMessages = (conversationId) =>
-    useInfiniteQuery({
+    useQuery({
         queryKey: ['chat', 'messages', conversationId],
-        queryFn: ({ pageParam }) =>
+        queryFn: () =>
             api
-                .getMessages(conversationId, {
-                    before: pageParam?.created_at,
-                    before_id: pageParam?.id,
-                    limit: 30,
-                })
+                .getMessages(conversationId, { limit: 30 })
                 .then((r) => r.data),
-        initialPageParam: null,
-        getNextPageParam: (lastPage) => lastPage.nextCursor || undefined,
         enabled: !!conversationId,
         staleTime: 60 * 1000,
     });
@@ -267,4 +263,6 @@ export const useMembers = (conversationId) =>
         queryKey: ['chat', 'members', conversationId],
         queryFn: () => api.getMembers(conversationId).then((r) => r.data),
         enabled: !!conversationId,
+        // staleTime вместо 0 — участники не меняются от каждого сообщения.
+        staleTime: 30 * 1000,
     });
