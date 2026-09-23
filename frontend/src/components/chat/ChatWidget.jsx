@@ -22,7 +22,7 @@ const TABS = [
     { key: 'all', label: 'Все чаты', icon: MessageCircle },
     { key: 'channels', label: 'Каналы', icon: Hash },
     { key: 'chats', label: 'Чаты', icon: MessageSquare },
-    { key: 'settings', label: 'Настройки', icon: SettingsIcon },
+    { key: 'settings', label: 'Персонализация', icon: SettingsIcon },
 ];
 
 const Badge = ({ count, size = 'md' }) => {
@@ -65,6 +65,16 @@ const ChatWidget = () => {
         window.addEventListener('chat:toggle', handler);
         return () => window.removeEventListener('chat:toggle', handler);
     }, [setIsOpen]);
+
+    // Открыть чат сразу на вкладке «Настройки»
+    useEffect(() => {
+        const handler = () => {
+            setIsOpen(true);
+            setTab('settings');
+        };
+        window.addEventListener('chat:open-settings', handler);
+        return () => window.removeEventListener('chat:open-settings', handler);
+    }, [setIsOpen, setTab]);
 
     if (!has('chat.use')) return null;
 

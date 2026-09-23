@@ -61,6 +61,17 @@ const updateCallSchema = Joi.object({
     victims_rescued_data: Joi.array().items(personRescued).default([]),
     victims_evacuated_total: intField,
     victims_evacuated_children: intField,
+    dtp_circumstances: Joi.string().allow('', null),
+    dtp_vehicle_marks: Joi.array()
+        .items(Joi.object({ mark: Joi.string().allow('', null) }))
+        .default([]),
+    dtp_work_description: Joi.string().allow('', null),
+    involved_staff: Joi.array()
+        .items(Joi.object({
+            department_id: Joi.string().uuid().allow('', null),
+            count: intField.default(0),
+        }))
+        .default([]),
 }).min(1);
 
 const setStatusSchema = Joi.object({

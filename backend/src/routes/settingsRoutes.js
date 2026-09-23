@@ -7,6 +7,8 @@ const {
     getSettings,
     getPublicSettings,
     getUploadDisk,
+    getSoduSettings,
+    updateSoduSettings,
     updateSettings,
     sendBroadcast,
     getLatestBroadcast,
@@ -32,6 +34,11 @@ router.get(
 );
 router.get('/files', requirePermission('settings.files'), listFiles);
 router.post('/files/delete', requirePermission('settings.files'), deleteFiles);
+
+// Настройки СОДУ (глобальные). Чтение — всем авторизованным,
+// изменение — только по праву sodu.settings.
+router.get('/sodu', getSoduSettings);
+router.put('/sodu', requirePermission('sodu.settings'), updateSoduSettings);
 
 // Системные настройки — только developer
 router.use(requireDeveloper);

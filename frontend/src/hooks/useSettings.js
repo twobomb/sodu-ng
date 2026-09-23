@@ -4,6 +4,8 @@ import {
     updateSettings,
     getPublicSettings,
     getDiskInfo,
+    getSoduSettings,
+    updateSoduSettings,
     sendBroadcast,
     getAdminFiles,
     getFolderSize,
@@ -59,6 +61,25 @@ export const useDiskInfo = () =>
         queryFn: () => getDiskInfo().then((r) => r.data),
         staleTime: 5 * 60 * 1000,
     });
+
+// Настройки СОДУ — глобальные, применяются ко всем пользователям
+export const useSoduSettings = () =>
+    useQuery({
+        queryKey: ['soduSettings'],
+        queryFn: () => getSoduSettings().then((r) => r.data),
+        staleTime: 15 * 1000,
+    });
+
+export const useUpdateSoduSettings = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: updateSoduSettings,
+        onSuccess: () => {
+            qc.invalidateQueries(['soduSettings']);
+            qc.invalidateQueries(['settings']);
+        },
+    });
+};
 
 /**
  * Живой broadcast — данные приходят ТОЛЬКО через socket.

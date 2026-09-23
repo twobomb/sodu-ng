@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import SearchableSelect from '@/components/ui/searchable-select';
 import UnitStatusDialog from '@/components/units/UnitStatusDialog';
 import AddressAutocomplete from '@/components/calls/AddressAutocomplete';
+import { useSoduSettings } from '../../hooks/useSettings';
+import { buildMapUrl } from '../../lib/mapLink';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import VictimsGroup from '../../components/calls/VictimsGroup';
 import {
@@ -34,7 +36,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search, Map as MapIcon } from 'lucide-react';
 
 // Поля-даты вызова (в БД — timestamptz)
 const DATETIME_FIELDS = [
@@ -85,6 +87,10 @@ const EMPTY_FORM = {
     victims_injured_total: '', victims_injured_children: '', victims_injured_data: [],
     victims_rescued_total: '', victims_rescued_children: '', victims_rescued_data: [],
     victims_evacuated_total: '', victims_evacuated_children: '',
+    dtp_circumstances: '',
+    dtp_vehicle_marks: [],
+    dtp_work_description: '',
+    involved_staff: [],
 };
 
 // Перевод данных с сервера (ISO) в значения формы (datetime-local / строки)
@@ -105,6 +111,10 @@ const fromServer = (call) => {
     f.not_accounted_reason_id = call?.not_accounted_reason_id || '';
     for (const k of VICTIM_NUMBER_FIELDS) f[k] = call?.[k] ?? '';
     for (const k of VICTIM_DATA_FIELDS) f[k] = Array.isArray(call?.[k]) ? call[k] : [];
+    f.dtp_circumstances = call?.dtp_circumstances || '';
+    f.dtp_vehicle_marks = Array.isArray(call?.dtp_vehicle_marks) ? call.dtp_vehicle_marks : [];
+    f.dtp_work_description = call?.dtp_work_description || '';
+    f.involved_staff = Array.isArray(call?.involved_staff) ? call.involved_staff : [];
     return f;
 };
 
@@ -167,6 +177,9 @@ const VICTIM_GROUPS = [
         ],
     },
 ];
+
+// Марки автомобилей участников ДТП (динамический список, как в «Пострадавших»)
+const DTP_VEHICLE_FIELDS = [{ key: 'mark', label: 'Марка / номер автомобиля' }];
 
 // Кастомный выпадающий список для длинных формулировок: перенос строк + разделители
 const LongOptionsSelect = ({ value, options, onChange, disabled, placeholder = 'Выберите...' }) => {
@@ -351,6 +364,18 @@ const CallDetail = () => {
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [dirty, setDirty] = useState(false);
     const [formError, setFormError] = useState('');
+
+    // Настройки СОДУ (глобальные): карта и автодополнение адреса
+    const { data: soduSettings } = useSoduSettings();
+    const enableAddressAutocomplete =
+        soduSettings?.enable_address_autocomplete !== false;
+    const showMapButton =
+        !!soduSettings?.show_map_button &&
+        !!formData.address &&
+        !!soduSettings?.map_link_template;
+    const mapUrl = showMapButton
+        ? buildMapUrl(soduSettings.map_link_template, formData.address)
+        : null;
     const [flashId, setFlashId] = useState(null);
 
     // Подсветка новых событий (добавленных этим пользователем или другими)
@@ -483,6 +508,13 @@ const CallDetail = () => {
             payload[k] = formData[k] === '' || formData[k] === null ? null : Number(formData[k]);
         }
         for (const k of VICTIM_DATA_FIELDS) payload[k] = formData[k] || [];
+        payload.dtp_circumstances = formData.dtp_circumstances || '';
+        payload.dtp_vehicle_marks = formData.dtp_vehicle_marks || [];
+        payload.dtp_work_description = formData.dtp_work_description || '';
+        payload.involved_staff = (formData.involved_staff || []).map((row) => ({
+            department_id: row.department_id || null,
+            count: row.count === '' || row.count == null ? 0 : Number(row.count) || 0,
+        }));
 
         updateCall.mutate(
             { id, data: payload },
@@ -662,6 +694,7 @@ const CallDetail = () => {
     const [eventAt, setEventAt] = useState(nowLocalInput());
     const [eventText, setEventText] = useState('');
     const [eventToDelete, setEventToDelete] = useState(null);
+    const [pendingStaffDelete, setPendingStaffDelete] = useState(null);
 
     const openEventDialog = () => {
         setEventAt(nowLocalInput());
@@ -725,10 +758,35 @@ const CallDetail = () => {
     }
 
     const isFire = formData.type === 'Пожар';
+    const isDtp = formData.type === 'ДТП';
 
     const evacTotal = Number(formData.victims_evacuated_total);
     const evacChildren = Number(formData.victims_evacuated_children);
     const evacInvalid = !isNaN(evacTotal) && !isNaN(evacChildren) && evacTotal > 0 && evacChildren > evacTotal;
+// ---------- Привлекаемый личный состав ----------
+    const staffRows = Array.isArray(formData.involved_staff) ? formData.involved_staff : [];
+    const deptNameById = {};
+    for (const d of allDepts) deptNameById[d.id] = d.name || d.full_name || d.id;
+    const addedStaffDeptIds = new Set(staffRows.map((r) => r.department_id).filter(Boolean));
+    // Добавлению доступны только подразделения, к которым есть доступ у пользователя
+    const staffAddableDepts = flatAccessDepts.filter((d) => !addedStaffDeptIds.has(d.id));
+
+    const setStaffCount = (deptId, val) => {
+        const valNum = val === '' || val == null ? 0 : Number(val);
+        setField('involved_staff', staffRows.map((r) =>
+            r.department_id === deptId ? { ...r, count: isNaN(valNum) ? 0 : valNum } : r
+        ));
+    };
+    const addStaffDept = (deptId) => {
+        if (!deptId || addedStaffDeptIds.has(deptId)) return;
+        setField('involved_staff', [...staffRows, { department_id: deptId, count: 0 }]);
+    };
+    const confirmRemoveStaffDept = () => {
+        if (!pendingStaffDelete) return;
+        setField('involved_staff', staffRows.filter((r) => r.department_id !== pendingStaffDelete));
+        setPendingStaffDelete(null);
+    };
+    const totalStaff = staffRows.reduce((sum, r) => sum + (Number(r.count) || 0), 0);
 
     return (
         <div className="space-y-4">
@@ -844,13 +902,29 @@ const CallDetail = () => {
                             </div>
                             <div className="space-y-2 sm:col-span-2">
                                 <Label htmlFor="address">Адрес места происшествия</Label>
-                                <AddressAutocomplete
-                                    id="address"
-                                    placeholder="Адрес"
-                                    value={formData.address}
-                                    onChange={(v) => setField('address', v)}
-                                    disabled={!canEdit}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <AddressAutocomplete
+                                            id="address"
+                                            placeholder="Адрес"
+                                            value={formData.address}
+                                            onChange={(v) => setField('address', v)}
+                                            disabled={!canEdit}
+                                            enabled={enableAddressAutocomplete}
+                                        />
+                                    </div>
+                                    {showMapButton && (
+                                        <a
+                                            href={mapUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Открыть карту"
+                                            className="h-9 w-9 shrink-0 rounded-lg border border-slate-200 flex items-center justify-center text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors"
+                                        >
+                                            <MapIcon className="h-4 w-4" />
+                                        </a>
+                                    )}
+                                </div>
                             </div>
                             <DateTimeField id="dispatch_at" label="Время высылки сил и средств" value={formData.dispatch_at} onChange={(v) => setField('dispatch_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('dispatch_at')} />
                             <DateTimeField id="arrival_at" label="Время прибытия" value={formData.arrival_at} onChange={(v) => setField('arrival_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('arrival_at')} />
@@ -858,6 +932,62 @@ const CallDetail = () => {
                         <div className="space-y-2 mt-3">
                             <Label htmlFor="description">Описание</Label>
                             <Textarea id="description" rows={4} placeholder="Описание вызова..." value={formData.description} onChange={(e) => setField('description', e.target.value)} disabled={!canEdit} className="rounded-lg" />
+                        </div>
+                    </div>
+{/* Привлекаемый личный состав */}
+                    <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                        <h2 className="text-base font-semibold text-slate-700 mb-3">Привлекаемый личный состав</h2>
+                        <div className="space-y-2">
+                            {staffRows.length === 0 && !canEdit && (
+                                <p className="text-sm text-slate-400">Личный состав не привлекался</p>
+                            )}
+                            {staffRows.map((row) => (
+                                <div key={row.department_id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                                    <div className="flex-1 min-w-0">
+                                        <span className="text-sm text-slate-700 truncate block">
+                                            {deptNameById[row.department_id] || 'Без наименования'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <Label className="text-xs text-slate-500 whitespace-nowrap">л/с, чел.</Label>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            value={row.count ?? 0}
+                                            disabled={!canEdit}
+                                            onChange={(e) => setStaffCount(row.department_id, e.target.value)}
+                                            className="w-24 rounded-lg"
+                                        />
+                                        {canEdit && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setPendingStaffDelete(row.department_id)}
+                                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                                                title="Удалить"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {canEdit && staffAddableDepts.length > 0 && (
+                                <SearchableSelect
+                                    options={staffAddableDepts.map((d) => ({ value: d.id, label: d.name, search: `${d.name} ${d.full_name || ''}`.toLowerCase() }))}
+                                    value=""
+                                    onChange={addStaffDept}
+                                    placeholder="Добавить подразделение..."
+                                    emptyText="Нет доступных подразделений"
+                                />
+                            )}
+                            {canEdit && staffAddableDepts.length === 0 && staffRows.length > 0 && (
+                                <p className="text-xs text-slate-400">Нет доступных для добавления подразделений</p>
+                            )}
+                            <div className="flex items-center justify-between rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 mt-1">
+                                <span className="text-sm font-medium text-slate-700">Общее количество привлеченного л/с</span>
+                                <span className="text-base font-bold text-orange-700">{totalStaff} чел.</span>
+                            </div>
                         </div>
                     </div>
 
@@ -969,9 +1099,36 @@ const CallDetail = () => {
                             )}
                         </div>
                     )}
-
+{/* Характеристика ДТП */}
+                    {isDtp && (
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                            <h2 className="text-base font-semibold text-slate-700 mb-3">Характеристика ДТП</h2>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="dtp_circumstances">Обстоятельства происшествия</Label>
+                                    <Textarea id="dtp_circumstances" rows={3} placeholder="Обстоятельства происшествия..." value={formData.dtp_circumstances || ''} disabled={!canEdit} onChange={(e) => setField('dtp_circumstances', e.target.value)} className="rounded-lg" />
+                                </div>
+                                <VictimsGroup
+                                    title="Марки автомобилей участников ДТП"
+                                    dataKey="dtp_vehicle_marks"
+                                    values={formData}
+                                    data={formData.dtp_vehicle_marks || []}
+                                    disabled={!canEdit}
+                                    inline
+                                    onChangeValue={setField}
+                                    onChangeData={(k, arr) => setField(k, arr)}
+                                    fields={DTP_VEHICLE_FIELDS}
+                                    shadow="#ffd9d9"
+                                />
+                                <div className="space-y-2">
+                                    <Label htmlFor="dtp_work_description">Описание выполненных работ на месте происшествия</Label>
+                                    <Textarea id="dtp_work_description" rows={3} placeholder="Описание выполненных работ..." value={formData.dtp_work_description || ''} disabled={!canEdit} onChange={(e) => setField('dtp_work_description', e.target.value)} className="rounded-lg" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {/* Пострадавшие */}
-                    {isFire && (
+                    {(isFire || isDtp) && (
                         <div id="victims-block" className={`rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4 transition-all ${flashId === 'victims-block' ? 'ring-2 ring-red-400 animate-pulse' : ''}`}>
                             <h2 className="text-base font-semibold text-slate-700 mb-3">Пострадавшие</h2>
                             <div className="space-y-4">
@@ -1008,6 +1165,7 @@ const CallDetail = () => {
                             </div>
                         </div>
                     )}
+
                 </div>
 
                 {/* ---------- Правая колонка: ход событий (фиксированная) ---------- */}
@@ -1041,6 +1199,27 @@ const CallDetail = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Подтверждение удаления подразделения из личного состава */}
+            <AlertDialog open={!!pendingStaffDelete} onOpenChange={(o) => { if (!o) setPendingStaffDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удаление подразделения</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Вы уверены, что хотите удалить подразделение «{pendingStaffDelete ? (deptNameById[pendingStaffDelete] || 'Без наименования') : ''}» из привлекаемого личного состава? Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveStaffDept}
+                            className="bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Диалог добавления события */}
             <Dialog open={eventOpen} onOpenChange={setEventOpen}>

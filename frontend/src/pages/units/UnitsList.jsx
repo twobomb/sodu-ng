@@ -10,6 +10,7 @@ import {
     useCreateUnit,
     useUpdateUnit,
     useReorderUnits,
+    useAvailableCalls,
 } from '../../hooks/useUnits';
 import { useDepartments } from '../../hooks/useDepartments';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -23,13 +24,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -57,6 +51,7 @@ import UnitForm from '../../components/UnitForm';
 import SearchableSelect from '@/components/ui/searchable-select';
 import UnitMetricsHistoryDialog from '../../components/units/UnitMetricsHistoryDialog';
 import UnitMetricsEditDialog from '../../components/units/UnitMetricsEditDialog';
+import UnitStatusDialog from '../../components/units/UnitStatusDialog';
 
 const asArray = (v) => {
     if (Array.isArray(v)) return v;
@@ -106,6 +101,7 @@ const UnitsList = () => {
     const { data: deptData, isLoading: deptsLoading } = useDepartments();
     const { data: statuses } = useUnitStatuses();
     const { data: typesData } = useUnitTypes();
+    const { data: availableCalls } = useAvailableCalls();
 
     const units = asArray(data);
     const departments = asArray(deptData);
@@ -137,6 +133,8 @@ const UnitsList = () => {
     const [formError, setFormError] = useState('');
     const [metricsUnit, setMetricsUnit] = useState(null);
     const [metricsEditUnit, setMetricsEditUnit] = useState(null);
+    const [statusUnit, setStatusUnit] = useState(null);
+    const [statusError, setStatusError] = useState('');
 
     // Опции для SearchableSelect подразделений
     const deptOptions = useMemo(
@@ -250,12 +248,21 @@ const UnitsList = () => {
         }
     };
 
-    const handleStatusChange = (unit, statusId) => {
+    const handleStatusSubmit = (unit, payload) => {
+        setStatusError('');
         changeStatus.mutate(
-            { id: unit.id, data: { status_id: statusId } },
+            {
+                id: unit.id,
+                data: {
+                    status_id: payload.status_id,
+                    call_id: payload.call_id,
+                    add_event: payload.add_event,
+                },
+            },
             {
                 onError: (err) =>
-                    alert(err.response?.data?.error || 'Ошибка смены статуса'),
+                    setStatusError(err.response?.data?.error || 'Ошибка смены статуса'),
+                onSuccess: () => setStatusUnit(null),
             }
         );
     };
@@ -435,65 +442,30 @@ const UnitsList = () => {
                                                 </div>
                                                 <div className="flex items-center gap-1 flex-shrink-0">
 {unit.status_id ? (
-                                                        <DropdownMenu modal={false}>
-                                                            <DropdownMenuTrigger
-                                                                asChild
-                                                                disabled={!canChangeStatus}
-                                                            >
-                                                                <button
-                                                                    type="button"
-                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white transition-opacity ${
-                                                                        canChangeStatus
-                                                                            ? 'hover:opacity-90 cursor-pointer'
-                                                                            : 'cursor-default'
-                                                                    }`}
-                                                                    style={{ backgroundColor: unit.status_color }}
-                                                                    title={
-                                                                        canChangeStatus
-                                                                            ? 'Нажмите, чтобы сменить статус'
-                                                                            : unit.status_name
-                                                                    }
-                                                                >
-                                                                    <span>{unit.status_short_name}</span>
-                                                                    {canChangeStatus && (
-                                                                        <MousePointer2 className="h-3 w-3 opacity-70" />
-                                                                    )}
-                                                                </button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent
-                                                                align="start"
-                                                                sideOffset={4}
-                                                                collisionPadding={16}
-                                                                className="min-w-[220px] z-[100]"
-                                                            >
-                                                                <DropdownMenuLabel>Сменить статус</DropdownMenuLabel>
-                                                                {statusList.map((s) => {
-                                                                    const isCurrent = s.id === unit.status_id;
-                                                                    return (
-                                                                        <DropdownMenuItem
-                                                                            key={s.id}
-                                                                            disabled={isCurrent}
-                                                                            onClick={() =>
-                                                                                !isCurrent && handleStatusChange(unit, s.id)
-                                                                            }
-                                                                        >
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span
-                                                                                    className="h-3 w-3 rounded-full flex-shrink-0"
-                                                                                    style={{ backgroundColor: s.color }}
-                                                                                />
-                                                                                <span className="flex-1">{s.name}</span>
-                                                                                {isCurrent && (
-                                                                                    <span className="text-[10px] text-slate-400">
-                                                                                        текущий
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                        </DropdownMenuItem>
-                                                                    );
-                                                                })}
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
+                                                        <button
+                                                            type="button"
+                                                            disabled={!canChangeStatus}
+                                                            onClick={() => {
+                                                                setStatusError('');
+                                                                setStatusUnit(unit);
+                                                            }}
+                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-white transition-opacity ${
+                                                                canChangeStatus
+                                                                    ? 'hover:opacity-90 cursor-pointer'
+                                                                    : 'cursor-default'
+                                                            }`}
+                                                            style={{ backgroundColor: unit.status_color }}
+                                                            title={
+                                                                canChangeStatus
+                                                                    ? 'Нажмите, чтобы сменить статус'
+                                                                    : unit.status_name
+                                                            }
+                                                        >
+                                                            <span>{unit.status_short_name}</span>
+                                                            {canChangeStatus && (
+                                                                <MousePointer2 className="h-3 w-3 opacity-70" />
+                                                            )}
+                                                        </button>
                                                     ) : (
                                                         <span className="text-slate-400 text-sm">—</span>
                                                     )}
@@ -604,6 +576,24 @@ const UnitsList = () => {
                     if (!open) setMetricsEditUnit(null);
                 }}
                 unit={metricsEditUnit}
+            />
+
+            <UnitStatusDialog
+                open={!!statusUnit}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setStatusUnit(null);
+                        setStatusError('');
+                    }
+                }}
+                unitName={statusUnit?.name}
+                statuses={statusList}
+                calls={Array.isArray(availableCalls) ? availableCalls : []}
+                currentStatusId={statusUnit?.status_id}
+                defaultCallId={statusUnit?.call_id || ''}
+                onSubmit={(payload) => handleStatusSubmit(statusUnit, payload)}
+                pending={changeStatus.isPending}
+                error={statusError || undefined}
             />
         </div>
     );

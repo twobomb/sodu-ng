@@ -154,13 +154,18 @@ export const useChangeUnitStatus = () => {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, data }) => api.changeUnitStatus(id, data),
-        onSuccess: () => {
+        onSuccess: (_, variables) => {
             qc.invalidateQueries(['units']);
             qc.invalidateQueries(['units-grid']);
             qc.invalidateQueries(['unit-history']);
             qc.invalidateQueries(['units-history-global']);
             qc.invalidateQueries(['units-calls-available']);
             qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'call' || q.queryKey[0] === 'calls' });
+            // Инвалидируем конкретную карточку вызова, если техника привязана к вызову
+            const callId = variables?.data?.call_id;
+            if (callId) {
+                qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'call' && q.queryKey[1] === callId });
+            }
         },
     });
 };

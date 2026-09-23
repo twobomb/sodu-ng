@@ -45,6 +45,8 @@ const SELECT_CALL_BASE = `
   c.victims_injured_total, c.victims_injured_children, c.victims_injured_data,
   c.victims_rescued_total, c.victims_rescued_children, c.victims_rescued_data,
   c.victims_evacuated_total, c.victims_evacuated_children,
+  c.dtp_circumstances, c.dtp_vehicle_marks, c.dtp_work_description,
+  c.involved_staff,
   u.username AS creator_username,
   c.number, c.call_code, c.color,
   d.name AS department_name,
@@ -366,8 +368,11 @@ const UPDATE_COLUMNS = [
     'victims_rescued_total',
     'victims_rescued_children',
     'victims_rescued_data',
-    'victims_evacuated_total',
-    'victims_evacuated_children',
+    'victims_evacuated_total', 'victims_evacuated_children',
+    'dtp_circumstances',
+    'dtp_vehicle_marks',
+    'dtp_work_description',
+    'involved_staff',
 ];
 
 const updateCall = async (id, data) => {
@@ -379,8 +384,12 @@ const updateCall = async (id, data) => {
         if (data[col] !== undefined) {
             fields.push(`${col} = $${i++}`);
             let val = data[col] === '' ? null : data[col];
-            // jsonb-колонки данных пострадавших сериализуем в JSON строку
-            if (col.endsWith('_data')) {
+            // jsonb-колонки сериализуем в JSON строку
+            if (
+                col.endsWith('_data') ||
+                col === 'dtp_vehicle_marks' ||
+                col === 'involved_staff'
+            ) {
                 val = val == null ? null : JSON.stringify(val);
             }
             params.push(val);

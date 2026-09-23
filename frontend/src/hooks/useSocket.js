@@ -59,6 +59,7 @@ const DOMAIN_PREDICATES = {
             'unit-metrics-history',
         ].includes(q.queryKey[0]),
     settings: (q) => q.queryKey[0] === 'settings' || q.queryKey[0] === 'publicSettings',
+    sodu: (q) => q.queryKey[0] === 'soduSettings',
 };
 
 

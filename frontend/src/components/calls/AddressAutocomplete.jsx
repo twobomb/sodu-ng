@@ -14,6 +14,7 @@ export const AddressAutocomplete = ({
                                         value = '',
                                         onChange,
                                         disabled = false,
+                                        enabled = true,
                                         placeholder = 'Адрес',
                                         limit = 8,
                                     }) => {
@@ -83,15 +84,17 @@ export const AddressAutocomplete = ({
 
     const handleChange = (q) => {
         const newValue = q || '';
+        if (onChange) onChange(newValue);
+        // Автодополнение выключено (глобальная настройка СОДУ) — просто поле ввода
+        if (!enabled) return;
         setOpen(true);
         setSelectedIdx(-1);
-        if (onChange) onChange(newValue);
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => fetchOptions(newValue), DEBOUNCE_MS);
     };
 
     const handleFocus = () => {
-        if (disabled) return;
+        if (disabled || !enabled) return;
         setOpen(true);
     };
 

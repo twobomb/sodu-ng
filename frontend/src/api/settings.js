@@ -4,6 +4,9 @@ export const getSettings = () => apiClient.get('/settings');
 export const updateSettings = (data) => apiClient.put('/settings', data);
 export const getPublicSettings = () => apiClient.get('/settings/public');
 export const getDiskInfo = () => apiClient.get('/settings/disk');
+export const getSoduSettings = () => apiClient.get('/settings/sodu');
+export const updateSoduSettings = (data) =>
+    apiClient.put('/settings/sodu', data);
 
 export const sendBroadcast = (data) =>
     apiClient.post('/settings/broadcast', data);

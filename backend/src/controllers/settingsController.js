@@ -206,10 +206,89 @@ const sendBroadcast = asyncHandler(async (req, res) => {
 });
 
 
+// ============================================================
+// Настройки СОДУ (глобальные, применяются ко всем пользователям)
+// ============================================================
+const SODU_SETTING_DEFAULTS = {
+    map_link_template: 'https://yandex.ru/maps/?&text=Луганская Народная Республика,$ADDRESS&z=14',
+    show_map_button: true,
+    enable_address_autocomplete: true,
+};
+
+const soduSettingsSchema = Joi.object({
+    map_link_template: Joi.string().allow('').max(1000),
+    show_map_button: Joi.boolean(),
+    enable_address_autocomplete: Joi.boolean(),
+});
+
+// GET /api/settings/sodu — доступно всем авторизованным (нужно для UI всех юзеров)
+const getSoduSettings = asyncHandler(async (req, res) => {
+    try {
+        const all = await settingsService.getAll();
+        const out = {};
+
+        for (const key of Object.keys(SODU_SETTING_DEFAULTS)) {
+            const v = all[key];
+            if (key === 'map_link_template') {
+                out[key] =
+                    typeof v === 'string' && v !== ''
+                        ? v
+                        : SODU_SETTING_DEFAULTS[key];
+            } else {
+                // show_map_button / enable_address_autocomplete — булевы
+                out[key] =
+                    v === undefined ? SODU_SETTING_DEFAULTS[key] : !!v;
+            }
+        }
+
+        res.json(out);
+    } catch (err) {
+        logger.error('Ошибка получения настроек СОДУ: ' + err.message, {
+            stack: err.stack,
+        });
+        res.status(500).json({ error: 'Ошибка получения настроек СОДУ' });
+    }
+});
+
+// PUT /api/settings/sodu — только по праву sodu.settings
+const updateSoduSettings = asyncHandler(async (req, res) => {
+    const { error, value } = soduSettingsSchema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const keys = Object.keys(SODU_SETTING_DEFAULTS);
+    try {
+        const updates = {};
+        for (const key of keys) {
+            if (value[key] !== undefined) {
+                await settingsService.set(key, value[key], req.user.id);
+                updates[key] = value[key];
+            }
+        }
+
+        const io = req.app.get('io');
+        if (io) io.emit('force_refresh', { domains: ['sodu'] });
+
+        res.json(updates);
+    } catch (err) {
+        logger.error('Ошибка обновления настроек СОДУ: ' + err.message, {
+            stack: err.stack,
+            body: req.body,
+            user: req.user?.id,
+        });
+        res.status(500).json({
+            error: err.message || 'Ошибка обновления настроек СОДУ',
+        });
+    }
+});
+
 module.exports = {
     getSettings,
     getPublicSettings,
     getUploadDisk,
+    getSoduSettings,
+    updateSoduSettings,
     updateSettings,
     sendBroadcast,
 };

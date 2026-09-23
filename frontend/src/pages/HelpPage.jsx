@@ -165,15 +165,7 @@ const HelpPage = () => {
                             </span>
                         ) : (
                             <span className="inline-flex flex-wrap items-center gap-1">
-                                Ищет по названиям, текстам и правам доступа. Быстрый переход —
-                                <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-sans text-[10px] text-slate-500 dark:border-white/15 dark:bg-white/10">
-                                    Ctrl
-                                </kbd>
-                                +
-                                <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-sans text-[10px] text-slate-500 dark:border-white/15 dark:bg-white/10">
-                                    K
-                                </kbd>
-                                или «/».
+                                Ищет по названиям, текстам и правам доступа. 
                             </span>
                         )}
                         {blockedIds.size > 0 && (
@@ -245,7 +237,7 @@ const HelpPage = () => {
                                 Не нашли ответ?
                             </CardTitle>
                             <CardDescription>
-                                Напишите разработчику в чат или отправьте описание проблемы —
+                                Напишите разработчику в чат или отправьте описание проблемы или предложения —
                                 сообщение уйдёт в личный чат, ответ придёт туда же.
                             </CardDescription>
                         </CardHeader>
@@ -255,7 +247,7 @@ const HelpPage = () => {
                                 className="gap-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
                             >
                                 <Bug className="h-4 w-4" />
-                                Сообщить об ошибке
+                                Сообщить 
                             </Button>
                             {has('chat.use') && (
                                 <Button
@@ -272,13 +264,6 @@ const HelpPage = () => {
                         </CardContent>
                     </Card>
 
-                    <p className="flex items-center gap-1.5 pb-4 text-xs text-slate-400">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Текст справки настраивается в файле
-                        <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] text-slate-500 dark:bg-white/10">
-                            frontend/src/lib/helpContent.js
-                        </code>
-                    </p>
                 </div>
             </div>
 
