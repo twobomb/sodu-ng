@@ -796,7 +796,7 @@ const LineNotesPage = () => {
                 federal_district: exportDistrict.trim(),
                 mchs_org_name: exportOrg.trim(),
             });
-            const { base64, filename, ignored } = res.data;
+            const { base64, ignored } = res.data;
 
             // Декодируем base64 и скачиваем файл
             const binary = atob(base64);
@@ -808,7 +808,8 @@ const LineNotesPage = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = filename || `Строевая_${dateStr}.xls`;
+            
+            a.download = `Строевая ${toDotDate(dateStr)}.xls`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

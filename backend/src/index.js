@@ -30,6 +30,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const lineNoteRoutes = require('./routes/lineNoteRoutes');
 const departmentTypeRoutes = require('./routes/departmentTypeRoutes');
 const garrisonRoutes = require('./routes/garrisonRoutes');
+const loginHistoryRoutes = require('./routes/loginHistoryRoutes');
 
 const { verifyToken } = require('./utils/jwt');
 const { touchSession } = require('./services/authService');
@@ -71,6 +72,7 @@ app.use('/api/chat', messageRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/line-notes', lineNoteRoutes);
+app.use('/api/login-history', loginHistoryRoutes);
 
 // Кэшированная проверка БД — реальный запрос уходит в Postgres не чаще, чем раз в 10 сек,
 // независимо от числа клиентов.

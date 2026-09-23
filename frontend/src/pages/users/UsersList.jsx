@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     useUsers,
     useCreateUser,
@@ -40,6 +41,7 @@ import {
     Ban,
     CheckCircle2,
     Lock,
+    History,
 } from 'lucide-react';
 import UserForm from '../../components/UserForm';
 
@@ -49,6 +51,7 @@ import { useAuth } from '../../context/AuthContext';
 
 
 const UsersList = () => {
+    const navigate = useNavigate();
     const { has } = usePermissions();
     const { data, isLoading, error } = useUsers();
     const { data: deptData } = useDepartments();
@@ -409,6 +412,24 @@ const UsersList = () => {
                                                             <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     )}
+
+                                                    {has('users.login_history') ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                navigate(
+                                                                    `/login-history?userId=${user.id}&name=${encodeURIComponent(
+                                                                        user.username
+                                                                    )}`
+                                                                )
+                                                            }
+                                                            className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700"
+                                                            title="История входов"
+                                                        >
+                                                            <History className="h-4 w-4" />
+                                                        </Button>
+                                                    ) : null}
                                                 </>
                                             );
                                         })()}

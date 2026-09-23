@@ -21,6 +21,7 @@ import {
     Moon,
     Sun,
     FileText,
+    History,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -42,7 +43,7 @@ const NavBar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
-    const { has } = usePermissions();
+    const { has, isDeveloper } = usePermissions();
     const unread = useChatUnreadCounts();
     const { data: onlineUsers = [] } = useOnlineUsers();
     const onlineCount = Array.isArray(onlineUsers) ? onlineUsers.length : 0;
@@ -54,7 +55,7 @@ const NavBar = () => {
         location.pathname === path || location.pathname.startsWith(path + '/');
 
     const isUsersSection =
-        isActive('/users') || isActive('/online') || isActive('/roles');
+        isActive('/users') || isActive('/online') || isActive('/roles') || isActive('/login-history');
 
     // Пункт "Дополнительно" активен на страницах разделов
     const isAdditionalSection =
@@ -64,7 +65,8 @@ const NavBar = () => {
         isActive('/department-types') ||
         isActive('/garrisons') ||
         isActive('/dictionaries') ||
-        isActive('/unit-types');
+        isActive('/unit-types') ||
+        isActive('/settings');
 
     // Пункт "Мониторинг" активен на страницах мониторинга
     const isMonitoringSection =
@@ -172,11 +174,14 @@ const NavBar = () => {
 
                         {(has('users.view') ||
                             has('users.view_online') ||
+                            has('users.login_history') ||
                             has('roles.view') ||
                             has('departments.view') ||
                             has('units.view') ||
                             has('calls.view') ||
-                            has('dictionaries.manage')) && (
+                            has('dictionaries.manage') ||
+                            isDeveloper ||
+                            has('settings.files')) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -263,6 +268,28 @@ const NavBar = () => {
                                                     Типы техники
                                                 </DropdownMenuItem>
                                             )}
+                                        </>
+                                    )}
+                                    {(isDeveloper || has('settings.files')) && (
+                                        <>
+                                            <DropdownMenuLabel>Настройки</DropdownMenuLabel>
+                                            <DropdownMenuItem
+                                                icon={SettingsIcon}
+                                                onClick={() => navigate('/settings')}
+                                            >
+                                                Настройки
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                    {has('users.login_history') && (
+                                        <>
+                                            <DropdownMenuLabel>Безопасность</DropdownMenuLabel>
+                                            <DropdownMenuItem
+                                                icon={History}
+                                                onClick={() => navigate('/login-history')}
+                                            >
+                                                История входов
+                                            </DropdownMenuItem>
                                         </>
                                     )}
                                 </DropdownMenuContent>
@@ -368,17 +395,6 @@ const NavBar = () => {
                             <LogOut className="h-4 w-4 mr-2" />
                             Выйти
                         </Button>
-
-                        {user?.role === 'developer' && (
-                            <Link to="/settings" title="Конфигурация системы">
-                                <Button
-                                    variant="outline"
-                                    className="rounded-lg border-slate-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200"
-                                >
-                                    <SettingsIcon className="h-4 w-4" />
-                                </Button>
-                            </Link>
-                        )}
                     </div>
                 </div>
             </div>

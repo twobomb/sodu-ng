@@ -73,6 +73,7 @@ const PERMISSIONS_CATALOG = [
             { key: 'users.update', name: 'Редактирование', description: 'Изменять пользователей' },
             { key: 'users.delete', name: 'Удаление', description: 'Удалять пользователей' },
             { key: 'users.block', name: 'Блокировка', description: 'Блокировать и разблокировать' },
+            { key: 'users.login_history', name: 'История входов', description: 'Просматривать историю входов пользователей' },
         ],
     },
     {
@@ -137,6 +138,18 @@ const PERMISSIONS_CATALOG = [
             { key: 'chat.manage_members', name: 'Управление участниками', description: 'Добавлять и удалять участников каналов' },
             { key: 'chat.moderate', name: 'Модерация сообщений', description: 'Удалять любые сообщения, а не только свои' },
             { key: 'chat.manage_profiles', name: 'Управление профилями чата', description: 'Изменять имя и аватар других пользователей в чате' },
+        ],
+    },
+    {
+        key: 'settings',
+        name: 'Настройки',
+        description: 'Системные настройки (вкладка «Системные» доступна разработчику)',
+        permissions: [
+            {
+                key: 'settings.files',
+                name: 'Управление файлами',
+                description: 'Доступ к разделу «Управление файлами» в настройках',
+            },
         ],
     },
 ];

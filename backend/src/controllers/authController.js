@@ -7,6 +7,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
 const settingsService = require('../services/settingsService');
+const loginHistoryService = require('../services/loginHistoryService');
 
 /**
  * POST /api/auth/login
@@ -64,6 +65,21 @@ const login = asyncHandler(async (req, res) => {
 
         // createSession удалит старые сессии и создаст новую
                 const session = await createSession(user.id);
+
+                // ---- Логирование входа (время, пользователь, IP) ----
+                // Ошибка записи истории не должна блокировать сам вход.
+                try {
+                    await loginHistoryService.recordLogin({
+                        userId: user.id,
+                        username: user.username,
+                        ip: req.ip,
+                    });
+                } catch (e) {
+                    logger.error(
+                        `Ошибка записи истории входа ${user.username}: ` + e.message,
+                        { stack: e.stack }
+                    );
+                }
 
         logger.info(`Успешный вход: ${user.username} (${user.role})`, {
             userId: user.id,

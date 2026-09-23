@@ -14,6 +14,7 @@ import CallMonitor from './pages/calls/CallMonitor';
 import UnitsList from './pages/units/UnitsList';
 import UsersList from './pages/users/UsersList';
 import OnlineUsers from './pages/users/OnlineUsers';
+import LoginHistoryPage from './pages/users/LoginHistoryPage';
 import RolesList from './pages/roles/RolesList';
 import DepartmentsList from './pages/departments/DepartmentsList.jsx';
 import DepartmentTypesList from './pages/departments/DepartmentTypesList.jsx';
@@ -25,7 +26,6 @@ import FireNonaccountList from './pages/dictionaries/FireNonaccountList.jsx';
 import SettingsPage from './pages/settings/SettingsPage';
 
 import PermissionRoute from './components/PermissionRoute';
-import DeveloperRoute from './components/DeveloperRoute';
 import HomeRedirect from './components/HomeRedirect';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import UnitTypesList from './components/units/UnitTypesList';
@@ -239,12 +239,16 @@ const router = createBrowserRouter([
                 ),
             },
             {
-                path: 'settings',
+                path: 'login-history',
                 element: (
-                    <DeveloperRoute>
-                        <SettingsPage />
-                    </DeveloperRoute>
+                    <PermissionRoute permission="users.login_history">
+                        <LoginHistoryPage />
+                    </PermissionRoute>
                 ),
+            },
+            {
+                path: 'settings',
+                element: <SettingsPage />,
             },
             {
                 path: 'reports/line-notes',

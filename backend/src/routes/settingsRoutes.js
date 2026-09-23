@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middlewares/auth');
 const { requireDeveloper } = require('../middlewares/developerGuard');
+const { requirePermission } = require('../middlewares/permissionGuard');
 const {
     getSettings,
     getPublicSettings,
@@ -19,20 +20,21 @@ const {
 // Публичный — без авторизации
 router.get('/public', getPublicSettings);
 
-
-// Всё остальное — только developer
+// Всё остальное — только для авторизованных
 router.use(authenticate);
+
+// Управление файлами — доступ по правилу «Управление файлами»
+router.get(
+    '/files/folder-size',
+    requirePermission('settings.files'),
+    getFolderSize
+);
+router.get('/files', requirePermission('settings.files'), listFiles);
+router.post('/files/delete', requirePermission('settings.files'), deleteFiles);
+
+// Системные настройки — только developer
 router.use(requireDeveloper);
 
-// Управление файлами
-router.get('/files/folder-size', getFolderSize);
-router.get('/files', listFiles);
-router.post('/files/delete', deleteFiles);
-
-// Основные настройки
-router.post('/broadcast', sendBroadcast);
-router.get('/', getSettings);
-router.put('/', updateSettings);
 router.post('/broadcast', sendBroadcast);
 router.get('/', getSettings);
 router.put('/', updateSettings);
