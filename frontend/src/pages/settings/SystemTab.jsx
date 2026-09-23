@@ -1,5 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useSettings, useUpdateSettings, useSendBroadcast } from '../../hooks/useSettings';
+import { useState } from 'react';
+import {
+    useSettings,
+    useUpdateSettings,
+    useSendBroadcast,
+    useDiskInfo,
+} from '../../hooks/useSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,15 +23,24 @@ import {
     Megaphone,
     Send,
     FileText,
+    Info,
 } from 'lucide-react';
 
 // Нормализация: массив / {data: ...} / undefined
 const unwrap = (v) => (v && v.data !== undefined ? v.data : v);
 
+// Человекочитаемый размер по объёму в байтах (ГБ / ТБ)
+const formatGb = (bytes) => {
+    const gb = bytes / 1024 ** 3;
+    if (gb >= 1024) return `${(gb / 1024).toFixed(1)} ТБ`;
+    return `${Math.round(gb)} ГБ`;
+};
+
 const SystemTab = () => {
     const { data, isLoading, error } = useSettings();
     const updateSettings = useUpdateSettings();
     const sendBroadcast = useSendBroadcast();
+    const { data: diskInfo } = useDiskInfo();
 
     // ---- ТО ----
     const [maintenance, setMaintenance] = useState(false);
@@ -38,21 +52,34 @@ const SystemTab = () => {
     const [fileMessage, setFileMessage] = useState('');
     const [fileMessageType, setFileMessageType] = useState('info');
 
+    // ---- Общий лимит хранилища (ГБ) ----
+    const [maxTotalGb, setMaxTotalGb] = useState(400);
+    const [totalMessage, setTotalMessage] = useState('');
+    const [totalMessageType, setTotalMessageType] = useState('info');
+
     // ---- Broadcast ----
     const [broadcastTitle, setBroadcastTitle] = useState('');
     const [broadcastText, setBroadcastText] = useState('');
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [broadcastMessageType, setBroadcastMessageType] = useState('info');
 
-    useEffect(() => {
+    // Синхронизация локального состояния с загруженными настройками.
+    // Паттерн «adjusting state when a prop changes» из документации React —
+    // позволяет обойтись без setState внутри useEffect.
+    const [syncedData, setSyncedData] = useState(undefined);
+    if (data !== syncedData) {
+        setSyncedData(data);
         const s = unwrap(data);
         if (s !== undefined) {
             setMaintenance(!!s.maintenance_mode);
             if (s.chat_max_file_size_mb !== undefined) {
                 setMaxFileMb(Number(s.chat_max_file_size_mb) || 20);
             }
+            if (s.chat_max_total_storage_gb !== undefined) {
+                setMaxTotalGb(Number(s.chat_max_total_storage_gb) || 400);
+            }
         }
-    }, [data]);
+    }
 
     const handleSaveMaintenance = () => {
         setMaintenanceMessage('');
@@ -95,6 +122,31 @@ const SystemTab = () => {
                 onError: (err) => {
                     setFileMessageType('error');
                     setFileMessage(err.response?.data?.error || 'Ошибка сохранения');
+                },
+            }
+        );
+    };
+
+    const handleSaveMaxTotal = () => {
+        setTotalMessage('');
+        const value = Number(maxTotalGb);
+        if (!Number.isFinite(value) || value < 1) {
+            setTotalMessageType('error');
+            setTotalMessage('Значение должно быть больше 0 ГБ');
+            return;
+        }
+
+        updateSettings.mutate(
+            { chat_max_total_storage_gb: value },
+            {
+                onSuccess: () => {
+                    setTotalMessageType('success');
+                    setTotalMessage(`Новый общий лимит: ${value} ГБ`);
+                    setTimeout(() => setTotalMessage(''), 3000);
+                },
+                onError: (err) => {
+                    setTotalMessageType('error');
+                    setTotalMessage(err.response?.data?.error || 'Ошибка сохранения');
                 },
             }
         );
@@ -148,6 +200,14 @@ const SystemTab = () => {
             </div>
         );
     }
+
+    // Размер раздела с uploads и рекомендованный лимит (размер − 100 ГБ)
+    const diskTotalGb = diskInfo?.total_bytes
+        ? diskInfo.total_bytes / 1024 ** 3
+        : null;
+    const recommendedGb = diskTotalGb
+        ? Math.max(1, Math.floor(diskTotalGb - 100))
+        : null;
 
     return (
         <div className="space-y-4">
@@ -238,19 +298,22 @@ const SystemTab = () => {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                         <FileText className="h-5 w-5 text-orange-500" />
-                        Максимальный размер файла в чате
+                        Ограничения хранилища файлов
                     </CardTitle>
                     <CardDescription>
-                        Ограничение на один загружаемый файл. Применяется мгновенно.
+                        Лимиты на размер файлов в чате. Применяются мгновенно.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex items-center gap-3">
-                        <Input
-                            type="number"
-                            min={1}
-                            max={500}
-                            value={maxFileMb}
+                <CardContent className="space-y-5">
+                    {/* Лимит одного файла */}
+                    <div className="space-y-2">
+                        <Label>Максимальный размер одного файла</Label>
+                        <div className="flex items-center gap-3">
+                            <Input
+                                type="number"
+                                min={1}
+                                max={500}
+                                value={maxFileMb}
                             onChange={(e) => setMaxFileMb(e.target.value)}
                             className="rounded-lg w-32"
                         />
@@ -288,6 +351,69 @@ const SystemTab = () => {
                             {fileMessage}
                         </div>
                     )}
+                    </div>
+
+                    <div className="border-t border-slate-100" />
+
+                    {/* Общий лимит хранилища */}
+                    <div className="space-y-2">
+                        <Label>Общий максимальный размер загружаемых файлов</Label>
+                        <div className="flex items-center gap-3">
+                            <Input
+                                type="number"
+                                min={1}
+                                value={maxTotalGb}
+                                onChange={(e) => setMaxTotalGb(e.target.value)}
+                                className="rounded-lg w-32"
+                            />
+                            <span className="text-sm text-slate-600">ГБ</span>
+                            <Button
+                                onClick={handleSaveMaxTotal}
+                                disabled={updateSettings.isPending}
+                                className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 ml-auto"
+                            >
+                                {updateSettings.isPending ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Сохранение...
+                                    </>
+                                ) : (
+                                    'Сохранить'
+                                )}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                            Значение по умолчанию: 400 ГБ. Размер уже загруженных файлов
+                            проверяется по базе данных перед каждой загрузкой.
+                        </p>
+
+                        {diskTotalGb != null && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+                                <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-blue-700">
+                                    Размер раздела, на котором хранятся файлы:{' '}
+                                    <b>{formatGb(diskInfo.total_bytes)}</b>. Рекомендуем
+                                    выставлять не более <b>{recommendedGb} ГБ</b>{' '}
+                                    (размер раздела − 100 ГБ).
+                                </p>
+                            </div>
+                        )}
+
+                        {totalMessage && (
+                            <div
+                                className={`text-sm p-3 rounded-lg border flex items-center gap-2 ${
+                                    totalMessageType === 'error'
+                                        ? 'bg-red-50 text-red-600 border-red-200'
+                                        : 'bg-green-50 text-green-700 border-green-200'
+                                }`}
+                            >
+                                {totalMessageType !== 'error' && (
+                                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                                )}
+                                {totalMessage}
+                            </div>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 {/* Техническое обслуживание */}

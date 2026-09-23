@@ -4,10 +4,11 @@ import {
     TabsList,
     TabsTrigger,
 } from '@/components/ui/tabs';
-import { Settings, Wrench, HardDrive } from 'lucide-react';
+import { Settings, Wrench, HardDrive, Volume2 } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 import SystemTab from './SystemTab';
 import FilesTab from './FilesTab';
+import SoundsTab from './SoundsTab';
 
 const SettingsPage = () => {
     const { isDeveloper, has } = usePermissions();
@@ -16,22 +17,14 @@ const SettingsPage = () => {
     const showSystem = isDeveloper;
     // «Управление файлами» — по правилу доступа
     const showFiles = has('settings.files');
+    // «Звуки» — доступны всем пользователям
+    const showSounds = true;
 
-    if (!showSystem && !showFiles) {
-        return (
-            <div className="space-y-4 max-w-5xl">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Settings className="h-6 w-6 text-orange-500" />
-                        Настройки
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                        У вас нет доступа к доступным разделам настроек.
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    const defaultTab = showSystem
+        ? 'system'
+        : showFiles
+            ? 'files'
+            : 'sounds';
 
     return (
         <div className="space-y-4 max-w-5xl">
@@ -41,11 +34,11 @@ const SettingsPage = () => {
                     Настройки
                 </h2>
                 <p className="text-sm text-slate-500 mt-1">
-                    Системные настройки и управление файлами
+                    Системные настройки, управление файлами и звуки
                 </p>
             </div>
 
-            <Tabs defaultValue={showSystem ? 'system' : 'files'}>
+            <Tabs defaultValue={defaultTab}>
                 <TabsList className="bg-white shadow-sm rounded-xl p-1 inline-flex w-auto">
                     {showSystem && (
                         <TabsTrigger
@@ -65,6 +58,15 @@ const SettingsPage = () => {
                             Управление файлами
                         </TabsTrigger>
                     )}
+                    {showSounds && (
+                        <TabsTrigger
+                            value="sounds"
+                            className="rounded-lg data-[state=active]:bg-orange-500 data-[state=active]:text-white px-4"
+                        >
+                            <Volume2 className="h-4 w-4 mr-2" />
+                            Звуки
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 {showSystem && (
@@ -76,6 +78,12 @@ const SettingsPage = () => {
                 {showFiles && (
                     <TabsContent value="files" className="mt-4">
                         <FilesTab />
+                    </TabsContent>
+                )}
+
+                {showSounds && (
+                    <TabsContent value="sounds" className="mt-4">
+                        <SoundsTab />
                     </TabsContent>
                 )}
             </Tabs>

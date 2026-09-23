@@ -6,6 +6,7 @@ const { requirePermission } = require('../middlewares/permissionGuard');
 const {
     getSettings,
     getPublicSettings,
+    getUploadDisk,
     updateSettings,
     sendBroadcast,
     getLatestBroadcast,
@@ -35,6 +36,7 @@ router.post('/files/delete', requirePermission('settings.files'), deleteFiles);
 // Системные настройки — только developer
 router.use(requireDeveloper);
 
+router.get('/disk', getUploadDisk);
 router.post('/broadcast', sendBroadcast);
 router.get('/', getSettings);
 router.put('/', updateSettings);

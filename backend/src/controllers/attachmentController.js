@@ -70,6 +70,36 @@ const setMissingFlag = async (attachmentId) => {
 };
 
 // ============================================================
+// Удаление временно загруженных файлов с диска (при отмене загрузки)
+// ============================================================
+const removeUploadedFiles = (files) => {
+    if (!Array.isArray(files)) return;
+    for (const f of files) {
+        try {
+            fs.unlinkSync(f.path);
+        } catch (_) {}
+    }
+};
+
+// ============================================================
+// Проверка общего лимита хранилища.
+// Размер уже загруженных файлов считается ТОЛЬКО по БД
+// (без обращения к диску), чтобы не нагружать систему.
+// Если после загрузки будет превышен лимит — загрузку отменяем.
+// ============================================================
+const exceedsTotalStorage = async (additionalBytes) => {
+    const limitGb = Number(
+        await settingsService.get('chat_max_total_storage_gb')
+    );
+    if (!limitGb || limitGb <= 0) return false; // лимит не задан — не ограничиваем
+
+    const limitBytes = limitGb * 1024 * 1024 * 1024;
+    const usedBytes = await attachmentService.getTotalStoredBytes();
+
+    return usedBytes + additionalBytes > limitBytes;
+};
+
+// ============================================================
 // POST /api/chat/conversations/:id/upload
 // ============================================================
 const uploadFiles = asyncHandler(async (req, res) => {
@@ -83,15 +113,32 @@ const uploadFiles = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Файлы не переданы' });
     }
 
+    // Суммарный размер загружаемых файлов (из multer, без чтения с диска)
+    const newBytes = req.files.reduce(
+        (sum, f) => sum + (Number(f.size) || 0),
+        0
+    );
+
     try {
         const isMember = await chatService.isMember(conversationId, userId);
         if (!isMember) {
-            for (const f of req.files) {
-                try {
-                    fs.unlinkSync(f.path);
-                } catch (_) {}
-            }
+            removeUploadedFiles(req.files);
             return res.status(403).json({ error: 'Нет доступа к этому чату' });
+        }
+
+        // Общий лимит хранилища: проверяем ТОЛЬКО по БД
+        if (await exceedsTotalStorage(newBytes)) {
+            removeUploadedFiles(req.files);
+            logger.warn(
+                `Отклонена загрузка: превышен общий лимит хранилища ` +
+                    `(+${newBytes} байт)`,
+                { user: userId, conversationId }
+            );
+            return res.status(413).json({
+                error:
+                    'Превышен максимальный размер хранимых файлов. ' +
+                    'Обратитесь к администратору, чтобы он освободил пространство.',
+            });
         }
 
         const attachments = await attachmentService.createAttachments({

@@ -12,6 +12,10 @@ import {
     playUnitStatusSound,
     isUnitSoundEnabled,
 } from '../lib/unitNotificationSound';
+import {
+    playNewCallSound,
+    isCallSoundEnabled,
+} from '../lib/callNotificationSound';
 
 // VITE_API_URL в проде = '/api', в dev = 'http://localhost:5000/api'.
 // Убираем /api, и если остаётся пусто — значит API на том же origin.
@@ -272,6 +276,30 @@ export const useSocket = () => {
             if (payload?.unit_id) {
                 queryClient.invalidateQueries(['unit-history', payload.unit_id]);
                 queryClient.invalidateQueries(['unit', payload.unit_id]);
+            }
+        });
+
+        // ============================================================
+        // ВЫЗОВЫ: создан новый — real-time + звук
+        // Бэкенд шлёт событие только тем, у кого есть доступ к вызову
+        // (can_view_all / developer или пользователи доступных подразделений).
+        // Звук играем, только если пользователь на странице «Вызовы»
+        // или «Мониторинг вызовов» и звук включён.
+        // ============================================================
+        socket.on('call:created', (payload) => {
+            const path = pathnameRef.current;
+            const onCallsPage =
+                path === '/calls' || path === '/calls-monitor';
+
+            if (onCallsPage && isCallSoundEnabled()) {
+                playNewCallSound();
+            }
+
+            queryClient.invalidateQueries(['calls']);
+            queryClient.invalidateQueries(['calls', 'monitor']);
+
+            if (payload?.id) {
+                queryClient.invalidateQueries(['call', payload.id]);
             }
         });
 

@@ -2,6 +2,8 @@ const settingsService = require('../services/settingsService');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
+const fsp = require('fs/promises');
+const { UPLOAD_DIR } = require('../config/upload');
 const Joi = require('joi');
 const { v4: uuidv4 } = require('uuid');
 
@@ -9,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const updateSettingsSchema = Joi.object({
     maintenance_mode: Joi.boolean(),
     chat_max_file_size_mb: Joi.number().integer().min(1).max(500),
+    chat_max_total_storage_gb: Joi.number().integer().min(1).max(1000000),
     chat_max_pinned_chats: Joi.number().integer().min(1).max(50),
     chat_max_pinned_channels: Joi.number().integer().min(1).max(50),
     chat_edit_window_minutes: Joi.number().integer().min(1).max(1440),
@@ -39,6 +42,29 @@ const getPublicSettings = asyncHandler(async (req, res) => {
     }
 });
 
+// GET /api/settings/disk — информация о разделе, где хранится папка uploads.
+// Нужна для подсказки при настройке общего лимита хранилища. Только developer.
+const getUploadDisk = asyncHandler(async (req, res) => {
+    try {
+        const stats = await fsp.statfs(UPLOAD_DIR);
+        const bsize = Number(stats.bsize);
+        const totalBytes = Number(stats.blocks) * bsize;
+        const freeBytes = Number(stats.bavail) * bsize;
+
+        res.json({
+            path: UPLOAD_DIR,
+            total_bytes: totalBytes,
+            free_bytes: freeBytes,
+            used_bytes: totalBytes - freeBytes,
+        });
+    } catch (err) {
+        logger.error('Ошибка получения данных о диске: ' + err.message, {
+            stack: err.stack,
+        });
+        res.status(500).json({ error: 'Не удалось получить информацию о разделе' });
+    }
+});
+
 // PUT /api/settings — только developer
 
 const updateSettings = asyncHandler(async (req, res) => {
@@ -53,6 +79,7 @@ const updateSettings = asyncHandler(async (req, res) => {
         // --- Простые числовые настройки ---
         const numericKeys = [
             'chat_max_file_size_mb',
+            'chat_max_total_storage_gb',
             'chat_max_pinned_chats',
             'chat_max_pinned_channels',
             'chat_edit_window_minutes',
@@ -182,6 +209,7 @@ const sendBroadcast = asyncHandler(async (req, res) => {
 module.exports = {
     getSettings,
     getPublicSettings,
+    getUploadDisk,
     updateSettings,
     sendBroadcast,
 };

@@ -3,6 +3,7 @@ import {
     getSettings,
     updateSettings,
     getPublicSettings,
+    getDiskInfo,
     sendBroadcast,
     getAdminFiles,
     getFolderSize,
@@ -50,6 +51,14 @@ export const useUpdateSettings = () => {
         },
     });
 };
+
+// Информация о разделе, где хранится папка uploads (только developer)
+export const useDiskInfo = () =>
+    useQuery({
+        queryKey: ['settings-disk'],
+        queryFn: () => getDiskInfo().then((r) => r.data),
+        staleTime: 5 * 60 * 1000,
+    });
 
 /**
  * Живой broadcast — данные приходят ТОЛЬКО через socket.

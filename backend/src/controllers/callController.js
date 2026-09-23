@@ -2,7 +2,7 @@ const callService = require('../services/callService');
 const pool = require('../db/pool');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
-const { emitForceRefresh } = require('../utils/socketEvents');
+const { emitForceRefresh, emitNewCall } = require('../utils/socketEvents');
 const Joi = require('joi');
 
 const CALL_TYPES = callService.CALL_TYPES;
@@ -238,6 +238,7 @@ const createCall = asyncHandler(async (req, res) => {
     try {
         const call = await callService.createCall(req.user.id, req.user.can_view_all);
         const io = req.app.get('io');
+        emitNewCall(io, call);
         emitForceRefresh(io, 'calls');
         res.status(201).json(call);
     } catch (err) {

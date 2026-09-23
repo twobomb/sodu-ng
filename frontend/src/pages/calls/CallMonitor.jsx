@@ -17,9 +17,16 @@ import {
     ExternalLink,
     ChevronUp,
     ChevronDown,
+    Volume2,
+    VolumeX,
 } from 'lucide-react';
 import { CALL_STATUS_META } from '../../lib/calls';
 import UnitStatusDialog from '../../components/units/UnitStatusDialog';
+import {
+    isCallSoundEnabled,
+    setCallSoundEnabled,
+    subscribeToCallUiPrefs,
+} from '../../lib/callNotificationSound';
 
 const MONITOR_FIELDS = [
     'address', 'incident_at', 'message_received_at', 'dispatch_at', 'arrival_at',
@@ -114,6 +121,13 @@ const CallMonitor = () => {
     const [legendOpen, setLegendOpen] = useState(true);
     const [pendingStatus, setPendingStatus] = useState(null); // { unit, callIdDefault }
     const [statusError, setStatusError] = useState('');
+    const [soundOn, setSoundOn] = useState(isCallSoundEnabled());
+
+    // Синхронизация настройки звука о новых вызовах
+    useEffect(() => {
+        const update = () => setSoundOn(isCallSoundEnabled());
+        return subscribeToCallUiPrefs(update);
+    }, []);
 
     const calls = useMemo(() => {
         if (!Array.isArray(data)) return [];
@@ -137,6 +151,8 @@ const CallMonitor = () => {
 
     const canChangeStatus = has('units.update_status');
     const statusList = Array.isArray(statuses) ? statuses : [];
+
+    const handleSoundToggle = () => setCallSoundEnabled(!soundOn);
 
     // Подсветка полей, изменившихся с прошлого обновления
     const [flash, setFlash] = useState(new Set());
@@ -207,6 +223,24 @@ const CallMonitor = () => {
                         Мониторинг вызовов
                     </h1>
                     <p className="text-sm text-slate-400">Вызовы в обработке: {calls.length}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleSoundToggle}
+                        className={`h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${
+                            soundOn
+                                ? 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                                : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                        }`}
+                        title={soundOn ? 'Отключить звук о новых вызовах' : 'Включить звук о новых вызовах'}
+                    >
+                        {soundOn ? (
+                            <Volume2 className="h-4 w-4" />
+                        ) : (
+                            <VolumeX className="h-4 w-4" />
+                        )}
+                    </button>
                 </div>
             </div>
 {/* Список вызовов */}

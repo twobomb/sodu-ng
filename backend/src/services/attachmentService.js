@@ -197,6 +197,17 @@ const deleteAttachmentsForMessage = async (messageId) => {
     await pool.query(`DELETE FROM attachments WHERE message_id = $1`, [messageId]);
 };
 
+// ============================================================
+// Общий размер всех хранимых вложений — считается ТОЛЬКО по БД
+// (обращение к диску не выполняется, чтобы не нагружать систему).
+// ============================================================
+const getTotalStoredBytes = async () => {
+    const res = await pool.query(
+        `SELECT COALESCE(SUM(size), 0) AS total FROM attachments`
+    );
+    return Number(res.rows[0]?.total) || 0;
+};
+
 module.exports = {
     createAttachments,
     getAttachmentById,
@@ -206,5 +217,6 @@ module.exports = {
     getThumbnailPath,
     deleteFileFromDisk,
     deleteAttachmentsForMessage,
+    getTotalStoredBytes,
     IMAGE_MIMES,
 };

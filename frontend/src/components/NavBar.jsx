@@ -43,7 +43,7 @@ const NavBar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
-    const { has, isDeveloper } = usePermissions();
+    const { has } = usePermissions();
     const unread = useChatUnreadCounts();
     const { data: onlineUsers = [] } = useOnlineUsers();
     const onlineCount = Array.isArray(onlineUsers) ? onlineUsers.length : 0;
@@ -172,30 +172,20 @@ const NavBar = () => {
                             </DropdownMenu>
                         )}
 
-                        {(has('users.view') ||
-                            has('users.view_online') ||
-                            has('users.login_history') ||
-                            has('roles.view') ||
-                            has('departments.view') ||
-                            has('units.view') ||
-                            has('calls.view') ||
-                            has('dictionaries.manage') ||
-                            isDeveloper ||
-                            has('settings.files')) && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        className={`rounded-lg transition-all ${
-                                            isAdditionalSection
-                                                ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
-                                                : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <LayoutGrid className="h-4 w-4 mr-2" />
-                                        Дополнительно
-                                        <ChevronDown className="h-3 w-3 ml-1" />
-                                    </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className={`rounded-lg transition-all ${
+                                        isAdditionalSection
+                                            ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
+                                            : 'text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <LayoutGrid className="h-4 w-4 mr-2" />
+                                    Дополнительно
+                                    <ChevronDown className="h-3 w-3 ml-1" />
+                                </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
                                     {(has('users.view') ||
@@ -270,17 +260,15 @@ const NavBar = () => {
                                             )}
                                         </>
                                     )}
-                                    {(isDeveloper || has('settings.files')) && (
-                                        <>
-                                            <DropdownMenuLabel>Настройки</DropdownMenuLabel>
-                                            <DropdownMenuItem
-                                                icon={SettingsIcon}
-                                                onClick={() => navigate('/settings')}
-                                            >
-                                                Настройки
-                                            </DropdownMenuItem>
-                                        </>
-                                    )}
+                                    <>
+                                        <DropdownMenuLabel>Настройки</DropdownMenuLabel>
+                                        <DropdownMenuItem
+                                            icon={SettingsIcon}
+                                            onClick={() => navigate('/settings')}
+                                        >
+                                            Настройки
+                                        </DropdownMenuItem>
+                                    </>
                                     {has('users.login_history') && (
                                         <>
                                             <DropdownMenuLabel>Безопасность</DropdownMenuLabel>
@@ -294,7 +282,6 @@ const NavBar = () => {
                                     )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                        )}
 
                         {has('line_notes.view') && (
                             <DropdownMenu>

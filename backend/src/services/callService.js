@@ -326,7 +326,11 @@ const createCall = async (userId, canViewAll) => {
         );
     }
 
-    return getCallById(id);
+    const call = await getCallById(id);
+    // Подразделения, привязанные к вызову — по ним определяем, кому он виден
+    // (используется для адресной рассылки события call:created).
+    call.department_ids = deps;
+    return call;
 };
 
 // ============================================================
