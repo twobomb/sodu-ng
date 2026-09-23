@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCalls, useCreateCall, useMunicipalities } from '../../hooks/useCalls';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -28,6 +28,21 @@ import { FilterX, Loader2, Plus, Search, Siren } from 'lucide-react';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
+// Список страниц для пагинации с многоточиями, напр. [1, '…', 4, 5, 6, '…', 20]
+const getPageItems = (current, total) => {
+    if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const items = [1];
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    if (start > 2) items.push('…');
+    for (let p = start; p <= end; p++) items.push(p);
+    if (end < total - 1) items.push('…');
+    items.push(total);
+    return items;
+};
+
 const CallsList = () => {
     const navigate = useNavigate();
     const { has } = usePermissions();
@@ -43,7 +58,16 @@ const CallsList = () => {
 
     // Пагинация
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(25);
+    // Запоминаем выбранный размер страницы (10/25/50/100) в localStorage
+    // (паттерн как в UnitsGrid). Ленивая инициализация + сохраняем при изменении.
+    const [pageSize, setPageSize] = useState(() => {
+        const saved = Number(localStorage.getItem('callsPageSize'));
+        return PAGE_SIZES.includes(saved) ? saved : 25;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('callsPageSize', String(pageSize));
+    }, [pageSize]);
 
     const munisQuery = useMunicipalities();
 
@@ -329,7 +353,7 @@ const CallsList = () => {
                                 {total} всего · стр. {page} из {totalPages || 1}
                             </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -339,6 +363,27 @@ const CallsList = () => {
                             >
                                 Назад
                             </Button>
+                            {getPageItems(page, totalPages || 1).map((item, idx) =>
+                                item === '…' ? (
+                                    <span
+                                        key={`gap-${idx}`}
+                                        className="px-0.5 text-sm text-slate-400"
+                                    >
+                                        …
+                                    </span>
+                                ) : (
+                                    <Button
+                                        key={item}
+                                        variant={item === page ? 'default' : 'outline'}
+                                        size="sm"
+                                        disabled={item === page}
+                                        onClick={() => setPage(item)}
+                                        className="rounded-lg min-w-9"
+                                    >
+                                        {item}
+                                    </Button>
+                                )
+                            )}
                             <Button
                                 variant="outline"
                                 size="sm"

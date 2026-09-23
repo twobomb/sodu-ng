@@ -107,7 +107,12 @@ apiClient.get = (url, config) => {
     if (typeof url === 'string' && url.includes('/chat/')) {
         return _origGet(url, config);
     }
-    const k = 'GET ' + url;
+    // Ключ = полный URL с параметрами (путь + page/filters/...). Без этого axios
+    // присылает в url только "/calls", а параметры лежат в config.params, и все
+    // страницы/фильтры получали ОДИН ключ "GET /calls": быстрый клик по пагинации
+    // возвращал Promise предыдущей страницы, пока не истекал GET_DEDUP_MS.
+    const fullUrl = apiClient.getUri({ url, params: config?.params });
+    const k = 'GET ' + fullUrl;
     const now = Date.now();
     const prev = getDedup.get(k);
     if (prev && now - prev.at < GET_DEDUP_MS) {

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import * as api from '../api/calls';
 
 // Инвалидирует кэши списков и карточек вызовов
@@ -24,6 +24,12 @@ export const useCalls = (filters = {}) => {
         queryKey: ['calls', clean],
         queryFn: () => api.getCalls(clean).then((r) => r.data),
         refetchOnWindowFocus: false,
+        // keepPreviousData: держим данные последней успешной страницы/фильтра на
+        // экране, пока грузится новая. Это важно и при смене queryKey (разные страницы):
+        // placeholderData: (prev)=>prev здесь БЕСПОЛЕЗЕН, т.к. для нового ключа prev
+        // отсутствует. без этого на время загрузки data становится undefined,
+        // totalPages обнуляется до 1, кнопки блокируются и «откатывают» страницу назад.
+        placeholderData: keepPreviousData,
     });
 };
 
