@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ru } from 'react-day-picker/locale';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ import {
     useUpdateLineNote,
     useCopyLineNote,
     useExportLineNotes,
+    useExportLineNotesTpsg,
 } from '../../hooks/useLineNotes';
 import { usePermissions } from '../../hooks/usePermissions';
 import { Loader2, Save, FileText, Truck, CheckCircle2, RotateCcw, Search, Building2, Copy, Download } from 'lucide-react';
@@ -608,6 +610,7 @@ const NoteDayCell = ({ className, children, modifiers = {}, ...props }) => {
 const LineNotesPage = () => {
     const { has } = usePermissions();
     const { user } = useAuth();
+    const queryClient = useQueryClient();
     const { data: departmentsData } = useDepartments();
     const { data: typesData, isLoading: typesLoading } = useUnitTypes();
 
@@ -829,6 +832,51 @@ const LineNotesPage = () => {
         }
     };
 
+    // —— Выгрузка строевой ТПСГ (компактный шаблон) ——
+    const tpsgMut = useExportLineNotesTpsg();
+    const [tpsgOpen, setTpsgOpen] = useState(false);
+    const [tpsgOfficers, setTpsgOfficers] = useState({
+        nach: '',
+        st: '',
+        pom: '',
+        disp: '',
+    });
+    const tpsgSet = (k, v) => setTpsgOfficers((prev) => ({ ...prev, [k]: v }));
+
+    const handleTpsgSave = async () => {
+        try {
+            const res = await tpsgMut.mutateAsync({
+                date: dateStr,
+                officers: {
+                    nach: tpsgOfficers.nach.trim(),
+                    st: tpsgOfficers.st.trim(),
+                    pom: tpsgOfficers.pom.trim(),
+                    disp: tpsgOfficers.disp.trim(),
+                },
+            });
+            const { base64, filename } = res.data;
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || `Строевая ТПСГ за ${toDotDate(dateStr)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setTpsgOpen(false);
+            toast.success('Файл ТПСГ сформирован');
+        } catch (e) {
+            toast.error(e?.response?.data?.error || 'Не удалось сформировать выгрузку ТПСГ');
+        }
+    };
+
     const modifiers = useMemo(() => {
         const draft = [];
         const approved = [];
@@ -905,6 +953,20 @@ const LineNotesPage = () => {
                 });
             }
             setNote((n) => (n ? { ...n, status } : n));
+            // Обновляем бейдж подразделения в списке сразу. Инвалидация
+            // line-notes-status при сохранении может быть отброшена глобальным
+            // троттлингом refetchQueries (App.jsx), поэтому правим кэш напрямую,
+            // чтобы статус (Черновик/Утверждённая) менялся без перезагрузки.
+            {
+                const statusKey = ['line-notes-status', dateStr];
+                let nextStatuses = queryClient.getQueryData(statusKey);
+                if (!Array.isArray(nextStatuses)) nextStatuses = [];
+                const hasDept = nextStatuses.some((s) => s.department_id === activeDeptId);
+                nextStatuses = hasDept
+                    ? nextStatuses.map((s) => (s.department_id === activeDeptId ? { ...s, status } : s))
+                    : [...nextStatuses, { department_id: activeDeptId, status }];
+                queryClient.setQueryData(statusKey, nextStatuses);
+            }
             toast.success('Строевая записка сохранена');
         } catch (e) {
             toast.error(e?.response?.data?.error || 'Не удалось сохранить записку');
@@ -1084,6 +1146,22 @@ const LineNotesPage = () => {
                                     Выгрузить строевые подразделений на {toDotDate(dateStr)}
                                 </span>
                             </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setTpsgOfficers({ nach: '', st: '', pom: '', disp: '' });
+                                    setTpsgOpen(true);
+                                }}
+                                disabled={tpsgMut.isPending}
+                                className="w-full h-auto whitespace-normal text-left leading-tight rounded-lg"
+                            >
+                                {tpsgMut.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-2 shrink-0 animate-spin" />
+                                ) : (
+                                    <Download className="h-4 w-4 mr-2 shrink-0" />
+                                )}
+                                <span>Выгрузить строевую ТПСГ за {toDotDate(dateStr)}</span>
+                            </Button>
                             </div>
                         )}
                     </div>
@@ -1258,6 +1336,69 @@ const LineNotesPage = () => {
                                 className="bg-orange-600 hover:bg-orange-700 rounded-lg"
                             >
                                 {copyMut.isPending ? 'Копирование...' : 'Копировать'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={tpsgOpen} onOpenChange={setTpsgOpen}>
+                    <AlertDialogContent className="lg:max-w-2xl rounded-2xl">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Выгрузка строевой ТПСГ</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Формируется выгрузка за{' '}
+                                <span className="font-semibold">{toDotDate(dateStr)}</span>.
+                                Должности и ФИО дежурной смены подставятся внизу документа (необязательно).
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="space-y-3 py-2">
+                            <div className="space-y-1">
+                                <Label className="text-sm text-slate-600">
+                                    Начальник дежурной смены
+                                </Label>
+                                <input
+                                    type="text"
+                                    value={tpsgOfficers.nach}
+                                    onChange={(e) => tpsgSet('nach', e.target.value)}
+                                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-sm text-slate-600">Старший помощник</Label>
+                                <input
+                                    type="text"
+                                    value={tpsgOfficers.st}
+                                    onChange={(e) => tpsgSet('st', e.target.value)}
+                                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-sm text-slate-600">Помощник</Label>
+                                <input
+                                    type="text"
+                                    value={tpsgOfficers.pom}
+                                    onChange={(e) => tpsgSet('pom', e.target.value)}
+                                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-sm text-slate-600">Диспетчер гарнизона</Label>
+                                <input
+                                    type="text"
+                                    value={tpsgOfficers.disp}
+                                    onChange={(e) => tpsgSet('disp', e.target.value)}
+                                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleTpsgSave}
+                                disabled={tpsgMut.isPending}
+                                className="bg-orange-600 hover:bg-orange-700 rounded-lg"
+                            >
+                                {tpsgMut.isPending ? 'Формирование...' : 'Выгрузить'}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

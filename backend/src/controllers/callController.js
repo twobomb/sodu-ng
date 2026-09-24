@@ -29,6 +29,10 @@ const personRescued = Joi.object({
     fio: Joi.string().allow('', null),
     birth_date: Joi.string().allow('', null),
 });
+const fireLeader = Joi.object({
+    fio: Joi.string().allow('', null),
+    position: Joi.string().allow('', null),
+});
 
 const updateCallSchema = Joi.object({
     type: Joi.string().valid(...CALL_TYPES).allow('', null),
@@ -69,8 +73,13 @@ const updateCallSchema = Joi.object({
     involved_staff: Joi.array()
         .items(Joi.object({
             department_id: Joi.string().uuid().allow('', null),
+            uid: Joi.string().max(64).allow('', null),
+            name: Joi.string().max(500).allow('', null),
             count: intField.default(0),
         }))
+        .default([]),
+    fire_leaders: Joi.array()
+        .items(fireLeader)
         .default([]),
 }).min(1);
 

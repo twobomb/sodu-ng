@@ -7,6 +7,7 @@ import {
     updateLineNote,
     copyLineNote,
     exportLineNotes,
+    exportLineNotesTpsg,
 } from '../api/lineNotes';
 
 export const useLineNotesByDepartment = (departmentId) =>
@@ -71,3 +72,6 @@ export const useCopyLineNote = () => {
 };
 
 export const useExportLineNotes = () => useMutation({ mutationFn: exportLineNotes });
+
+export const useExportLineNotesTpsg = () =>
+    useMutation({ mutationFn: exportLineNotesTpsg });

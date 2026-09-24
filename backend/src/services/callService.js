@@ -47,6 +47,7 @@ const SELECT_CALL_BASE = `
   c.victims_evacuated_total, c.victims_evacuated_children,
   c.dtp_circumstances, c.dtp_vehicle_marks, c.dtp_work_description,
   c.involved_staff,
+  c.fire_leaders,
   u.username AS creator_username,
   c.number, c.call_code, c.color,
   d.name AS department_name,
@@ -373,6 +374,7 @@ const UPDATE_COLUMNS = [
     'dtp_vehicle_marks',
     'dtp_work_description',
     'involved_staff',
+    'fire_leaders',
 ];
 
 const updateCall = async (id, data) => {
@@ -388,7 +390,8 @@ const updateCall = async (id, data) => {
             if (
                 col.endsWith('_data') ||
                 col === 'dtp_vehicle_marks' ||
-                col === 'involved_staff'
+                col === 'involved_staff' ||
+                col === 'fire_leaders'
             ) {
                 val = val == null ? null : JSON.stringify(val);
             }

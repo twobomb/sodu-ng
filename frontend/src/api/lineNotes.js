@@ -21,3 +21,6 @@ export const copyLineNote = (data) => apiClient.post('/line-notes/copy', data);
 
 // Выгрузка всех строевых в Excel по шаблону
 export const exportLineNotes = (data) => apiClient.post('/line-notes/export', data);
+
+// Выгрузка строевой ТПСГ (компактный шаблон .xlsx)
+export const exportLineNotesTpsg = (data) => apiClient.post('/line-notes/export/tpsg', data);

@@ -1,5 +1,6 @@
 const lineNoteService = require('../services/lineNoteService');
 const lineNoteExportService = require('../services/lineNoteExportService');
+const lineNoteTpsgExportService = require('../services/lineNoteTpsgExportService');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const { emitForceRefresh } = require('../utils/socketEvents');
@@ -212,6 +213,47 @@ const exportFile = asyncHandler(async (req, res) => {
     }
 });
 
+// POST /api/line-notes/export/tpsg
+const exportTpsgSchema = Joi.object({
+    date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+    officers: Joi.object({
+        nach: Joi.string().allow('', null).max(300).default(''),
+        st: Joi.string().allow('', null).max(300).default(''),
+        pom: Joi.string().allow('', null).max(300).default(''),
+        disp: Joi.string().allow('', null).max(300).default(''),
+    }).default({}),
+});
+
+const exportTpsg = asyncHandler(async (req, res) => {
+    if (!req.user.can_view_all && req.user.role !== 'developer') {
+        return res
+            .status(403)
+            .json({ error: 'Выгрузка доступна только при доступе ко всем подразделениям' });
+    }
+
+    const { error, value } = exportTpsgSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    try {
+        const result = await lineNoteTpsgExportService.exportLineNotes({
+            date: value.date,
+            officers: value.officers || {},
+        });
+
+        res.json({
+            filename: result.filename,
+            base64: result.buffer.toString('base64'),
+            ignored: result.ignored,
+        });
+    } catch (err) {
+        logger.error('Ошибка выгрузки строевой ТПСГ: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка выгрузки' });
+    }
+});
+
 // POST /api/line-notes/copy
 const copy = asyncHandler(async (req, res) => {
     const { error, value } = copySchema.validate(req.body);
@@ -319,4 +361,5 @@ module.exports = {
     copy,
     statusByDate,
     exportFile,
+    exportTpsg,
 };

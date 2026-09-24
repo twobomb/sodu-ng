@@ -10,6 +10,7 @@ const {
     copy,
     statusByDate,
     exportFile,
+    exportTpsg,
 } = require('../controllers/lineNoteController');
 
 router.use(authenticate);
@@ -35,6 +36,7 @@ router.post('/copy', requirePermission('line_notes.manage'), copy);
 
 // Выгрузка в Excel по шаблону (доступ ко всем подразделениям — проверяется в контроллере)
 router.post('/export', requirePermission('line_notes.view'), exportFile);
+router.post('/export/tpsg', requirePermission('line_notes.view'), exportTpsg);
 
 // Обновление — правом «редактирование», «утверждение» или «редактирование утверждённых»
 // (детальная проверка по текущему статусу — в контроллере)

@@ -91,6 +91,7 @@ const EMPTY_FORM = {
     dtp_vehicle_marks: [],
     dtp_work_description: '',
     involved_staff: [],
+    fire_leaders: [],
 };
 
 // Перевод данных с сервера (ISO) в значения формы (datetime-local / строки)
@@ -115,6 +116,7 @@ const fromServer = (call) => {
     f.dtp_vehicle_marks = Array.isArray(call?.dtp_vehicle_marks) ? call.dtp_vehicle_marks : [];
     f.dtp_work_description = call?.dtp_work_description || '';
     f.involved_staff = Array.isArray(call?.involved_staff) ? call.involved_staff : [];
+    f.fire_leaders = Array.isArray(call?.fire_leaders) ? call.fire_leaders : [];
     return f;
 };
 
@@ -513,7 +515,13 @@ const CallDetail = () => {
         payload.dtp_work_description = formData.dtp_work_description || '';
         payload.involved_staff = (formData.involved_staff || []).map((row) => ({
             department_id: row.department_id || null,
+            uid: row.uid || null,
+            name: row.name || '',
             count: row.count === '' || row.count == null ? 0 : Number(row.count) || 0,
+        }));
+        payload.fire_leaders = (formData.fire_leaders || []).map((row) => ({
+            fio: row.fio || '',
+            position: row.position || '',
         }));
 
         updateCall.mutate(
@@ -695,6 +703,9 @@ const CallDetail = () => {
     const [eventText, setEventText] = useState('');
     const [eventToDelete, setEventToDelete] = useState(null);
     const [pendingStaffDelete, setPendingStaffDelete] = useState(null);
+    // Ввод названия произвольного «поля» в личном составе + подтверждение удаления РТП
+    const [staffCustomName, setStaffCustomName] = useState('');
+    const [leaderToDelete, setLeaderToDelete] = useState(null);
 
     const openEventDialog = () => {
         setEventAt(nowLocalInput());
@@ -767,26 +778,62 @@ const CallDetail = () => {
     const staffRows = Array.isArray(formData.involved_staff) ? formData.involved_staff : [];
     const deptNameById = {};
     for (const d of allDepts) deptNameById[d.id] = d.name || d.full_name || d.id;
+    // Стабильный ключ строки: у произвольных полей — uid, у подразделений — id
+    const staffKey = (row) => (row?.uid ? `u${row.uid}` : `d${row.department_id}`);
     const addedStaffDeptIds = new Set(staffRows.map((r) => r.department_id).filter(Boolean));
     // Добавлению доступны только подразделения, к которым есть доступ у пользователя
     const staffAddableDepts = flatAccessDepts.filter((d) => !addedStaffDeptIds.has(d.id));
 
-    const setStaffCount = (deptId, val) => {
+    const setStaffCount = (key, val) => {
         const valNum = val === '' || val == null ? 0 : Number(val);
         setField('involved_staff', staffRows.map((r) =>
-            r.department_id === deptId ? { ...r, count: isNaN(valNum) ? 0 : valNum } : r
+            staffKey(r) === key ? { ...r, count: isNaN(valNum) ? 0 : valNum } : r
+        ));
+    };
+    const setStaffName = (key, name) => {
+        setField('involved_staff', staffRows.map((r) =>
+            staffKey(r) === key ? { ...r, name } : r
         ));
     };
     const addStaffDept = (deptId) => {
         if (!deptId || addedStaffDeptIds.has(deptId)) return;
         setField('involved_staff', [...staffRows, { department_id: deptId, count: 0 }]);
     };
-    const confirmRemoveStaffDept = () => {
+    const addStaffCustom = () => {
+        const name = (staffCustomName || '').trim();
+        if (!name) return;
+        // Уникальный ключ, который переживает сохранение/перезагрузку
+        const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        setField('involved_staff', [...staffRows, { uid, name, count: 0 }]);
+        setStaffCustomName('');
+    };
+    const confirmRemoveStaff = () => {
         if (!pendingStaffDelete) return;
-        setField('involved_staff', staffRows.filter((r) => r.department_id !== pendingStaffDelete));
+        setField('involved_staff', staffRows.filter((r) => staffKey(r) !== pendingStaffDelete));
         setPendingStaffDelete(null);
     };
+    const staffDisplayName = (key) => {
+        const row = staffRows.find((r) => staffKey(r) === key);
+        if (!row) return 'элемент';
+        return row.department_id
+            ? (deptNameById[row.department_id] || 'Без наименования')
+            : (row.name || 'Без наименования');
+    };
     const totalStaff = staffRows.reduce((sum, r) => sum + (Number(r.count) || 0), 0);
+
+    // ---------- Руководители тушения пожара (РТП) ----------
+    const fireLeaders = Array.isArray(formData.fire_leaders) ? formData.fire_leaders : [];
+    const addFireLeader = () => {
+        setField('fire_leaders', [...fireLeaders, { fio: '', position: '' }]);
+    };
+    const setFireLeader = (idx, field, value) => {
+        setField('fire_leaders', fireLeaders.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
+    };
+    const confirmRemoveFireLeader = () => {
+        if (leaderToDelete == null) return;
+        setField('fire_leaders', fireLeaders.filter((_, i) => i !== leaderToDelete));
+        setLeaderToDelete(null);
+    };
 
     return (
         <div className="space-y-4">
@@ -942,12 +989,22 @@ const CallDetail = () => {
                                 <p className="text-sm text-slate-400">Личный состав не привлекался</p>
                             )}
                             {staffRows.map((row) => (
-                                <div key={row.department_id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
-                                    <div className="flex-1 min-w-0">
-                                        <span className="text-sm text-slate-700 truncate block">
-                                            {deptNameById[row.department_id] || 'Без наименования'}
-                                        </span>
-                                    </div>
+                                <div key={staffKey(row)} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                                    {row.department_id ? (
+                                        <div className="flex-1 min-w-0">
+                                            <span className="text-sm text-slate-700 truncate block">
+                                                {deptNameById[row.department_id] || 'Без наименования'}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <Input
+                                            value={row.name || ''}
+                                            disabled={!canEdit}
+                                            onChange={(e) => setStaffName(staffKey(row), e.target.value)}
+                                            placeholder="Наименование..."
+                                            className="flex-1 min-w-0 rounded-lg"
+                                        />
+                                    )}
                                     <div className="flex items-center gap-2 shrink-0">
                                         <Label className="text-xs text-slate-500 whitespace-nowrap">л/с, чел.</Label>
                                         <Input
@@ -955,14 +1012,14 @@ const CallDetail = () => {
                                             min="0"
                                             value={row.count ?? 0}
                                             disabled={!canEdit}
-                                            onChange={(e) => setStaffCount(row.department_id, e.target.value)}
+                                            onChange={(e) => setStaffCount(staffKey(row), e.target.value)}
                                             className="w-24 rounded-lg"
                                         />
                                         {canEdit && (
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => setPendingStaffDelete(row.department_id)}
+                                                onClick={() => setPendingStaffDelete(staffKey(row))}
                                                 className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
                                                 title="Удалить"
                                             >
@@ -972,6 +1029,20 @@ const CallDetail = () => {
                                     </div>
                                 </div>
                             ))}
+                            {canEdit && (
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        value={staffCustomName}
+                                        onChange={(e) => setStaffCustomName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') addStaffCustom(); }}
+                                        placeholder="Произвольное наименование..."
+                                        className="flex-1 rounded-lg"
+                                    />
+                                    <Button type="button" onClick={addStaffCustom} disabled={!staffCustomName.trim()} className="rounded-lg" title="Добавить поле с произвольным названием">
+                                        <Plus className="h-4 w-4 mr-1" /> Добавить
+                                    </Button>
+                                </div>
+                            )}
                             {canEdit && staffAddableDepts.length > 0 && (
                                 <SearchableSelect
                                     options={staffAddableDepts.map((d) => ({ value: d.id, label: d.name, search: `${d.name} ${d.full_name || ''}`.toLowerCase() }))}
@@ -990,6 +1061,55 @@ const CallDetail = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Руководители тушения пожара */}
+                    {isFire && (
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                            <h2 className="text-base font-semibold text-slate-700 mb-3">Руководители тушения пожара</h2>
+                            <div className="space-y-2">
+                                {fireLeaders.length === 0 && !canEdit && (
+                                    <p className="text-sm text-slate-400">Руководители не указаны</p>
+                                )}
+                                {fireLeaders.map((row, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                                        <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1.5 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                                            РТП {idx + 1}
+                                        </span>
+                                        <Input
+                                            value={row.fio || ''}
+                                            disabled={!canEdit}
+                                            onChange={(e) => setFireLeader(idx, 'fio', e.target.value)}
+                                            placeholder="ФИО"
+                                            className="flex-1 min-w-0 rounded-lg"
+                                        />
+                                        <Input
+                                            value={row.position || ''}
+                                            disabled={!canEdit}
+                                            onChange={(e) => setFireLeader(idx, 'position', e.target.value)}
+                                            placeholder="Должность"
+                                            className="flex-1 min-w-0 rounded-lg"
+                                        />
+                                        {canEdit && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setLeaderToDelete(idx)}
+                                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                                                title="Удалить"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                ))}
+                                {canEdit && (
+                                    <Button type="button" variant="outline" size="sm" onClick={addFireLeader} className="rounded-lg">
+                                        <Plus className="h-4 w-4 mr-1" /> Добавить РТП
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Оперативно-тактическая обстановка и объекты пожара */}
                     {isFire && (
@@ -1200,19 +1320,40 @@ const CallDetail = () => {
                 </div>
             </div>
 
-            {/* Подтверждение удаления подразделения из личного состава */}
+            {/* Подтверждение удаления элемента из личного состава */}
             <AlertDialog open={!!pendingStaffDelete} onOpenChange={(o) => { if (!o) setPendingStaffDelete(null); }}>
                 <AlertDialogContent className="rounded-2xl">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Удаление подразделения</AlertDialogTitle>
+                        <AlertDialogTitle>Удаление из личного состава</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Вы уверены, что хотите удалить подразделение «{pendingStaffDelete ? (deptNameById[pendingStaffDelete] || 'Без наименования') : ''}» из привлекаемого личного состава? Это действие нельзя отменить.
+                            Вы уверены, что хотите удалить «{pendingStaffDelete ? staffDisplayName(pendingStaffDelete) : ''}» из привлекаемого личного состава? Это действие нельзя отменить.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={confirmRemoveStaffDept}
+                            onClick={confirmRemoveStaff}
+                            className="bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Подтверждение удаления руководителя тушения пожара */}
+            <AlertDialog open={leaderToDelete != null} onOpenChange={(o) => { if (!o) setLeaderToDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удаление руководителя тушения пожара</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Удалить РТП {leaderToDelete != null ? leaderToDelete + 1 : ''} из списка? Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveFireLeader}
                             className="bg-red-600 hover:bg-red-700 rounded-lg"
                         >
                             Удалить
