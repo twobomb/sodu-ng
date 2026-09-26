@@ -46,6 +46,7 @@ const updateCallSchema = Joi.object({
     localization_at: datetimeField,
     open_fire_eliminated_at: datetimeField,
     fire_eliminated_at: datetimeField,
+    first_barrel_at: datetimeField,
     description: Joi.string().max(10000).allow('', null),
     fire_area: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
     area_type: Joi.string().valid('urban', 'rural').allow('', null),
@@ -80,6 +81,14 @@ const updateCallSchema = Joi.object({
         .default([]),
     fire_leaders: Joi.array()
         .items(fireLeader)
+        .default([]),
+    fire_extinguishing_means: Joi.array()
+        .items(Joi.object({
+            uid: Joi.string().max(64).allow('', null),
+            name: Joi.string().max(300).allow('', null),
+            qty: Joi.alternatives().try(Joi.number().min(0), Joi.string().allow('', null)).allow(null).empty(''),
+            text: Joi.string().max(1000).allow('', null),
+        }))
         .default([]),
 }).min(1);
 

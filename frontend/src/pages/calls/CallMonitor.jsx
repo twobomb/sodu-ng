@@ -106,6 +106,7 @@ const CallOperational = ({ call, f = () => false }) => (
         <Info label="Локализация" value={fmt(call.localization_at)} highlight={f('localization_at')} />
         <Info label="Локал. откр. горения" value={fmt(call.open_fire_eliminated_at)} highlight={f('open_fire_eliminated_at')} />
         <Info label="Ликвидация пожара" value={fmt(call.fire_eliminated_at)} highlight={f('fire_eliminated_at')} />
+        <Info label="Подача 1-го ствола" value={fmt(call.first_barrel_at)} highlight={f('first_barrel_at')} />
         <Info label="Местность" value={call.area_type === 'rural' ? 'Сельская' : call.area_type === 'urban' ? 'Городская' : '—'} highlight={f('area_type')} />
     </div>
 );
@@ -289,11 +290,12 @@ const CallMonitor = () => {
                                                         {unit.department_name && (
                                                             <span className="text-xs text-slate-400 truncate">{unit.department_name}</span>
                                                         )}
-                                                        {(unit.dispatch_at || unit.arrival_at) && (
+                                                        {(unit.dispatch_at || unit.arrival_at || unit.return_at) && (
                                                             <span className="text-[10px] text-slate-500 whitespace-nowrap">
                                                                 {unit.dispatch_at ? `Выезд ${fmt(unit.dispatch_at)}` : ''}
                                                                 {unit.dispatch_at && unit.arrival_at ? ' · ' : ''}
                                                                 {unit.arrival_at ? `Приб. ${fmt(unit.arrival_at)}` : ''}
+                                                                {unit.return_at ? ` · Возвр. ${fmt(unit.return_at)}` : ''}
                                                             </span>
                                                         )}
                                                         {canChangeStatus ? (

@@ -16,6 +16,11 @@ const {
     getCallDepartments,
     setCallDepartments,
 } = require('../controllers/callController');
+const {
+    getEventTemplates,
+    createEventTemplate,
+    deleteEventTemplate,
+} = require('../controllers/callEventTemplateController');
 
 // Все маршруты требуют аутентификации
 router.use(authenticate);
@@ -39,6 +44,10 @@ const requireCallUpdate = (req, res, next) => {
 router.get('/', requirePermission('calls.view'), getCalls);
 router.get('/monitor', requirePermission('calls.view'), getMonitorCalls);
 router.get('/municipalities', requirePermission('calls.view'), getMunicipalities);
+// ----- Типовые фразы хода событий (до /:id, чтобы не попасть под параметр) -----
+router.get('/event-templates', requirePermission('calls.view'), getEventTemplates);
+router.post('/event-templates', requireCallUpdate, createEventTemplate);
+router.delete('/event-templates/:templateId', requireCallUpdate, deleteEventTemplate);
 router.get('/:id', requirePermission('calls.view'), getCallById);
 
 // ----- Создание -----

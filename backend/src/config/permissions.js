@@ -27,6 +27,11 @@ const PERMISSIONS_CATALOG = [
             { key: 'calls.update', name: 'Редактирование', description: 'Изменять поля вызова в обработке' },
             { key: 'calls.update_status', name: 'Смена статуса', description: 'Менять статус вызова (Закрыт, Ошибочный)' },
             { key: 'calls.update_closed', name: 'Правка закрытых', description: 'Редактировать закрытые вызовы' },
+            {
+                key: 'calls.manage_event_templates',
+                name: 'Типовые фразы',
+                description: 'Добавлять и удалять общие типовые фразы для хода событий',
+            },
         ],
     },
     {
@@ -123,6 +128,18 @@ const PERMISSIONS_CATALOG = [
                 key: 'line_notes.edit_approved',
                 name: 'Редактирование утверждённых',
                 description: 'Редактировать утверждённые записки и возвращать их в черновик',
+            },
+        ],
+    },
+    {
+        key: 'call_journal',
+        name: 'Журнал вызовов',
+        description: 'Отчёты: выгрузка журнала вызовов',
+        permissions: [
+            {
+                key: 'call_journal.export',
+                name: 'Выгрузка журнала',
+                description: 'Видеть раздел «Отчёты → Выгрузка журнала вызовов» и формировать файл',
             },
         ],
     },

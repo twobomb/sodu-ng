@@ -141,3 +141,38 @@ export const useSetCallDepartments = () => {
         },
     });
 };
+
+// ============================================================
+// ТИПОВЫЕ ФРАЗЫ ХОДА СОБЫТИЙ
+// ============================================================
+export const useEventTemplates = () =>
+    useQuery({
+        queryKey: ['calls', 'event-templates'],
+        queryFn: () => api.getEventTemplates().then((r) => r.data),
+        refetchOnWindowFocus: false,
+    });
+
+export const useCreateEventTemplate = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => api.createEventTemplate(data),
+        onSuccess: () => qc.invalidateQueries(['calls', 'event-templates']),
+    });
+};
+
+export const useDeleteEventTemplate = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (templateId) => api.deleteEventTemplate(templateId),
+        // 404 «фраза не найдена» — уже удалена (кто-то другой / стale список).
+        // Считаем успехом и всё равно обновляем список.
+        onSuccess: () => qc.invalidateQueries(['calls', 'event-templates']),
+        onError: (e) => {
+            if (e?.response?.status === 404) {
+                qc.invalidateQueries(['calls', 'event-templates']);
+                return;
+            }
+            throw e;
+        },
+    });
+};

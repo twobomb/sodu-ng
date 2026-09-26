@@ -22,6 +22,7 @@ import {
     Sun,
     FileText,
     History,
+    Download,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -306,6 +307,14 @@ const NavBar = () => {
                                     >
                                         Строевая записка
                                     </DropdownMenuItem>
+                                    {has('call_journal.export') && (
+                                        <DropdownMenuItem
+                                            icon={Download}
+                                            onClick={() => navigate('/reports/call-journal')}
+                                        >
+                                            Выгрузка журнала вызовов
+                                        </DropdownMenuItem>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}

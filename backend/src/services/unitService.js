@@ -189,7 +189,7 @@ const eventTextForStatus = (statusName, unitName) => {
 // СМЕНА СТАТУСА (+ привязка к вызову, даты, событие в ход событий)
 // ============================================================
 const changeStatus = async (unitId, statusId, actorId, opts = {}) => {
-    const { callId = null, dispatchAt = null, arrivalAt = null, addEvent = false, comment = null } = opts;
+    const { callId = null, dispatchAt = null, arrivalAt = null, returnAt = null, addEvent = false, comment = null } = opts;
     const client = await pool.connect();
 
     try {
@@ -266,12 +266,13 @@ const changeStatus = async (unitId, statusId, actorId, opts = {}) => {
         // Даты выезда/прибытия в call_units — при передаче callId (независимо от статуса)
         if (callId) {
             await client.query(
-                `INSERT INTO call_units (call_id, unit_id, dispatch_at, arrival_at)
-                 VALUES ($1, $2, $3, $4)
+                `INSERT INTO call_units (call_id, unit_id, dispatch_at, arrival_at, return_at)
+                 VALUES ($1, $2, $3, $4, $5)
                  ON CONFLICT (call_id, unit_id) DO UPDATE SET
                    dispatch_at = COALESCE(EXCLUDED.dispatch_at, call_units.dispatch_at),
-                   arrival_at = COALESCE(EXCLUDED.arrival_at, call_units.arrival_at)`,
-                [callId, unitId, dispatchAt || null, arrivalAt || null]
+                   arrival_at = COALESCE(EXCLUDED.arrival_at, call_units.arrival_at),
+                   return_at = COALESCE(EXCLUDED.return_at, call_units.return_at)`,
+                [callId, unitId, dispatchAt || null, arrivalAt || null, returnAt || null]
             );
 
             // Событие в «ход событий» — только при реальной смене на выездной статус

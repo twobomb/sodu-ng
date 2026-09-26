@@ -33,6 +33,7 @@ const changeStatusSchema = Joi.object({
     call_id: Joi.string().uuid().allow('', null),
     dispatch_at: Joi.string().allow('', null),
     arrival_at: Joi.string().allow('', null),
+    return_at: Joi.string().allow('', null),
     add_event: Joi.boolean().default(false),
 });
 
@@ -267,6 +268,7 @@ const changeStatus = asyncHandler(async (req, res) => {
                 callId: value.call_id || null,
                 dispatchAt: value.dispatch_at || null,
                 arrivalAt: value.arrival_at || null,
+                returnAt: value.return_at || null,
                 addEvent: !!value.add_event,
                 comment: value.comment || null,
             }

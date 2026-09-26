@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments } from '../../hooks/useCalls';
+import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate } from '../../hooks/useCalls';
 import { useUnits, useUnitStatuses, useChangeUnitStatus, useAvailableCalls } from '../../hooks/useUnits';
 import { useDepartments } from '../../hooks/useDepartments';
 import { useAuth } from '../../context/AuthContext';
@@ -47,6 +47,19 @@ const DATETIME_FIELDS = [
     'localization_at',
     'open_fire_eliminated_at',
     'fire_eliminated_at',
+    'first_barrel_at',
+];
+
+// Пресеты средств пожаротушения (строка «Средства пожаротушения»)
+// qty — поле количества; text — текстовое поле («Иные»).
+const FIRE_MEANS_PRESETS = [
+    { id: 'clappers', label: 'Хлопушки' },
+    { id: 'rp18', label: 'РП-18' },
+    { id: 'barrel_b', label: 'Ств. "Б"', qty: true },
+    { id: 'barrel_a', label: 'Ств. "А"', qty: true },
+    { id: 'lafet', label: 'Лафетный ствол', qty: true },
+    { id: 'svp', label: 'СВП', qty: true },
+    { id: 'other', label: 'Иные', text: true },
 ];
 
 // Поля-числа пострадавших
@@ -75,6 +88,7 @@ const EMPTY_FORM = {
     localization_at: '',
     open_fire_eliminated_at: '',
     fire_eliminated_at: '',
+    first_barrel_at: '',
     description: '',
     fire_area: '',
     area_type: 'urban',
@@ -92,6 +106,7 @@ const EMPTY_FORM = {
     dtp_work_description: '',
     involved_staff: [],
     fire_leaders: [],
+    fire_extinguishing_means: [],
 };
 
 // Перевод данных с сервера (ISO) в значения формы (datetime-local / строки)
@@ -117,6 +132,7 @@ const fromServer = (call) => {
     f.dtp_work_description = call?.dtp_work_description || '';
     f.involved_staff = Array.isArray(call?.involved_staff) ? call.involved_staff : [];
     f.fire_leaders = Array.isArray(call?.fire_leaders) ? call.fire_leaders : [];
+    f.fire_extinguishing_means = Array.isArray(call?.fire_extinguishing_means) ? call.fire_extinguishing_means : [];
     return f;
 };
 
@@ -230,19 +246,32 @@ const UnitCallControl = ({ unit, statuses, calls, canEdit, currentCallId, onRemo
     const [dialogOpen, setDialogOpen] = useState(false);
     const baseDispatch = toLocalInput(unit.dispatch_at);
     const baseArrival = toLocalInput(unit.arrival_at);
+    const baseReturn = toLocalInput(unit.return_at);
     const [dispatchAt, setDispatchAt] = useState(baseDispatch);
     const [arrivalAt, setArrivalAt] = useState(baseArrival);
+    const [returnAt, setReturnAt] = useState(baseReturn);
     const durTxt = fmtDur(dispatchAt, arrivalAt);
-    const datesInvalid = !!dispatchAt && !!arrivalAt && new Date(arrivalAt) <= new Date(dispatchAt);
+    const d = dispatchAt ? new Date(dispatchAt) : null;
+    const a = arrivalAt ? new Date(arrivalAt) : null;
+    const r = returnAt ? new Date(returnAt) : null;
+    const arrivalInvalid = !!d && !!a && a <= d;
+    const returnInvalid = !!r && (!!(d && r <= d) || !!(a && r <= a));
+    const datesInvalid = arrivalInvalid || returnInvalid;
+    const datesError = arrivalInvalid
+        ? 'Время выезда должно быть раньше времени прибытия'
+        : returnInvalid
+            ? (d && r && r <= d ? 'Время возвращения должно быть не раньше времени выезда' : 'Время возвращения должно быть не раньше времени прибытия')
+            : null;
     const attachedHere = !!currentCallId && unit.call_id === currentCallId;
     // даты изменились относительно серверных
-    const datesDirty = dispatchAt !== baseDispatch || arrivalAt !== baseArrival;
+    const datesDirty = dispatchAt !== baseDispatch || arrivalAt !== baseArrival || returnAt !== baseReturn;
 
     // Синхронизация с сервером (если даты меняет другой пользователь)
     useEffect(() => {
         setDispatchAt(baseDispatch);
         setArrivalAt(baseArrival);
-    }, [baseDispatch, baseArrival]);
+        setReturnAt(baseReturn);
+    }, [baseDispatch, baseArrival, baseReturn]);
 
     return (
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -266,20 +295,24 @@ const UnitCallControl = ({ unit, statuses, calls, canEdit, currentCallId, onRemo
                 </div>
             </div>
 
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
                     <Label className="text-xs text-slate-500">Время выезда</Label>
                     <Input type="datetime-local" value={dispatchAt} disabled={!canEdit || pending} onChange={(e) => setDispatchAt(e.target.value)} onFocus={() => { if (!dispatchAt && canEdit) setDispatchAt(nowLocalInput()); }} className="rounded-lg" />
                 </div>
                 <div className="space-y-1">
                     <Label className="text-xs text-slate-500">Время прибытия</Label>
-                    <Input type="datetime-local" value={arrivalAt} disabled={!canEdit || pending} onChange={(e) => setArrivalAt(e.target.value)} onFocus={() => { if (!arrivalAt && canEdit) setArrivalAt(nowLocalInput()); }} className={`rounded-lg ${datesInvalid ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
+                    <Input type="datetime-local" value={arrivalAt} disabled={!canEdit || pending} onChange={(e) => setArrivalAt(e.target.value)} onFocus={() => { if (!arrivalAt && canEdit) setArrivalAt(nowLocalInput()); }} className={`rounded-lg ${arrivalInvalid ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
                 </div>
-                {durTxt && !datesInvalid && <div className="sm:col-span-2 text-xs text-emerald-600 font-medium">Время в дороге: {durTxt}</div>}
-                {datesInvalid && <div className="sm:col-span-2 text-xs text-red-600">Время выезда должно быть раньше времени прибытия</div>}
+                <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">Время возвращения</Label>
+                    <Input type="datetime-local" value={returnAt} disabled={!canEdit || pending} onChange={(e) => setReturnAt(e.target.value)} onFocus={() => { if (!returnAt && canEdit) setReturnAt(nowLocalInput()); }} className={`rounded-lg ${returnInvalid ? 'border-red-400 ring-1 ring-red-300' : ''}`} />
+                </div>
+                {durTxt && !datesInvalid && <div className="sm:col-span-3 text-xs text-emerald-600 font-medium">Время в дороге к м/в: {durTxt}</div>}
+                {datesInvalid && <div className="sm:col-span-3 text-xs text-red-600">{datesError}</div>}
                 {canEdit && (
-                    <div className="sm:col-span-2 flex items-center gap-2 mt-1">
-                        <Button size="sm" onClick={() => onSubmitDates(unit, { dispatch_at: toIso(dispatchAt), arrival_at: toIso(arrivalAt) })} disabled={pending || datesInvalid || !datesDirty} className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <div className="sm:col-span-3 flex items-center gap-2 mt-1">
+                        <Button size="sm" onClick={() => onSubmitDates(unit, { dispatch_at: toIso(dispatchAt), arrival_at: toIso(arrivalAt), return_at: toIso(returnAt) })} disabled={pending || datesInvalid || !datesDirty} className="rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
                             {pending ? 'Сохранение...' : 'Сохранить даты'}
                         </Button>
                         {error && <span className="text-xs text-red-600">{error}</span>}
@@ -298,7 +331,7 @@ const UnitCallControl = ({ unit, statuses, calls, canEdit, currentCallId, onRemo
                 pending={pending}
                 error={error}
                 onSubmit={(p) => {
-                    onSubmitStatus({ ...p, unit_id: unit.unit_id, dispatch_at: toIso(dispatchAt), arrival_at: toIso(arrivalAt) });
+                    onSubmitStatus({ ...p, unit_id: unit.unit_id, dispatch_at: toIso(dispatchAt), arrival_at: toIso(arrivalAt), return_at: toIso(returnAt) });
                     setDialogOpen(false);
                 }}
             />
@@ -310,7 +343,7 @@ const UnitCallControl = ({ unit, statuses, calls, canEdit, currentCallId, onRemo
 const CallDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { has } = usePermissions();
+    const { has, isDeveloper } = usePermissions();
 
     const callQuery = useCall(id);
     const munisQuery = useMunicipalities();
@@ -352,6 +385,9 @@ const CallDetail = () => {
     const setUnits = useSetCallUnits();
     const addEvent = useAddCallEvent();
     const deleteEvent = useDeleteCallEvent();
+    const templatesQuery = useEventTemplates();
+    const createTemplate = useCreateEventTemplate();
+    const deleteTemplate = useDeleteEventTemplate();
 
     const call = callQuery.data;
     const callStatus = call?.status;
@@ -523,6 +559,12 @@ const CallDetail = () => {
             fio: row.fio || '',
             position: row.position || '',
         }));
+        payload.fire_extinguishing_means = (formData.fire_extinguishing_means || []).map((row) => ({
+            uid: row.uid || null,
+            name: row.name || '',
+            qty: row.qty === '' || row.qty == null ? null : (Number(row.qty) || null),
+            text: row.text || '',
+        }));
 
         updateCall.mutate(
             { id, data: payload },
@@ -678,6 +720,7 @@ const CallDetail = () => {
                     call_id: call.id,
                     dispatch_at: dates.dispatch_at,
                     arrival_at: dates.arrival_at,
+                    return_at: dates.return_at,
                     add_event: false,
                 },
             },
@@ -706,6 +749,8 @@ const CallDetail = () => {
     // Ввод названия произвольного «поля» в личном составе + подтверждение удаления РТП
     const [staffCustomName, setStaffCustomName] = useState('');
     const [leaderToDelete, setLeaderToDelete] = useState(null);
+    // Подтверждение удаления средства пожаротушения
+    const [fireMeansToDelete, setFireMeansToDelete] = useState(null);
 
     const openEventDialog = () => {
         setEventAt(nowLocalInput());
@@ -718,6 +763,58 @@ const CallDetail = () => {
             { id, data: { event_at: toIso(eventAt), text: eventText.trim() } },
             { onSuccess: () => setEventOpen(false) }
         );
+    };
+
+    // ---------- Типовые фразы хода событий ----------
+    const templates = Array.isArray(templatesQuery.data) ? templatesQuery.data : [];
+    const canManageGlobal = isDeveloper || has('calls.manage_event_templates');
+    const [newPhraseText, setNewPhraseText] = useState('');
+    const [newPhraseScope, setNewPhraseScope] = useState('personal');
+    // Объект фразы, которая подтверждена к удалению: { id, text, ... } или null.
+    const [templateToDelete, setTemplateToDelete] = useState(null);
+
+    const addPhraseToText = (text) =>
+        setEventText((prev) => (prev && prev.trim() ? prev + '\n' : '') + text);
+
+    const canDeleteTemplate = (tpl) =>
+        tpl.scope === 'global'
+            ? canManageGlobal
+            : canManageGlobal || String(tpl.created_by) === String(user?.id);
+
+    // Фраза с таким же текстом уже есть в списке — добавлять нельзя.
+    const phraseExists =
+        !!newPhraseText.trim() &&
+        templates.some(
+            (tpl) =>
+                String(tpl.text || '').trim().toLowerCase() ===
+                newPhraseText.trim().toLowerCase()
+        );
+
+    const submitNewPhrase = () => {
+        const text = newPhraseText.trim();
+        if (!text || createTemplate.isPending) return;
+        createTemplate.mutate(
+            { text, scope: newPhraseScope },
+            {
+                onSuccess: () => {
+                    setNewPhraseText('');
+                    setNewPhraseScope('personal');
+                },
+                onError: (e) =>
+                    setFormError(e?.response?.data?.error || 'Не удалось сохранить фразу'),
+            }
+        );
+    };
+
+    const confirmDeleteTemplate = () => {
+        const { id } = templateToDelete || {};
+        if (typeof id !== 'string' || !id || deleteTemplate.isPending) return;
+        // id приходит из объекта, положенного в состояние кликом по корзине, —
+        // гарантированно существующий uuid, никакой расхождений с кэшем.
+        deleteTemplate.mutate(id, {
+            onSuccess: () => setTemplateToDelete(null),
+            onError: () => setTemplateToDelete(null),
+        });
     };
 
     // ---------- Уход со страницы с несохранёнными данными ----------
@@ -834,6 +931,37 @@ const CallDetail = () => {
         setField('fire_leaders', fireLeaders.filter((_, i) => i !== leaderToDelete));
         setLeaderToDelete(null);
     };
+
+    // ---------- Средства пожаротушения ----------
+    const meansRows = Array.isArray(formData.fire_extinguishing_means) ? formData.fire_extinguishing_means : [];
+    const addFireMeans = (pId) => {
+        const p = FIRE_MEANS_PRESETS.find((x) => x.id === pId);
+        if (!p) return;
+        // Одно и то же средство нельзя добавить повторно (кроме «Иные»)
+        if (p.label !== 'Иные' && meansRows.some((r) => r.name === p.label)) return;
+        // Уникальный ключ, который переживает сохранение/перезагрузку
+        const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        setField('fire_extinguishing_means', [...meansRows, {
+            uid, name: p.label, qty: p.qty ? 1 : null, text: p.text ? '' : null,
+        }]);
+    };
+    const setFireMeans = (idx, field, value) => {
+        setField('fire_extinguishing_means', meansRows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+    };
+    const confirmRemoveFireMeans = () => {
+        if (!fireMeansToDelete) return;
+        setField('fire_extinguishing_means', meansRows.filter((r) => r.uid !== fireMeansToDelete));
+        setFireMeansToDelete(null);
+    };
+    const fireMeansRowName = (uid) => {
+        const row = meansRows.find((r) => r.uid === uid);
+        return row ? (row.name || 'Средство') : 'Средство';
+    };
+    // Пресеты, доступные для добавления: уже добавленные скрываем (кроме «Иные»)
+    const addedMeansNames = new Set(meansRows.map((r) => r.name));
+    const meansSelectOptions = FIRE_MEANS_PRESETS
+        .filter((p) => p.label === 'Иные' || !addedMeansNames.has(p.label))
+        .map((p) => ({ value: p.id, label: p.label, search: p.label.toLowerCase() }));
 
     return (
         <div className="space-y-4">
@@ -1115,7 +1243,7 @@ const CallDetail = () => {
                     {isFire && (
                         <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
                             <h2 className="text-base font-semibold text-slate-700 mb-3">Оперативно-тактическая обстановка и объекты пожара</h2>
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-3 sm:grid-cols-3">
                                 <div className="space-y-2">
                                     <Label htmlFor="rank">Ранг вызова</Label>
                                     <NativeSelect value={formData.rank} onChange={(e) => setField('rank', e.target.value)} disabled={!canEdit} className="w-full">
@@ -1127,11 +1255,59 @@ const CallDetail = () => {
                                     <Label htmlFor="fire_area">Площадь пожара, м²</Label>
                                     <Input id="fire_area" type="number" min="0" value={formData.fire_area === '' || formData.fire_area === null ? '' : formData.fire_area} disabled={!canEdit} onChange={(e) => setField('fire_area', e.target.value)} className="rounded-lg" />
                                 </div>
+                                <DateTimeField id="first_barrel_at" label="Подача 1-го ствола" value={formData.first_barrel_at} onChange={(v) => setField('first_barrel_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('first_barrel_at')} />
                             </div>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mt-3">
                                 <DateTimeField id="localization_at" label="Локализация пожара" value={formData.localization_at} onChange={(v) => setField('localization_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('localization_at')} />
                                 <DateTimeField id="open_fire_eliminated_at" label="Ликвидация открытого горения" value={formData.open_fire_eliminated_at} onChange={(v) => setField('open_fire_eliminated_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('open_fire_eliminated_at')} />
                                 <DateTimeField id="fire_eliminated_at" label="Ликвидация пожара" value={formData.fire_eliminated_at} onChange={(v) => setField('fire_eliminated_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('fire_eliminated_at')} />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Средства пожаротушения */}
+                    {isFire && (
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                            <h2 className="text-base font-semibold text-slate-700 mb-3">Средства пожаротушения</h2>
+                            <div className="space-y-2">
+                                {meansRows.length === 0 && !canEdit && (
+                                    <p className="text-sm text-slate-400">Средства не указаны</p>
+                                )}
+                                {meansRows.map((row, idx) => {
+                                    const def = FIRE_MEANS_PRESETS.find((p) => p.label === row.name) || null;
+                                    return (
+                                        <div key={row.uid || idx} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                                            <span className="flex-1 min-w-0 text-sm text-slate-700 truncate block">{row.name || '—'}</span>
+                                            {def?.qty ? (
+                                                canEdit ? (
+                                                    <Input type="number" min="0" value={row.qty ?? ''} onChange={(e) => setFireMeans(idx, 'qty', e.target.value)} className="w-24 rounded-lg" />
+                                                ) : (
+                                                    <span className="text-sm text-slate-700 shrink-0">{(row.qty == null || row.qty === '') ? '' : `${row.qty} шт.`}</span>
+                                                )
+                                            ) : def?.text ? (
+                                                canEdit ? (
+                                                    <Input value={row.text || ''} onChange={(e) => setFireMeans(idx, 'text', e.target.value)} placeholder="Что за средство..." className="flex-1 min-w-0 rounded-lg" />
+                                                ) : (
+                                                    <span className="text-sm text-slate-600 flex-1 min-w-0 truncate block">{row.text || ''}</span>
+                                                )
+                                            ) : null}
+                                            {canEdit && (
+                                                <Button variant="ghost" size="sm" onClick={() => setFireMeansToDelete(row.uid)} className="h-7 w-7 p-0 text-red-500 hover:text-red-700" title="Удалить">
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {canEdit && (
+                                    <SearchableSelect
+                                        options={meansSelectOptions}
+                                        value=""
+                                        onChange={addFireMeans}
+                                        placeholder="Добавить средство..."
+                                        emptyText="Нет доступных средств"
+                                    />
+                                )}
                             </div>
                         </div>
                     )}
@@ -1362,18 +1538,113 @@ const CallDetail = () => {
                 </AlertDialogContent>
             </AlertDialog>
 
+            {/* Подтверждение удаления средства пожаротушения */}
+            <AlertDialog open={!!fireMeansToDelete} onOpenChange={(o) => { if (!o) setFireMeansToDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удаление средства пожаротушения</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Удалить «{fireMeansToDelete ? fireMeansRowName(fireMeansToDelete) : ''}» из списка? Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveFireMeans}
+                            className="bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Диалог добавления события */}
             <Dialog open={eventOpen} onOpenChange={setEventOpen}>
-                <DialogContent className="sm:max-w-md rounded-2xl">
+                <DialogContent className="sm:max-w-3xl rounded-2xl">
                     <DialogHeader><DialogTitle className="text-xl">Добавить ход событий</DialogTitle></DialogHeader>
-                    <div className="space-y-3 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="event_at">Дата и время</Label>
-                            <Input id="event_at" type="datetime-local" value={eventAt} onChange={(e) => setEventAt(e.target.value)} className="rounded-lg" />
+                    <div className="grid sm:grid-cols-2 gap-4 py-4 items-start">
+                        {/* Левая колонка: ввод */}
+                        <div className="space-y-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="event_at">Дата и время</Label>
+                                <Input id="event_at" type="datetime-local" value={eventAt} onChange={(e) => setEventAt(e.target.value)} className="rounded-lg" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="event_text">Описание хода</Label>
+                                <Textarea id="event_text" rows={6} placeholder="Например: локализация пожара, в помощь отправлена АЦ..." value={eventText} onChange={(e) => setEventText(e.target.value)} className="rounded-lg" />
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="event_text">Описание хода</Label>
-                            <Textarea id="event_text" rows={4} placeholder="Например: локализация пожара, в помощь отправлена АЦ..." value={eventText} onChange={(e) => setEventText(e.target.value)} className="rounded-lg" />
+
+                        {/* Правая колонка: типовые фразы + добавление */}
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 flex flex-col min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-slate-700">Типовые фразы</p>
+                                <span className="text-[10px] text-slate-400">клик — добавить в текст</span>
+                            </div>
+                            <div className="flex-1 min-h-[200px] max-h-[220px] overflow-y-auto mt-1 space-y-1 pr-1">
+                                {templates.length === 0 && (
+                                    <p className="text-xs text-slate-400">Пока нет доступных фраз.</p>
+                                )}
+                                {templates.map((tpl) => (
+                                    <div key={tpl.id} className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => addPhraseToText(tpl.text)}
+                                            title="Добавить в текст"
+                                            className="flex-1 min-w-0 text-left text-[11px] truncate font-medium hover:text-orange-600"
+                                        >
+                                            {tpl.text}
+                                        </button>
+                                        {canDeleteTemplate(tpl) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setTemplateToDelete(tpl)}
+                                                className="h-5 w-5 shrink-0 p-0 text-red-500 hover:text-red-700"
+                                                title="Удалить фразу"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            {canEdit && (
+                                <div className="mt-2 border-t border-slate-200 pt-2 space-y-2">
+                                    <Input
+                                        value={newPhraseText}
+                                        onChange={(e) => setNewPhraseText(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') submitNewPhrase(); }}
+                                        placeholder="Новая фраза..."
+                                        className="w-full rounded-lg"
+                                    />
+                                    <div className="flex items-center gap-1.5">
+                                        {canManageGlobal && (
+                                            <NativeSelect
+                                                value={newPhraseScope}
+                                                onChange={(e) => setNewPhraseScope(e.target.value)}
+                                                className="flex-1 rounded-lg"
+                                            >
+                                                <NativeSelectOption value="personal">Для себя</NativeSelectOption>
+                                                <NativeSelectOption value="global">Для всех</NativeSelectOption>
+                                            </NativeSelect>
+                                        )}
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={submitNewPhrase}
+                                            disabled={createTemplate.isPending || !newPhraseText.trim() || phraseExists}
+                                            title={phraseExists ? 'Фраза уже есть в списке' : undefined}
+                                            className="flex-1 whitespace-nowrap rounded-lg"
+                                        >
+                                            <Plus className="h-3.5 w-3.5 mr-1" />Добавить
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                            {phraseExists && (
+                                <p className="text-[11px] text-amber-600 mt-1">Такая фраза уже есть в списке</p>
+                            )}
                         </div>
                     </div>
                     <DialogFooter>
@@ -1382,6 +1653,22 @@ const CallDetail = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Подтверждение удаления типовой фразы */}
+            <AlertDialog open={!!templateToDelete} onOpenChange={(o) => { if (!o) setTemplateToDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удалить фразу</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {templateToDelete ? `Удалить фразу «${templateToDelete.text}» из списка? Это действие нельзя отменить.` : 'Удалить эту типовую фразу из списка? Это действие нельзя отменить.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDeleteTemplate} className="bg-red-600 hover:bg-red-700 rounded-lg">Удалить</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Диалог подтверждения смены статуса */}
             <AlertDialog open={!!statusConfirm} onOpenChange={(o) => { if (!o) setStatusConfirm(null); }}>

@@ -17,3 +17,8 @@ export const deleteCallEvent = (id, eventId) =>
 export const getCallDepartments = (id) => apiClient.get(`/calls/${id}/departments`);
 export const setCallDepartments = (id, departmentIds) =>
     apiClient.put(`/calls/${id}/departments`, { department_ids: departmentIds });
+export const getEventTemplates = () => apiClient.get('/calls/event-templates');
+export const createEventTemplate = (data) =>
+    apiClient.post('/calls/event-templates', data);
+export const deleteEventTemplate = (templateId) =>
+    apiClient.delete(`/calls/event-templates/${templateId}`);

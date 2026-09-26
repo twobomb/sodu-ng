@@ -36,7 +36,7 @@ const SELECT_CALL_BASE = `
   c.incident_at, c.message_received_at,
   c.department_id, c.municipality_id, c.address,
   c.dispatch_at, c.arrival_at,
-  c.localization_at, c.open_fire_eliminated_at, c.fire_eliminated_at,
+  c.localization_at, c.open_fire_eliminated_at, c.fire_eliminated_at, c.first_barrel_at,
   c.description, c.created_by, c.created_at, c.updated_at,
   c.fire_area, c.area_type,
   c.fire_category_id, c.fire_cause_id, c.fire_cause_other,
@@ -48,6 +48,7 @@ const SELECT_CALL_BASE = `
   c.dtp_circumstances, c.dtp_vehicle_marks, c.dtp_work_description,
   c.involved_staff,
   c.fire_leaders,
+  c.fire_extinguishing_means,
   u.username AS creator_username,
   c.number, c.call_code, c.color,
   d.name AS department_name,
@@ -80,7 +81,7 @@ const getUserDepartmentIds = async (userId) => {
 
 const getCallUnits = async (callId) => {
     const res = await pool.query(
-        `SELECT cu.unit_id, cu.dispatch_at, cu.arrival_at, u.name AS unit_name, u.plate_number, u.department_id,
+        `SELECT cu.unit_id, cu.dispatch_at, cu.arrival_at, cu.return_at, u.name AS unit_name, u.plate_number, u.department_id,
                      u.status_id, u.call_id,
                      d.name AS department_name, t.short_name AS type_short_name,
                      st.name AS unit_status_name, st.color AS unit_status_color, st.group_kind AS unit_status_group_kind
@@ -352,6 +353,7 @@ const UPDATE_COLUMNS = [
     'localization_at',
     'open_fire_eliminated_at',
     'fire_eliminated_at',
+    'first_barrel_at',
     'description',
     'fire_area',
     'area_type',
@@ -375,6 +377,7 @@ const UPDATE_COLUMNS = [
     'dtp_work_description',
     'involved_staff',
     'fire_leaders',
+    'fire_extinguishing_means',
 ];
 
 const updateCall = async (id, data) => {
@@ -391,7 +394,8 @@ const updateCall = async (id, data) => {
                 col.endsWith('_data') ||
                 col === 'dtp_vehicle_marks' ||
                 col === 'involved_staff' ||
-                col === 'fire_leaders'
+                col === 'fire_leaders' ||
+                col === 'fire_extinguishing_means'
             ) {
                 val = val == null ? null : JSON.stringify(val);
             }
