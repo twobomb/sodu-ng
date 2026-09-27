@@ -18,6 +18,7 @@ import {
     LayoutGrid,
     FolderTree,
     Ban,
+    ListFilter,
     Moon,
     Sun,
     FileText,
@@ -284,7 +285,7 @@ const NavBar = () => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
-                        {has('line_notes.view') && (
+                        {(has('line_notes.view') || has('call_journal.export') || has('call_samples.view')) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -301,18 +302,28 @@ const NavBar = () => {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
-                                    <DropdownMenuItem
-                                        icon={FileText}
-                                        onClick={() => navigate('/reports/line-notes')}
-                                    >
-                                        Строевая записка
-                                    </DropdownMenuItem>
+                                    {has('line_notes.view') && (
+                                        <DropdownMenuItem
+                                            icon={FileText}
+                                            onClick={() => navigate('/reports/line-notes')}
+                                        >
+                                            Строевая записка
+                                        </DropdownMenuItem>
+                                    )}
                                     {has('call_journal.export') && (
                                         <DropdownMenuItem
                                             icon={Download}
                                             onClick={() => navigate('/reports/call-journal')}
                                         >
                                             Выгрузка журнала вызовов
+                                        </DropdownMenuItem>
+                                    )}
+                                    {has('call_samples.view') && (
+                                        <DropdownMenuItem
+                                            icon={ListFilter}
+                                            onClick={() => navigate('/reports/call-samples')}
+                                        >
+                                            Выборка вызовов
                                         </DropdownMenuItem>
                                     )}
                                 </DropdownMenuContent>

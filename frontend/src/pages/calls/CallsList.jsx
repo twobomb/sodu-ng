@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCalls, useCreateCall, useMunicipalities } from '../../hooks/useCalls';
 import { usePermissions } from '../../hooks/usePermissions';
+import { decodeSampleDefinition } from '../../lib/callSampleUrl';
 import {
     CALL_TYPES,
     CALL_STATUS_META,
@@ -24,7 +25,7 @@ import {
     NativeSelect,
     NativeSelectOption,
 } from '@/components/ui/native-select';
-import { FilterX, Loader2, Plus, Search, Siren } from 'lucide-react';
+import { FilterX, ListFilter, Loader2, Plus, Search, Siren } from 'lucide-react';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -47,6 +48,17 @@ const CallsList = () => {
     const navigate = useNavigate();
     const { has } = usePermissions();
     const createCall = useCreateCall();
+
+    // Фильтр по выборке (из конструктора «Отчёты → Выборка вызовов»):
+    //  - sample_id (+ sample_name) — сохранённая выборка;
+    //  - cq — определение запроса, закодированное в base64url.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const sampleId = searchParams.get('sample_id');
+    const sampleNameParam = searchParams.get('sample_name');
+    const cq = searchParams.get('cq');
+    const sampleJson = useMemo(() => decodeSampleDefinition(cq), [cq]);
+    const activeSample = !!(sampleId || sampleJson);
+    const sampleLabel = sampleId ? (sampleNameParam || 'Сохранённая выборка') : 'Выборка вызовов';
 
     // Фильтры
     const [searchTerm, setSearchTerm] = useState('');
@@ -80,6 +92,8 @@ const CallsList = () => {
         created_to: createdTo || undefined,
         page,
         pageSize,
+        sample_id: sampleId || undefined,
+        sample: !sampleId && sampleJson ? sampleJson : undefined,
     });
 
     const calls = data?.items || [];
@@ -127,6 +141,16 @@ const CallsList = () => {
         setPage(1);
     };
 
+    // Убрать фильтр по выборке из адресной строки
+    const clearSample = () => {
+        const next = new URLSearchParams(searchParams);
+        next.delete('sample_id');
+        next.delete('sample_name');
+        next.delete('cq');
+        setSearchParams(next, { replace: true });
+        setPage(1);
+    };
+
     return (
         <div className="space-y-4">
             {/* Заголовок */}
@@ -155,6 +179,20 @@ const CallsList = () => {
                     </Button>
                 )}
             </div>
+
+            {/* Фильтр по выборке из конструктора */}
+            {activeSample && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                    <div className="flex items-center gap-2 text-sm text-orange-800">
+                        <ListFilter className="h-4 w-4" />
+                        Активен фильтр по выборке:
+                        <span className="font-semibold">{sampleLabel}</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={clearSample} className="rounded-lg">
+                        <FilterX className="h-4 w-4 mr-1" />Убрать фильтр
+                    </Button>
+                </div>
+            )}
 
             {/* Фильтры */}
             <div className="grid gap-2 sm:grid-cols-3 items-end">

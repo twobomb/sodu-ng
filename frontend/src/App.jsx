@@ -33,6 +33,7 @@ import UnitsGrid from './pages/units/UnitsGrid';
 import HelpPage from './pages/HelpPage';
 import LineNotesPage from './pages/reports/LineNotesPage';
 import CallJournalPage from './pages/reports/CallJournalPage';
+import CallSamplePage from './pages/reports/CallSamplePage';
 import { Toaster } from '@/components/ui/sonner';
 
 // Глобальные умолчания запросов.
@@ -264,6 +265,14 @@ const router = createBrowserRouter([
                 element: (
                     <PermissionRoute permission="call_journal.export">
                         <CallJournalPage />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'reports/call-samples',
+                element: (
+                    <PermissionRoute permission="call_samples.view">
+                        <CallSamplePage />
                     </PermissionRoute>
                 ),
             },

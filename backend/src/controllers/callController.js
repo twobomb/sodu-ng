@@ -1,4 +1,5 @@
 const callService = require('../services/callService');
+const callSampleService = require('../services/callSampleService');
 const pool = require('../db/pool');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
@@ -174,6 +175,15 @@ const getCalls = asyncHandler(async (req, res) => {
             page: req.query.page,
             pageSize: req.query.pageSize,
         };
+
+        // Фильтр по сохранённой выборке: либо определение строкой (sample),
+        // либо идентификатор сохранённой выборки (sample_id) — тогда берём её определение.
+        if (req.query.sample) {
+            filters.sample = String(req.query.sample);
+        } else if (req.query.sample_id) {
+            const definition = await callSampleService.getDefinition(req.query.sample_id);
+            if (definition) filters.sample = JSON.stringify(definition);
+        }
         const result = await callService.getCalls(filters, {
             canViewAll: req.user.can_view_all,
             departmentIds: await callService.getUserDepartmentIds(req.user.id),

@@ -144,6 +144,23 @@ const PERMISSIONS_CATALOG = [
         ],
     },
     {
+        key: 'call_samples',
+        name: 'Выборка вызовов',
+        description: 'Отчёты: конструктор запросов для выборки вызовов',
+        permissions: [
+            {
+                key: 'call_samples.view',
+                name: 'Доступ к странице',
+                description: 'Видеть раздел «Отчёты → Выборка вызовов» и строить запросы',
+            },
+            {
+                key: 'call_samples.manage',
+                name: 'Управление выборками',
+                description: 'Сохранять, пересохранять и удалять сохранённые выборки',
+            },
+        ],
+    },
+    {
         key: 'chat',
         name: 'Чат',
         description: 'Модуль обмена сообщениями',

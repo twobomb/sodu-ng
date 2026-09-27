@@ -1,32 +1,8 @@
 const pool = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
 const { colorFor, generateCallId, decorateCall } = require('../utils/callIdentity');
-
-// ============================================================
-// КОНСТАНТЫ
-// ============================================================
-const CALL_TYPES = [
-    'Пожар',
-    'АПС',
-    'АСР',
-    'ДТП',
-    'Помощь',
-    'ЛОХ',
-    'ПСП',
-    'ПТУ',
-    'Хоз. Работы',
-];
-
-const CALL_RANKS = [
-    'Ранг №1',
-    'Ранг №1-БИС',
-    'Ранг №2',
-    'Ранг №3',
-    'Ранг №4',
-    'Ранг №5',
-];
-
-const CALL_STATUSES = ['processing', 'closed', 'error'];
+const { CALL_TYPES, CALL_RANKS, CALL_STATUSES } = require('../config/callEnums');
+const { buildSampleWhere } = require('./callQueryBuilder');
 
 // ============================================================
 // ОБЩАЯ ЧАСТЬ SELECT
@@ -198,6 +174,25 @@ const getCalls = async (filters = {}, opts = {}) => {
         conds.push(`c.created_at < ($${i}::date + interval '1 day')`);
         params.push(filters.created_to);
         i++;
+    }
+
+    // Дополнительный фильтр по определению выборки (конструктор запросов).
+    // Определение приходит строкой JSON (или объектом) и строится безопасным
+    // построителем: поля/операторы — только из белого списка, значения — через параметры.
+    if (filters.sample) {
+        try {
+            const definition = typeof filters.sample === 'string'
+                ? JSON.parse(filters.sample)
+                : filters.sample;
+            const built = buildSampleWhere(definition, params.length);
+            if (built) {
+                conds.push(built.sql);
+                params.push(...built.params);
+                i += built.params.length;
+            }
+        } catch (_err) {
+            // Некорректное определение молча игнорируем — список просто покажет всё
+        }
     }
 
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
