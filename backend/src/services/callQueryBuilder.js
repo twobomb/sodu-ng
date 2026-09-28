@@ -146,6 +146,7 @@ const FIELD_LIST = [
     col('localization_at', 'Локализация пожара', GROUP_TACTICS, 'date', 'c.localization_at'),
     col('open_fire_eliminated_at', 'Ликвидация открытого горения', GROUP_TACTICS, 'date', 'c.open_fire_eliminated_at'),
     col('fire_eliminated_at', 'Ликвидация пожара', GROUP_TACTICS, 'date', 'c.fire_eliminated_at'),
+    { key: 'carryover_fire', label: 'Переходящий пожар', group: GROUP_TACTICS, type: 'boolean', sql: 'c.carryover_fire' },
 
     // ---- Средства пожаротушения ----
     // Название средства — селект по предустановленному перечню средств

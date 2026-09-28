@@ -6,12 +6,13 @@ import { useDepartments } from '../../hooks/useDepartments';
 import { useAuth } from '../../context/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useFireCategories, useFireCauses, useFireNonaccountReasons } from '../../hooks/useDictionaries';
-import { CALL_TYPES, CALL_RANKS, CALL_STATUS_META, CALL_STATUS_TRANSITIONS, AREA_TYPES, nowLocalInput, toLocalInput, toIso, formatDateTime } from '../../lib/calls';
+import { CALL_TYPES, FIRE_TYPES, CALL_RANKS, CALL_STATUS_META, CALL_STATUS_TRANSITIONS, AREA_TYPES, nowLocalInput, toLocalInput, toIso, formatDateTime } from '../../lib/calls';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import SearchableSelect from '@/components/ui/searchable-select';
 import UnitStatusDialog from '@/components/units/UnitStatusDialog';
 import AddressAutocomplete from '@/components/calls/AddressAutocomplete';
@@ -97,6 +98,7 @@ const EMPTY_FORM = {
     fire_cause_other: '',
     not_accounted_fire: false,
     not_accounted_reason_id: '',
+    carryover_fire: false,
     victims_dead_total: '', victims_dead_children: '', victims_dead_data: [],
     victims_injured_total: '', victims_injured_children: '', victims_injured_data: [],
     victims_rescued_total: '', victims_rescued_children: '', victims_rescued_data: [],
@@ -125,6 +127,7 @@ const fromServer = (call) => {
     f.fire_cause_other = call?.fire_cause_other || '';
     f.not_accounted_fire = !!call?.not_accounted_fire;
     f.not_accounted_reason_id = call?.not_accounted_reason_id || '';
+    f.carryover_fire = !!call?.carryover_fire;
     for (const k of VICTIM_NUMBER_FIELDS) f[k] = call?.[k] ?? '';
     for (const k of VICTIM_DATA_FIELDS) f[k] = Array.isArray(call?.[k]) ? call[k] : [];
     f.dtp_circumstances = call?.dtp_circumstances || '';
@@ -540,6 +543,7 @@ const CallDetail = () => {
             fire_cause_other: formData.fire_cause_other || '',
             not_accounted_fire: !!formData.not_accounted_fire,
             not_accounted_reason_id: formData.not_accounted_reason_id || null,
+            carryover_fire: !!formData.carryover_fire,
         };
         for (const k of DATETIME_FIELDS) payload[k] = toIso(formData[k]);
         for (const k of VICTIM_NUMBER_FIELDS) {
@@ -865,7 +869,7 @@ const CallDetail = () => {
         municipalityOptions.unshift({ value: call.municipality_id, label: call.municipality_name || 'Текущий округ', extra: 'Текущий округ' });
     }
 
-    const isFire = formData.type === 'Пожар';
+    const isFire = FIRE_TYPES.includes(formData.type);
     const isDtp = formData.type === 'ДТП';
 
     const evacTotal = Number(formData.victims_evacuated_total);
@@ -1261,6 +1265,15 @@ const CallDetail = () => {
                                 <DateTimeField id="localization_at" label="Локализация пожара" value={formData.localization_at} onChange={(v) => setField('localization_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('localization_at')} />
                                 <DateTimeField id="open_fire_eliminated_at" label="Ликвидация открытого горения" value={formData.open_fire_eliminated_at} onChange={(v) => setField('open_fire_eliminated_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('open_fire_eliminated_at')} />
                                 <DateTimeField id="fire_eliminated_at" label="Ликвидация пожара" value={formData.fire_eliminated_at} onChange={(v) => setField('fire_eliminated_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('fire_eliminated_at')} />
+                            </div>
+                            <div className="flex items-center gap-2 mt-3">
+                                <span className="text-sm font-medium text-slate-700">Переходящий пожар</span>
+                                <Switch
+                                    checked={!!formData.carryover_fire}
+                                    disabled={!canEdit}
+                                    onCheckedChange={(v) => setField('carryover_fire', v)}
+                                    aria-label="Переходящий пожар"
+                                />
                             </div>
                         </div>
                     )}

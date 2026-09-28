@@ -19,8 +19,9 @@ import {
     ChevronDown,
     Volume2,
     VolumeX,
+    Type,
 } from 'lucide-react';
-import { CALL_STATUS_META } from '../../lib/calls';
+import { CALL_STATUS_META, FIRE_TYPES } from '../../lib/calls';
 import UnitStatusDialog from '../../components/units/UnitStatusDialog';
 import {
     isCallSoundEnabled,
@@ -31,9 +32,40 @@ import {
 const MONITOR_FIELDS = [
     'address', 'incident_at', 'message_received_at', 'dispatch_at', 'arrival_at',
     'description', 'fire_area', 'localization_at', 'open_fire_eliminated_at',
-    'fire_eliminated_at', 'fire_category_name', 'fire_cause_name', 'fire_cause_other',
-    'not_accounted_reason_name', 'type', 'rank', 'municipality_name', 'area_type',
+    'fire_eliminated_at', 'first_barrel_at', 'fire_category_name', 'fire_cause_name',
+    'fire_cause_other', 'not_accounted_reason_name', 'type', 'rank',
+    'municipality_name', 'area_type', 'carryover_fire', 'involved_staff', 'fire_leaders',
 ];
+
+// Подпись значения для сравнения «было/стало». Массивы и объекты (jsonb-поля
+// л/с, РТП) сравниваем по JSON, иначе любое изменение сводилось бы к строке
+// «[object Object]» и подсветка не срабатывала.
+const sigOf = (v) => (
+    v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)
+);
+
+// ---------- Масштаб карточек вызовов ----------
+// Ползунок «размер текста»: пропорционально увеличивает всю карточку (шрифт,
+// отступы, иконки) через CSS zoom. Значение хранится в localStorage, чтобы
+// настройка держалась между перезагрузками и сеансами.
+const ZOOM_KEY = 'call_monitor_zoom';
+const ZOOM_MIN = 80;
+const ZOOM_MAX = 200;
+const ZOOM_STEP = 5;
+
+const clampZoom = (v) => {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n)) return 100;
+    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, n));
+};
+
+const readZoom = () => clampZoom(localStorage.getItem(ZOOM_KEY));
+
+const writeZoom = (v) => {
+    const val = clampZoom(v);
+    localStorage.setItem(ZOOM_KEY, String(val));
+    return val;
+};
 
 const fmt = (v) => {
     if (!v) return '—';
@@ -89,7 +121,7 @@ const CallPanelHeader = ({ call }) => {
 
 // Информационная секция вызова
 const CallInfo = ({ call, f = () => false }) => (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs border-b border-slate-100 pb-2">
+    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-1 text-xs border-b border-slate-100 pb-2">
         <Info label="Возникновение" value={fmt(call.incident_at)} highlight={f('incident_at')} />
         <Info label="Получено" value={fmt(call.message_received_at)} highlight={f('message_received_at')} />
         <Info label="Высылка" value={fmt(call.dispatch_at)} highlight={f('dispatch_at')} />
@@ -101,7 +133,7 @@ const CallInfo = ({ call, f = () => false }) => (
 
 // Оперативно-тактическая обстановка и объекты пожара (компактно, без заголовка)
 const CallOperational = ({ call, f = () => false }) => (
-    <div className="rounded-lg border border-slate-200 bg-white/60 p-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+    <div className="rounded-lg border border-slate-200 bg-white/60 p-2 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-1 text-xs">
         <Info label="Площадь пожара" value={call.fire_area == null ? '—' : `${call.fire_area} м²`} highlight={f('fire_area')} />
         <Info label="Локализация" value={fmt(call.localization_at)} highlight={f('localization_at')} />
         <Info label="Локал. откр. горения" value={fmt(call.open_fire_eliminated_at)} highlight={f('open_fire_eliminated_at')} />
@@ -110,6 +142,88 @@ const CallOperational = ({ call, f = () => false }) => (
         <Info label="Местность" value={call.area_type === 'rural' ? 'Сельская' : call.area_type === 'urban' ? 'Городская' : '—'} highlight={f('area_type')} />
     </div>
 );
+// Привлекаемый личный состав (подразделения + произвольные наименования)
+const CallStaff = ({ call, f = () => false }) => {
+    const rows = Array.isArray(call.involved_staff) ? call.involved_staff : [];
+    const total = rows.reduce((sum, r) => sum + (Number(r?.count) || 0), 0);
+    const nameOf = (row) => (
+        row?.department_id
+            ? (row.department_name || 'Без наименования')
+            : (row?.name || 'Без наименования')
+    );
+    return (
+        <div className={`rounded-lg border border-slate-200 bg-white/60 p-2 ${
+            f('involved_staff') ? 'ring-2 ring-amber-400 animate-pulse' : ''
+        }`}>
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Привлекаемый личный состав
+                </span>
+                <span className="text-[10px] text-slate-500 whitespace-nowrap">
+                    Всего: <span className="font-bold text-orange-700">{total} чел.</span>
+                </span>
+            </div>
+            {rows.length === 0 ? (
+                <div className="text-xs text-slate-400 italic mt-1">Личный состав не привлекался</div>
+            ) : (
+                <div className="mt-1 space-y-0.5">
+                    {rows.map((row, idx) => (
+                        <div
+                            key={row?.uid || row?.department_id || idx}
+                            className="flex items-center justify-between gap-2 text-xs"
+                        >
+                            <span className="text-slate-700 truncate">{nameOf(row)}</span>
+                            <span className="text-slate-600 font-medium whitespace-nowrap">
+                                {Number(row?.count) || 0} чел.
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Руководители тушения пожара (РТП) — только для «пожарных» типов вызова
+const CallFireLeaders = ({ call, f = () => false }) => {
+    const rows = Array.isArray(call.fire_leaders) ? call.fire_leaders : [];
+    const hasAny = rows.some((r) => (r?.fio || '').trim() || (r?.position || '').trim());
+    return (
+        <div className={`rounded-lg border border-slate-200 bg-white/60 p-2 ${
+            f('fire_leaders') ? 'ring-2 ring-amber-400 animate-pulse' : ''
+        }`}>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                Руководители тушения пожара
+            </div>
+            {!hasAny ? (
+                <div className="text-xs text-slate-400 italic mt-1">РТП не указаны</div>
+            ) : (
+                <div className="mt-1 space-y-0.5">
+                    {rows.map((row, idx) => {
+                        const fio = (row?.fio || '').trim();
+                        const position = (row?.position || '').trim();
+                        // Пустые строки пропускаем, но нумерация РТП сохраняется
+                        // такой же, как в карточке вызова.
+                        if (!fio && !position) return null;
+                        return (
+                            <div key={idx} className="flex items-baseline gap-2 text-xs">
+                                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                    РТП {idx + 1}
+                                </span>
+                                <span className="text-slate-700 font-medium truncate">{fio || '—'}</span>
+                                {position && (
+                                    <span className="text-slate-500 truncate">{position}</span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 
 const CallMonitor = () => {
     const { has } = usePermissions();
@@ -123,6 +237,10 @@ const CallMonitor = () => {
     const [pendingStatus, setPendingStatus] = useState(null); // { unit, callIdDefault }
     const [statusError, setStatusError] = useState('');
     const [soundOn, setSoundOn] = useState(isCallSoundEnabled());
+    // Масштаб карточек вызовов (ползунок «размер текста»)
+    const [zoom, setZoom] = useState(readZoom);
+
+    const applyZoom = (v) => setZoom(writeZoom(v));
 
     // Синхронизация настройки звука о новых вызовах
     useEffect(() => {
@@ -164,7 +282,7 @@ const CallMonitor = () => {
         const changed = new Set();
         for (const c of calls) {
             const sig = {};
-            for (const f of MONITOR_FIELDS) sig[f] = String(c[f] ?? '');
+            for (const f of MONITOR_FIELDS) sig[f] = sigOf(c[f]);
             const prev = prevRef.current.get(c.id);
             if (prev) {
                 for (const f of MONITOR_FIELDS) {
@@ -217,7 +335,7 @@ const CallMonitor = () => {
 
     return (
         <div className="space-y-4 pb-16">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <Siren className="h-6 w-6 text-red-500" />
@@ -226,6 +344,26 @@ const CallMonitor = () => {
                     <p className="text-sm text-slate-400">Вызовы в обработке: {calls.length}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <div
+                        className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 h-9"
+                        title="Размер текста в списке вызовов"
+                    >
+                        <Type className="h-4 w-4 shrink-0 text-slate-500" />
+                        <input
+                            type="range"
+                            min={ZOOM_MIN}
+                            max={ZOOM_MAX}
+                            step={ZOOM_STEP}
+                            value={zoom}
+                            onChange={(e) => applyZoom(e.target.value)}
+                            onDoubleClick={() => applyZoom(100)}
+                            className="w-24 sm:w-32 accent-orange-500 cursor-pointer"
+                            aria-label="Размер текста в списке вызовов"
+                        />
+                        <span className="w-11 shrink-0 text-right text-xs font-medium text-slate-600 tabular-nums">
+                            {zoom}%
+                        </span>
+                    </div>
                     <button
                         type="button"
                         onClick={handleSoundToggle}
@@ -250,7 +388,7 @@ const CallMonitor = () => {
                     <p>Нет вызовов в обработке{muniFilter ? ' по выбранному округу' : ''}</p>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div className="space-y-3" style={{ zoom: `${zoom / 100}` }}>
                     {calls.map((call) => {
                         const units = Array.isArray(call.units) ? call.units : [];
                         const events = Array.isArray(call.events) ? call.events : [];
@@ -262,6 +400,15 @@ const CallMonitor = () => {
                                 <div className="px-4 py-2 flex flex-wrap items-center gap-2">
                                     <CallPanelHeader call={call} />
                                     <Badge className={`${sm.badge} text-white`}>{sm.label}</Badge>
+                                    {call.carryover_fire && (
+                                        <Badge
+                                            className={`bg-amber-500 text-white hover:bg-amber-500 ${
+                                                f('carryover_fire') ? 'ring-2 ring-amber-300 animate-pulse' : ''
+                                            }`}
+                                        >
+                                            Переходящий пожар
+                                        </Badge>
+                                    )}
                                 </div>
                                 <div className="grid grid-cols-[1fr_280px] gap-3 px-4 py-3">
                                     <div className="min-w-0 space-y-3">
@@ -316,6 +463,10 @@ const CallMonitor = () => {
                                                     </div>
                                                 ))}
                                             </div>
+                                        )}
+                                        <CallStaff call={call} f={f} />
+                                        {FIRE_TYPES.includes(call.type) && (
+                                            <CallFireLeaders call={call} f={f} />
                                         )}
                                     </div>
                                     <div className="border border-slate-200 rounded-lg bg-white/70 flex flex-col max-h-64">

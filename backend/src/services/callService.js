@@ -17,6 +17,7 @@ const SELECT_CALL_BASE = `
   c.fire_area, c.area_type,
   c.fire_category_id, c.fire_cause_id, c.fire_cause_other,
   c.not_accounted_fire, c.not_accounted_reason_id,
+  c.carryover_fire,
   c.victims_dead_total, c.victims_dead_children, c.victims_dead_data,
   c.victims_injured_total, c.victims_injured_children, c.victims_injured_data,
   c.victims_rescued_total, c.victims_rescued_children, c.victims_rescued_data,
@@ -249,7 +250,32 @@ const getMonitorCalls = async (userId, canViewAll, departmentIds = []) => {
     );
 
     const calls = res.rows.map(decorateCall);
+    // Привлекаемый л/с хранится в jsonb как список ссылок на подразделения
+    // (только id) плюс произвольные наименования. Для мониторинга подставляем
+    // наименования подразделений, чтобы страница не зависела от доступа к
+    // справочнику подразделений.
+    const staffDeptIds = new Set();
     for (const call of calls) {
+        for (const row of (Array.isArray(call.involved_staff) ? call.involved_staff : [])) {
+            if (row?.department_id) staffDeptIds.add(row.department_id);
+        }
+    }
+    const staffDeptNames = new Map();
+    if (staffDeptIds.size) {
+        const dres = await pool.query(
+            'SELECT id, name FROM departments WHERE id = ANY($1)',
+            [[...staffDeptIds]]
+        );
+        for (const row of dres.rows) staffDeptNames.set(row.id, row.name);
+    }
+    for (const call of calls) {
+        if (Array.isArray(call.involved_staff)) {
+            call.involved_staff = call.involved_staff.map((row) =>
+                row?.department_id
+                    ? { ...row, department_name: staffDeptNames.get(row.department_id) || null }
+                    : row
+            );
+        }
         call.units = await getCallUnits(call.id);
         call.events = await getCallEvents(call.id);
     }
@@ -357,6 +383,7 @@ const UPDATE_COLUMNS = [
     'fire_cause_other',
     'not_accounted_fire',
     'not_accounted_reason_id',
+    'carryover_fire',
     'victims_dead_total',
     'victims_dead_children',
     'victims_dead_data',
@@ -424,20 +451,43 @@ const setCallStatus = async (id, status) => {
 };
 
 // ============================================================
-// ПРИВЛЕКАЕМАЯ ТЕХНИКА (заменяем весь набор)
+// ПРИВЛЕКАЕМАЯ ТЕХНИКА (синхронизация набора без потери данных)
 // ============================================================
+// ВАЖНО: строки call_units несут время выезда/прибытия/возвращения техники.
+// Поэтому набор нельзя перезаписывать целиком (DELETE всех строк + INSERT):
+// это обнуляло даты у техники, которая остаётся привязанной к вызову.
+// Набор синхронизируем точечно:
+//   • строки, которых нет в новом наборе — удаляем;
+//   • отсутствующие единицы — добавляем;
+//   • уже привязанные строки не трогаем — их время сохраняется.
 const setCallUnits = async (callId, unitIds) => {
+    const nextIds = [...new Set((unitIds || []).filter(Boolean))];
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM call_units WHERE call_id = $1', [callId]);
-        for (const unitId of unitIds) {
+
+        const existingRes = await client.query(
+            'SELECT unit_id FROM call_units WHERE call_id = $1',
+            [callId]
+        );
+        const keep = new Set(nextIds);
+        for (const row of existingRes.rows) {
+            if (!keep.has(row.unit_id)) {
+                await client.query(
+                    'DELETE FROM call_units WHERE call_id = $1 AND unit_id = $2',
+                    [callId, row.unit_id]
+                );
+            }
+        }
+
+        for (const unitId of nextIds) {
             await client.query(
                 `INSERT INTO call_units (call_id, unit_id)
                  VALUES ($1, $2) ON CONFLICT DO NOTHING`,
                 [callId, unitId]
             );
         }
+
         await client.query('COMMIT');
     } catch (err) {
         await client.query('ROLLBACK');

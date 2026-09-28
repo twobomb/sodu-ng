@@ -56,6 +56,7 @@ const updateCallSchema = Joi.object({
     fire_cause_other: Joi.string().max(1000).allow('', null),
     not_accounted_fire: Joi.boolean().allow('', null),
     not_accounted_reason_id: Joi.string().uuid().allow('', null),
+    carryover_fire: Joi.boolean().allow('', null),
     victims_dead_total: intField,
     victims_dead_children: intField,
     victims_dead_data: Joi.array().items(personDead).default([]),
