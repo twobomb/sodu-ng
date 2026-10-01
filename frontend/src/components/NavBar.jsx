@@ -22,6 +22,7 @@ import {
     Moon,
     Sun,
     FileText,
+    FileSpreadsheet,
     History,
     Download,
 } from 'lucide-react';
@@ -285,7 +286,7 @@ const NavBar = () => {
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
-                        {(has('line_notes.view') || has('call_journal.export') || has('call_samples.view')) && (
+                        {(has('line_notes.view') || has('call_journal.export') || has('daily_statement.export') || has('call_samples.view')) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -316,6 +317,14 @@ const NavBar = () => {
                                             onClick={() => navigate('/reports/call-journal')}
                                         >
                                             Выгрузка журнала вызовов
+                                        </DropdownMenuItem>
+                                    )}
+                                    {has('daily_statement.export') && (
+                                        <DropdownMenuItem
+                                            icon={FileSpreadsheet}
+                                            onClick={() => navigate('/reports/daily-statement')}
+                                        >
+                                            Выгрузка суточной ведомости
                                         </DropdownMenuItem>
                                     )}
                                     {has('call_samples.view') && (

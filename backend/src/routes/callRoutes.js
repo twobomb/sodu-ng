@@ -21,6 +21,11 @@ const {
     createEventTemplate,
     deleteEventTemplate,
 } = require('../controllers/callEventTemplateController');
+const {
+    getObjectTemplates,
+    createObjectTemplate,
+    deleteObjectTemplate,
+} = require('../controllers/callObjectTemplateController');
 
 // Все маршруты требуют аутентификации
 router.use(authenticate);
@@ -48,6 +53,10 @@ router.get('/municipalities', requirePermission('calls.view'), getMunicipalities
 router.get('/event-templates', requirePermission('calls.view'), getEventTemplates);
 router.post('/event-templates', requireCallUpdate, createEventTemplate);
 router.delete('/event-templates/:templateId', requireCallUpdate, deleteEventTemplate);
+// ----- Справочник значений поля «Объект» (тоже до /:id) -----
+router.get('/object-templates', requirePermission('calls.view'), getObjectTemplates);
+router.post('/object-templates', requireCallUpdate, createObjectTemplate);
+router.delete('/object-templates/:templateId', requireCallUpdate, deleteObjectTemplate);
 router.get('/:id', requirePermission('calls.view'), getCallById);
 
 // ----- Создание -----

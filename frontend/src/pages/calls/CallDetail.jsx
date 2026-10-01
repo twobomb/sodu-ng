@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate } from '../../hooks/useCalls';
+import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate, useObjectTemplates, useCreateObjectTemplate, useDeleteObjectTemplate } from '../../hooks/useCalls';
 import { useUnits, useUnitStatuses, useChangeUnitStatus, useAvailableCalls } from '../../hooks/useUnits';
 import { useDepartments } from '../../hooks/useDepartments';
 import { useAuth } from '../../context/AuthContext';
@@ -37,7 +37,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search, Map as MapIcon, Globe } from 'lucide-react';
 
 // Поля-даты вызова (в БД — timestamptz)
 const DATETIME_FIELDS = [
@@ -99,6 +99,8 @@ const EMPTY_FORM = {
     not_accounted_fire: false,
     not_accounted_reason_id: '',
     carryover_fire: false,
+    object_name: '',
+    false_call: false,
     victims_dead_total: '', victims_dead_children: '', victims_dead_data: [],
     victims_injured_total: '', victims_injured_children: '', victims_injured_data: [],
     victims_rescued_total: '', victims_rescued_children: '', victims_rescued_data: [],
@@ -128,6 +130,8 @@ const fromServer = (call) => {
     f.not_accounted_fire = !!call?.not_accounted_fire;
     f.not_accounted_reason_id = call?.not_accounted_reason_id || '';
     f.carryover_fire = !!call?.carryover_fire;
+    f.object_name = call?.object_name || '';
+    f.false_call = !!call?.false_call;
     for (const k of VICTIM_NUMBER_FIELDS) f[k] = call?.[k] ?? '';
     for (const k of VICTIM_DATA_FIELDS) f[k] = Array.isArray(call?.[k]) ? call[k] : [];
     f.dtp_circumstances = call?.dtp_circumstances || '';
@@ -391,6 +395,9 @@ const CallDetail = () => {
     const templatesQuery = useEventTemplates();
     const createTemplate = useCreateEventTemplate();
     const deleteTemplate = useDeleteEventTemplate();
+    const objectTemplatesQuery = useObjectTemplates();
+    const createObjectTemplate = useCreateObjectTemplate();
+    const deleteObjectTemplate = useDeleteObjectTemplate();
 
     const call = callQuery.data;
     const callStatus = call?.status;
@@ -544,6 +551,8 @@ const CallDetail = () => {
             not_accounted_fire: !!formData.not_accounted_fire,
             not_accounted_reason_id: formData.not_accounted_reason_id || null,
             carryover_fire: !!formData.carryover_fire,
+            object_name: (formData.object_name || '').trim(),
+            false_call: !!formData.false_call,
         };
         for (const k of DATETIME_FIELDS) payload[k] = toIso(formData[k]);
         for (const k of VICTIM_NUMBER_FIELDS) {
@@ -821,6 +830,54 @@ const CallDetail = () => {
         });
     };
 
+    // ---------- Справочник значений поля «Объект» ----------
+    const objectTemplates = Array.isArray(objectTemplatesQuery.data) ? objectTemplatesQuery.data : [];
+    const canManageGlobalObjects = isDeveloper || has('calls.manage_object_templates');
+    const [objectOpen, setObjectOpen] = useState(false);
+    const [newObjectName, setNewObjectName] = useState('');
+    const [newObjectScope, setNewObjectScope] = useState('personal');
+    // Объект значения, подтверждённого к удалению: { id, name, ... } или null.
+    const [objectToDelete, setObjectToDelete] = useState(null);
+
+    const canDeleteObject = (tpl) =>
+        tpl.scope === 'global'
+            ? canManageGlobalObjects
+            : canManageGlobalObjects || String(tpl.created_by) === String(user?.id);
+
+    // Значение с таким же текстом уже есть в списке — добавлять нельзя.
+    const objectExists =
+        !!newObjectName.trim() &&
+        objectTemplates.some(
+            (tpl) =>
+                String(tpl.name || '').trim().toLowerCase() ===
+                newObjectName.trim().toLowerCase()
+        );
+
+    const submitNewObject = () => {
+        const name = newObjectName.trim();
+        if (!name || createObjectTemplate.isPending) return;
+        createObjectTemplate.mutate(
+            { name, scope: newObjectScope },
+            {
+                onSuccess: () => {
+                    setNewObjectName('');
+                    setNewObjectScope('personal');
+                },
+                onError: (e) =>
+                    setFormError(e?.response?.data?.error || 'Не удалось сохранить значение'),
+            }
+        );
+    };
+
+    const confirmDeleteObject = () => {
+        const { id } = objectToDelete || {};
+        if (typeof id !== 'string' || !id || deleteObjectTemplate.isPending) return;
+        deleteObjectTemplate.mutate(id, {
+            onSuccess: () => setObjectToDelete(null),
+            onError: () => setObjectToDelete(null),
+        });
+    };
+
     // ---------- Уход со страницы с несохранёнными данными ----------
     const blocker = useBlocker(
         ({ currentLocation, nextLocation }) =>
@@ -1070,6 +1127,128 @@ const CallDetail = () => {
                                 <NativeSelect value={formData.type} onChange={(e) => setField('type', e.target.value)} disabled={!canEdit} className="w-full">
                                     {CALL_TYPES.map((t) => <NativeSelectOption key={t} value={t}>{t}</NativeSelectOption>)}
                                 </NativeSelect>
+                            </div>
+                            <div className="flex items-center gap-2 sm:mt-7">
+                                <span className="text-sm font-medium text-slate-700">ЛОЖНЫЙ ВЫЗОВ</span>
+                                <Switch
+                                    checked={!!formData.false_call}
+                                    disabled={!canEdit}
+                                    onCheckedChange={(v) => setField('false_call', v)}
+                                    aria-label="Ложный вызов"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="object_name">Объект</Label>
+                                <div className="relative">
+                                    <div className="flex items-center gap-1.5">
+                                        <Input
+                                            id="object_name"
+                                            // Отключаем браузерное автодополнение/автозаполнение
+                                            // (как в поле «Адрес» — AddressAutocomplete)
+                                            autoComplete="off"
+                                            autoCorrect="off"
+                                            spellCheck={false}
+                                            value={formData.object_name || ''}
+                                            disabled={!canEdit}
+                                            onChange={(e) => setField('object_name', e.target.value)}
+                                            onBlur={() => {
+                                                const raw = formData.object_name || '';
+                                                const trimmed = raw.trim();
+                                                // Помечаем несохранённые изменения только если
+                                                // действительно было что обрезать.
+                                                if (trimmed !== raw) setField('object_name', trimmed);
+                                            }}
+                                            placeholder="Выберите из списка или введите своё"
+                                            className="flex-1 min-w-0 rounded-lg"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={!canEdit}
+                                            onClick={() => setObjectOpen((v) => !v)}
+                                            title="Предустановленные значения"
+                                            className="h-9 w-9 shrink-0 p-0 rounded-lg"
+                                        >
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${objectOpen ? 'rotate-180' : ''}`} />
+                                        </Button>
+                                    </div>
+                                    {objectOpen && (
+                                        <div className="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg">
+                                            <div className="max-h-44 overflow-y-auto p-1">
+                                                {objectTemplates.length === 0 && (
+                                                    <p className="px-2 py-1 text-xs text-slate-400">Пока нет доступных значений.</p>
+                                                )}
+                                                {objectTemplates.map((tpl) => (
+                                                    <div key={tpl.id} className="flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-100">
+                                                        {tpl.scope === 'global' && (
+                                                            <span className="shrink-0 text-sky-500" title="Доступно всем">
+                                                                <Globe className="h-3 w-3" />
+                                                            </span>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setField('object_name', tpl.name); setObjectOpen(false); }}
+                                                            className="flex-1 min-w-0 text-left text-sm truncate hover:text-orange-600"
+                                                            title="Подставить значение"
+                                                        >
+                                                            {tpl.name}
+                                                        </button>
+                                                        {canDeleteObject(tpl) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setObjectToDelete(tpl)}
+                                                                className="h-5 w-5 shrink-0 text-red-500 hover:text-red-700"
+                                                                title="Удалить значение"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {canEdit && (
+                                                <div className="border-t border-slate-200 p-2 space-y-1.5">
+                                                    <Input
+                                                        value={newObjectName}
+                                                        autoComplete="off"
+                                                        autoCorrect="off"
+                                                        spellCheck={false}
+                                                        onChange={(e) => setNewObjectName(e.target.value)}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') submitNewObject(); }}
+                                                        placeholder="Новое значение..."
+                                                        className="w-full rounded-lg"
+                                                    />
+                                                    <div className="flex items-center gap-1.5">
+                                                        {canManageGlobalObjects && (
+                                                            <NativeSelect
+                                                                value={newObjectScope}
+                                                                onChange={(e) => setNewObjectScope(e.target.value)}
+                                                                className="flex-1 rounded-lg"
+                                                            >
+                                                                <NativeSelectOption value="personal">Для себя</NativeSelectOption>
+                                                                <NativeSelectOption value="global">Для всех</NativeSelectOption>
+                                                            </NativeSelect>
+                                                        )}
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={submitNewObject}
+                                                            disabled={createObjectTemplate.isPending || !newObjectName.trim() || objectExists}
+                                                            title={objectExists ? 'Значение уже есть в списке' : undefined}
+                                                            className="flex-1 whitespace-nowrap rounded-lg"
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5 mr-1" />Добавить
+                                                        </Button>
+                                                    </div>
+                                                    {objectExists && (
+                                                        <p className="text-[11px] text-amber-600">Такое значение уже есть в списке</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <DateTimeField id="incident_at" label="Дата и время возникновения события" value={formData.incident_at} onChange={(v) => setField('incident_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('incident_at')} />
                             <DateTimeField id="message_received_at" label="Время получения сообщения" value={formData.message_received_at} onChange={(v) => setField('message_received_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('message_received_at')} />
@@ -1723,6 +1902,22 @@ const CallDetail = () => {
                     <AlertDialogFooter>
                         <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
                         <AlertDialogAction onClick={() => { if (eventToDelete) deleteEvent.mutate({ id, eventId: eventToDelete }); setEventToDelete(null); }} className="bg-red-600 hover:bg-red-700 rounded-lg">Удалить</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Подтверждение удаления значения справочника «Объект» */}
+            <AlertDialog open={!!objectToDelete} onOpenChange={(o) => { if (!o) setObjectToDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удалить значение</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {objectToDelete ? `Удалить значение «${objectToDelete.name}» из списка? Это действие нельзя отменить.` : 'Удалить это значение из списка? Это действие нельзя отменить.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDeleteObject} className="bg-red-600 hover:bg-red-700 rounded-lg">Удалить</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

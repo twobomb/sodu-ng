@@ -22,3 +22,9 @@ export const createEventTemplate = (data) =>
     apiClient.post('/calls/event-templates', data);
 export const deleteEventTemplate = (templateId) =>
     apiClient.delete(`/calls/event-templates/${templateId}`);
+// Справочник значений поля «Объект»
+export const getObjectTemplates = () => apiClient.get('/calls/object-templates');
+export const createObjectTemplate = (data) =>
+    apiClient.post('/calls/object-templates', data);
+export const deleteObjectTemplate = (templateId) =>
+    apiClient.delete(`/calls/object-templates/${templateId}`);

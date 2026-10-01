@@ -112,6 +112,8 @@ const FIELD_LIST = [
     col('message_received_at', 'Время получения сообщения', GROUP_GENERAL, 'date', 'c.message_received_at'),
     refField('municipality_id', 'Муниципальный / городской округ', GROUP_GENERAL, 'municipalities', 'c.municipality_id'),
     col('address', 'Адрес места происшествия', GROUP_GENERAL, 'text', 'c.address'),
+    col('object_name', 'Объект', GROUP_GENERAL, 'text', 'c.object_name'),
+    col('false_call', 'Ложный вызов', GROUP_GENERAL, 'boolean', 'c.false_call'),
     col('dispatch_at', 'Время высылки сил и средств', GROUP_GENERAL, 'date', 'c.dispatch_at'),
     col('arrival_at', 'Время прибытия', GROUP_GENERAL, 'date', 'c.arrival_at'),
     col('description', 'Описание', GROUP_GENERAL, 'text', 'c.description'),

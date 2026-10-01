@@ -35,6 +35,7 @@ const MONITOR_FIELDS = [
     'fire_eliminated_at', 'first_barrel_at', 'fire_category_name', 'fire_cause_name',
     'fire_cause_other', 'not_accounted_reason_name', 'type', 'rank',
     'municipality_name', 'area_type', 'carryover_fire', 'involved_staff', 'fire_leaders',
+    'object_name', 'false_call',
 ];
 
 // Подпись значения для сравнения «было/стало». Массивы и объекты (jsonb-поля
@@ -127,6 +128,7 @@ const CallInfo = ({ call, f = () => false }) => (
         <Info label="Высылка" value={fmt(call.dispatch_at)} highlight={f('dispatch_at')} />
         <Info label="Прибытие" value={fmt(call.arrival_at)} highlight={f('arrival_at')} />
         <Info label="Адрес" value={call.address || '—'} highlight={f('address')} />
+        <Info label="Объект" value={call.object_name || '—'} highlight={f('object_name')} />
         <Info label="Округ" value={call.municipality_name || '—'} highlight={f('municipality_name')} />
     </div>
 );
@@ -407,6 +409,15 @@ const CallMonitor = () => {
                                             }`}
                                         >
                                             Переходящий пожар
+                                        </Badge>
+                                    )}
+                                    {call.false_call && (
+                                        <Badge
+                                            className={`bg-rose-600 text-white hover:bg-rose-600 ${
+                                                f('false_call') ? 'ring-2 ring-rose-300 animate-pulse' : ''
+                                            }`}
+                                        >
+                                            ЛОЖНЫЙ ВЫЗОВ
                                         </Badge>
                                     )}
                                 </div>

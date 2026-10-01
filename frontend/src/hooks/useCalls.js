@@ -176,3 +176,37 @@ export const useDeleteEventTemplate = () => {
         },
     });
 };
+
+// ============================================================
+// СПРАВОЧНИК ЗНАЧЕНИЙ ПОЛЯ «ОБЪЕКТ»
+// ============================================================
+export const useObjectTemplates = () =>
+    useQuery({
+        queryKey: ['calls', 'object-templates'],
+        queryFn: () => api.getObjectTemplates().then((r) => r.data),
+        refetchOnWindowFocus: false,
+    });
+
+export const useCreateObjectTemplate = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => api.createObjectTemplate(data),
+        onSuccess: () => qc.invalidateQueries(['calls', 'object-templates']),
+    });
+};
+
+export const useDeleteObjectTemplate = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (templateId) => api.deleteObjectTemplate(templateId),
+        // Значение уже удалено (кто-то другой / устаревший список) — не ошибка.
+        onSuccess: () => qc.invalidateQueries(['calls', 'object-templates']),
+        onError: (e) => {
+            if (e?.response?.status === 404) {
+                qc.invalidateQueries(['calls', 'object-templates']);
+                return;
+            }
+            throw e;
+        },
+    });
+};

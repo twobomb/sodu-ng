@@ -33,6 +33,7 @@ import UnitsGrid from './pages/units/UnitsGrid';
 import HelpPage from './pages/HelpPage';
 import LineNotesPage from './pages/reports/LineNotesPage';
 import CallJournalPage from './pages/reports/CallJournalPage';
+import DailyStatementPage from './pages/reports/DailyStatementPage';
 import CallSamplePage from './pages/reports/CallSamplePage';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -265,6 +266,14 @@ const router = createBrowserRouter([
                 element: (
                     <PermissionRoute permission="call_journal.export">
                         <CallJournalPage />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'reports/daily-statement',
+                element: (
+                    <PermissionRoute permission="daily_statement.export">
+                        <DailyStatementPage />
                     </PermissionRoute>
                 ),
             },
