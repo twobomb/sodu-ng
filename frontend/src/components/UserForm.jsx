@@ -20,6 +20,31 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { User, Eye, EyeOff, RefreshCw, Check } from 'lucide-react';
+import { useSecuritySettings } from '../hooks/usePasswordSecurity';
+import { toLocalInput, toIso } from '../lib/calls';
+
+// Требования политики по её ключу (совпадает с бэкендом, utils/passwordPolicy)
+const POLICY_CHECKS = {
+    simple: [],
+    medium: ['letter', 'digit', 'upper', 'lower'],
+    complex: ['letter', 'digit', 'upper', 'lower', 'special'],
+};
+
+const POLICY_TESTS = {
+    letter: /[A-Za-zА-Яа-яЁё]/,
+    digit: /\d/,
+    upper: /[A-ZА-ЯЁ]/,
+    lower: /[a-zа-яё]/,
+    special: /[\p{P}\p{S}]/u,
+};
+
+// Проверка пароля по действующей политике (та же логика, что на сервере)
+const passwordMeetsPolicy = (pwd, policy) => {
+    const password = typeof pwd === 'string' ? pwd : '';
+    if (!policy) return password.length >= 8;
+    if (password.length < policy.min) return false;
+    return (POLICY_CHECKS[policy.key] || []).every((c) => POLICY_TESTS[c].test(password));
+};
 
 // Пока фиксированный список ролей. В будущем заменим на API-запрос.
 
@@ -47,12 +72,22 @@ const UserForm = ({
         can_view_all: false,
         departmentIds: [],
         is_blocked: false,
+        password_expires_at: '',
     });
     const { user: currentUser } = useAuth();   // ← вот эта строка
     const isSelf = initialData?.id === currentUser?.id;
     const isSelfDeveloper = isSelf && initialData?.role === 'developer';
     const { data: rolesData } = useRoles();
     const roles = (rolesData?.data || []).filter((r) => r.code !== 'developer');
+
+    // Действующая политика сложности пароля (для подсказок и проверки)
+    const { data: security } = useSecuritySettings();
+    const policy = security?.policy;
+    const minLength = policy?.min ?? 8;
+    const requirements = policy?.requirements ?? [`минимум ${minLength} символов`];
+    const requirementsText = requirements
+        .map((r) => r.charAt(0).toUpperCase() + r.slice(1))
+        .join(', ');
 
     const [showPassword, setShowPassword] = useState(false);
     const [localError, setLocalError] = useState('');
@@ -66,6 +101,7 @@ const UserForm = ({
                 can_view_all: initialData.can_view_all || false,
                 departmentIds: (initialData.departments || []).map((d) => d.id),
                 is_blocked: initialData.is_blocked || false,
+                password_expires_at: toLocalInput(initialData.password_expires_at),
             });
         } else {
             setFormData({
@@ -75,6 +111,7 @@ const UserForm = ({
                 can_view_all: false,
                 departmentIds: [],
                 is_blocked: false,
+                password_expires_at: '',
             });
         }
         setLocalError('');
@@ -137,12 +174,14 @@ const UserForm = ({
         e.preventDefault();
         setLocalError('');
 
-        if (!initialData && formData.password.length < 8) {
-            setLocalError('Пароль должен содержать не менее 8 символов');
+        // Проверка пароля по действующей политике сложности
+        const isEditMode = !!initialData;
+        if (!isEditMode && !passwordMeetsPolicy(formData.password, policy)) {
+            setLocalError(`Пароль не соответствует требованиям: ${requirementsText}`);
             return;
         }
-        if (initialData && formData.password && formData.password.length < 8) {
-            setLocalError('Пароль должен содержать не менее 8 символов');
+        if (isEditMode && formData.password && !passwordMeetsPolicy(formData.password, policy)) {
+            setLocalError(`Пароль не соответствует требованиям: ${requirementsText}`);
             return;
         }
 
@@ -156,6 +195,14 @@ const UserForm = ({
         // Пароль отправляем только если он заполнен
         if (formData.password) {
             payload.password = formData.password;
+        }
+
+        // Дату истечения пароля отправляем только если её действительно изменили
+        const originalExpiry = toLocalInput(initialData?.password_expires_at);
+        if (isEditMode && formData.password_expires_at !== originalExpiry) {
+            payload.password_expires_at = formData.password_expires_at
+                ? toIso(formData.password_expires_at)
+                : null;
         }
 
         onSubmit(payload);
@@ -208,7 +255,7 @@ const UserForm = ({
                                         id="password"
                                         name="password"
                                         type={showPassword ? 'text' : 'password'}
-                                        placeholder="Минимум 8 символов"
+                                        placeholder={`Минимум ${minLength} символов`}
                                         value={formData.password}
                                         onChange={handleChange}
                                         required={!isEdit}
@@ -238,9 +285,30 @@ const UserForm = ({
                                 </Button>
                             </div>
                             <p className="text-xs text-slate-400">
-                                Пароль должен содержать не менее 8 символов
+                                Требования: {requirementsText}
                             </p>
                         </div>
+
+                        {/* Дата истечения пароля (только при редактировании) */}
+                        {isEdit && (
+                            <div className="space-y-2">
+                                <Label htmlFor="password_expires_at">
+                                    Срок действия пароля до
+                                </Label>
+                                <Input
+                                    id="password_expires_at"
+                                    name="password_expires_at"
+                                    type="datetime-local"
+                                    value={formData.password_expires_at || ''}
+                                    onChange={handleChange}
+                                    className="rounded-lg"
+                                />
+                                <p className="text-[11px] text-slate-500">
+                                    Пусто — срок не ограничен. Если дату не менять вручную,
+                                    при смене пароля срок пересчитается автоматически.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Роль */}
                         <div className="space-y-2">

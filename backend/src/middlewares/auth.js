@@ -1,5 +1,6 @@
 const { verifyToken } = require('../utils/jwt');
 const { touchSession } = require('../services/authService');
+const securityService = require('../services/securityService');
 const pool = require('../db/pool');
 
 const authenticate = async (req, res, next) => {
@@ -29,6 +30,7 @@ const authenticate = async (req, res, next) => {
         `
             SELECT
                 u.id, u.username, u.role, u.can_view_all, u.is_blocked,
+                u.password_changed_at, u.password_expires_at,
                 r.name AS role_name, r.permissions,
                 COALESCE(
                         (SELECT array_agg(department_id) FROM user_departments WHERE user_id = u.id),
@@ -58,6 +60,14 @@ const authenticate = async (req, res, next) => {
         can_view_all: u.can_view_all,
         permissions: u.permissions || [],
         department_ids: u.department_ids || [],
+        // Сведения о сроке действия пароля — нужны интерфейсу для
+        // предупреждения «срок истекает» и для вкладки «Безопасность».
+        ...securityService.buildPasswordInfo({
+            role: u.role,
+            permissions: u.permissions || [],
+            password_changed_at: u.password_changed_at,
+            password_expires_at: u.password_expires_at,
+        }),
     };
 
     next();

@@ -1,5 +1,6 @@
 const {
     authenticateUser,
+    changeOwnPassword,
     createSession,
     deleteSessionByToken,
 } = require('../services/authService');
@@ -7,7 +8,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
 const settingsService = require('../services/settingsService');
+const securityService = require('../services/securityService');
 const loginHistoryService = require('../services/loginHistoryService');
+const Joi = require('joi');
 
 /**
  * POST /api/auth/login
@@ -26,6 +29,20 @@ const login = asyncHandler(async (req, res) => {
         if (!user) {
             logger.warn(`Неудачная попытка входа: ${username}`, { ip: req.ip });
             return res.status(401).json({ error: 'Неверные учётные данные' });
+        }
+
+        // ---- Проверка срока действия пароля ----
+        // Просроченный пароль не пускает в систему, кроме пользователей,
+        // у роли которых есть право «Бессрочный пароль».
+        const passwordInfo = securityService.buildPasswordInfo(user);
+        if (passwordInfo.password_expired && !passwordInfo.password_never_expires) {
+            logger.warn(`Попытка входа с просроченным паролем: ${username}`, {
+                ip: req.ip,
+            });
+            return res.status(403).json({
+                error: 'Срок действия пароля истёк. Обратитесь к администратору.',
+                password_expired: true,
+            });
         }
 
         // ---- Проверка режима ТО ----
@@ -95,6 +112,7 @@ const login = asyncHandler(async (req, res) => {
                 can_view_all: user.can_view_all,
                 permissions: user.permissions,
                 department_ids: user.department_ids || [],
+                ...passwordInfo,
             },
             token: session.token,
         });
@@ -148,8 +166,39 @@ const getMe = (req, res) => {
     res.json(req.user);
 };
 
+const changePasswordSchema = Joi.object({
+    current_password: Joi.string().min(1).max(200).required(),
+    new_password: Joi.string().min(1).max(200).required(),
+});
+
+/**
+ * POST /api/auth/change-password
+ * Смена собственного пароля (доступно любому авторизованному пользователю).
+ */
+const changePassword = asyncHandler(async (req, res) => {
+    const { error, value } = changePasswordSchema.validate(req.body || {});
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    try {
+        await changeOwnPassword(req.user.id, value.current_password, value.new_password);
+        logger.info(`Пароль изменён: ${req.user.username}`, { userId: req.user.id });
+        res.json({ ok: true });
+    } catch (err) {
+        // Понятные пользователю ошибки — неверный текущий пароль и слабый новый
+        if (err.code === 'BAD_CURRENT_PASSWORD' || err.code === 'WEAK_PASSWORD') {
+            return res.status(400).json({ error: err.message });
+        }
+        logger.error(`Ошибка смены пароля ${req.user?.username}: ` + err.message, {
+            stack: err.stack,
+            userId: req.user?.id,
+        });
+        res.status(500).json({ error: 'Не удалось изменить пароль' });
+    }
+});
+
 module.exports = {
     login,
     logout,
     getMe,
+    changePassword,
 };

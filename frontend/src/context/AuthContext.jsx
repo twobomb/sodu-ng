@@ -34,6 +34,14 @@ export const AuthProvider = ({ children }) => {
     return user;
   };
 
+  const refreshUser = async () => {
+    const res = await getCurrentUser();
+    const fresh = res.data;
+    localStorage.setItem('user', JSON.stringify(fresh));
+    setUser(fresh);
+    return fresh;
+  };
+
   const logout = async () => {
     try {
       await apiLogout();
@@ -55,7 +63,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

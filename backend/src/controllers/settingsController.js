@@ -1,4 +1,5 @@
 const settingsService = require('../services/settingsService');
+const securityService = require('../services/securityService');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
@@ -283,12 +284,70 @@ const updateSoduSettings = asyncHandler(async (req, res) => {
     }
 });
 
+// ============================================================
+// Безопасность паролей
+// ============================================================
+const securitySettingsSchema = Joi.object({
+    password_policy: Joi.string().valid('simple', 'medium', 'complex'),
+    password_expiry_days: Joi.number().integer().min(1).max(3650),
+});
+
+// GET /api/settings/security — доступно всем авторизованным:
+// нужно для подсказок о требованиях к паролю и для вкладки «Безопасность»
+const getSecuritySettings = asyncHandler(async (req, res) => {
+    try {
+        res.json(await securityService.getSecuritySettings());
+    } catch (err) {
+        logger.error('Ошибка получения настроек безопасности: ' + err.message, {
+            stack: err.stack,
+        });
+        res.status(500).json({ error: 'Ошибка получения настроек безопасности' });
+    }
+});
+
+// PUT /api/settings/security — только developer
+const updateSecuritySettings = asyncHandler(async (req, res) => {
+    const { error, value } = securitySettingsSchema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+
+    try {
+        const updated = await securityService.updateSecuritySettings({
+            passwordPolicy: value.password_policy,
+            expiryDays: value.password_expiry_days,
+            updatedBy: req.user.id,
+        });
+
+        const io = req.app.get('io');
+        if (io) io.emit('force_refresh', { domains: ['settings'] });
+
+        logger.info('Обновлены настройки безопасности паролей', {
+            user: req.user?.id,
+            password_policy: updated.password_policy,
+            password_expiry_days: updated.password_expiry_days,
+        });
+
+        res.json(updated);
+    } catch (err) {
+        logger.error('Ошибка обновления настроек безопасности: ' + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({
+            error: err.message || 'Ошибка обновления настроек безопасности',
+        });
+    }
+});
+
 module.exports = {
     getSettings,
     getPublicSettings,
     getUploadDisk,
     getSoduSettings,
     updateSoduSettings,
+    getSecuritySettings,
+    updateSecuritySettings,
     updateSettings,
     sendBroadcast,
 };

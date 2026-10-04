@@ -5,6 +5,10 @@ import {
     useSendBroadcast,
     useDiskInfo,
 } from '../../hooks/useSettings';
+import {
+    useSecuritySettings,
+    useUpdateSecuritySettings,
+} from '../../hooks/usePasswordSecurity';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,7 +28,23 @@ import {
     Send,
     FileText,
     Info,
+    ShieldCheck,
 } from 'lucide-react';
+
+// Варианты сложности пароля (совпадают с политиками на бэкенде)
+const POLICY_OPTIONS = [
+    { value: 'simple', label: 'Простой', hint: 'минимум 8 символов' },
+    {
+        value: 'medium',
+        label: 'Средний',
+        hint: 'минимум 10 символов, буквы и цифры, хотя бы одна заглавная и одна строчная буква',
+    },
+    {
+        value: 'complex',
+        label: 'Сложный',
+        hint: 'минимум 12 символов, буквы в разных регистрах, цифры и хотя бы один специальный символ',
+    },
+];
 
 // Нормализация: массив / {data: ...} / undefined
 const unwrap = (v) => (v && v.data !== undefined ? v.data : v);
@@ -62,6 +82,46 @@ const SystemTab = () => {
     const [broadcastText, setBroadcastText] = useState('');
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [broadcastMessageType, setBroadcastMessageType] = useState('info');
+
+    // ---- Безопасность: политика пароля и срок действия ----
+    const { data: security } = useSecuritySettings();
+    const updateSecurity = useUpdateSecuritySettings();
+    const [passwordPolicy, setPasswordPolicy] = useState('simple');
+    const [expiryDays, setExpiryDays] = useState(30);
+    const [securityMessage, setSecurityMessage] = useState('');
+    const [securityMessageType, setSecurityMessageType] = useState('info');
+
+    const [syncedSecurity, setSyncedSecurity] = useState(undefined);
+    if (security !== syncedSecurity) {
+        setSyncedSecurity(security);
+        if (security) {
+            setPasswordPolicy(security.password_policy || 'simple');
+            setExpiryDays(Number(security.password_expiry_days) || 30);
+        }
+    }
+
+    const handleSaveSecurity = () => {
+        setSecurityMessage('');
+        updateSecurity.mutate(
+            {
+                password_policy: passwordPolicy,
+                password_expiry_days: Number(expiryDays) || 30,
+            },
+            {
+                onSuccess: () => {
+                    setSecurityMessageType('success');
+                    setSecurityMessage('Настройки безопасности сохранены');
+                },
+                onError: (e) => {
+                    setSecurityMessageType('error');
+                    setSecurityMessage(
+                        e?.response?.data?.error ||
+                            'Не удалось сохранить настройки безопасности'
+                    );
+                },
+            }
+        );
+    };
 
     // Синхронизация локального состояния с загруженными настройками.
     // Паттерн «adjusting state when a prop changes» из документации React —
@@ -479,6 +539,106 @@ const SystemTab = () => {
                             className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 rounded-lg"
                         >
                             {updateSettings.isPending ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Сохранение...
+                                </>
+                            ) : (
+                                'Сохранить'
+                            )}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Безопасность: сложность и срок действия пароля */}
+            <Card className="rounded-2xl border-slate-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <ShieldCheck className="h-5 w-5 text-orange-500" />
+                        Безопасность
+                    </CardTitle>
+                    <CardDescription>
+                        Сложность пароля и срок его действия. Правила применяются при
+                        создании пользователя и при смене пароля.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Сложность пароля</Label>
+                        <div className="space-y-2">
+                            {POLICY_OPTIONS.map((o) => (
+                                <label
+                                    key={o.value}
+                                    className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                                        passwordPolicy === o.value
+                                            ? 'border-orange-300 bg-orange-50'
+                                            : 'border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="password_policy"
+                                        value={o.value}
+                                        checked={passwordPolicy === o.value}
+                                        onChange={(e) => setPasswordPolicy(e.target.value)}
+                                        className="mt-1 h-4 w-4 accent-orange-500"
+                                    />
+                                    <div className="flex-1">
+                                        <div className="font-medium text-slate-800">
+                                            {o.label}
+                                        </div>
+                                        <p className="text-sm text-slate-500 mt-0.5">
+                                            {o.hint}
+                                        </p>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 max-w-xs">
+                        <Label htmlFor="password_expiry_days">
+                            Срок действия пароля, дней
+                        </Label>
+                        <Input
+                            id="password_expiry_days"
+                            type="number"
+                            min="1"
+                            max="3650"
+                            value={expiryDays}
+                            onChange={(e) => setExpiryDays(e.target.value)}
+                            className="rounded-lg"
+                        />
+                        <p className="text-xs text-slate-500">
+                            По умолчанию 30 дней. За {security?.warning_days ?? 5} дней до
+                            истечения пользователь получает предупреждение. Роли с правом
+                            «Бессрочный пароль» срок не ограничивает.
+                        </p>
+                    </div>
+
+                    {securityMessage && (
+                        <div
+                            className={`text-sm p-3 rounded-lg border flex items-center gap-2 ${
+                                securityMessageType === 'error'
+                                    ? 'bg-red-50 text-red-600 border-red-200'
+                                    : 'bg-green-50 text-green-700 border-green-200'
+                            }`}
+                        >
+                            {securityMessageType !== 'error' && (
+                                <CheckCircle2 className="h-4 w-4" />
+                            )}
+                            {securityMessage}
+                        </div>
+                    )}
+
+                    <div className="flex justify-end">
+                        <Button
+                            onClick={handleSaveSecurity}
+                            disabled={updateSecurity.isPending}
+                            className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 rounded-lg"
+                        >
+                            {updateSecurity.isPending ? (
                                 <>
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                     Сохранение...

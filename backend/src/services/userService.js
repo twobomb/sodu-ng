@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const pool = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
+const securityService = require('./securityService');
 
 const SALT_ROUNDS = 10;
 
@@ -12,6 +13,7 @@ const getAllUsers = async () => {
         SELECT
             u.id, u.username, u.role, u.can_view_all, u.is_blocked,
             u.created_at, u.updated_at,
+            u.password_changed_at, u.password_expires_at,
             COALESCE(
                     json_agg(
                             json_build_object('id', d.id, 'name', d.name)
@@ -34,6 +36,7 @@ const getUserById = async (id) => {
         SELECT
             u.id, u.username, u.role, u.can_view_all, u.is_blocked,
             u.created_at, u.updated_at,
+            u.password_changed_at, u.password_expires_at,
             COALESCE(
                     json_agg(
                             json_build_object('id', d.id, 'name', d.name)
@@ -55,8 +58,19 @@ const getUserById = async (id) => {
  * @returns {Object} созданный пользователь (без пароля)
  */
 const createUser = async ({ username, password, role, can_view_all = false, departmentIds = [] }) => {
+    // Проверка сложности пароля по действующей политике
+    const policyKey = await securityService.getPolicyKey();
+    const policyCheck = securityService.validatePassword(password, policyKey);
+    if (!policyCheck.ok) {
+        const err = new Error(policyCheck.error);
+        err.code = 'WEAK_PASSWORD';
+        throw err;
+    }
+
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
     const userId = uuidv4();
+    // Срок действия пароля считаем от текущего момента
+    const expiresAt = securityService.computeExpiresAt(await securityService.getExpiryDays());
 
     // Начинаем транзакцию
     const client = await pool.connect();
@@ -65,10 +79,10 @@ const createUser = async ({ username, password, role, can_view_all = false, depa
 
         // Вставка пользователя
         const userResult = await client.query(
-            `INSERT INTO users (id, username, password_hash, role, can_view_all)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, username, role, can_view_all, created_at, updated_at`,
-            [userId, username, hashed, role, can_view_all]
+            `INSERT INTO users (id, username, password_hash, role, can_view_all, password_changed_at, password_expires_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+       RETURNING id, username, role, can_view_all, created_at, updated_at, password_changed_at, password_expires_at`,
+            [userId, username, hashed, role, can_view_all, expiresAt]
         );
         const newUser = userResult.rows[0];
 
@@ -95,7 +109,7 @@ const createUser = async ({ username, password, role, can_view_all = false, depa
 /**
  * Обновить пользователя (пароль обновляется только если передан)
  */
-const updateUser = async (id, { username, password, role, can_view_all, departmentIds, is_blocked }) => {
+const updateUser = async (id, { username, password, role, can_view_all, departmentIds, is_blocked, password_expires_at }) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -109,10 +123,33 @@ const updateUser = async (id, { username, password, role, can_view_all, departme
             updates.push(`username = $${paramIndex++}`);
             values.push(username);
         }
+        // Дата истечения пароля, заданная администратором вручную.
+        // Если она передана — автосрок при смене пароля не применяем,
+        // приоритет у значения администратора.
+        const hasExplicitExpiry = password_expires_at !== undefined;
         if (password) {
+            const policyKey = await securityService.getPolicyKey();
+            const policyCheck = securityService.validatePassword(password, policyKey);
+            if (!policyCheck.ok) {
+                const err = new Error(policyCheck.error);
+                err.code = 'WEAK_PASSWORD';
+                throw err;
+            }
             const hashed = await bcrypt.hash(password, SALT_ROUNDS);
             updates.push(`password_hash = $${paramIndex++}`);
             values.push(hashed);
+            updates.push(`password_changed_at = NOW()`);
+            if (!hasExplicitExpiry) {
+                const expiresAt = securityService.computeExpiresAt(
+                    await securityService.getExpiryDays()
+                );
+                updates.push(`password_expires_at = $${paramIndex++}`);
+                values.push(expiresAt);
+            }
+        }
+        if (hasExplicitExpiry) {
+            updates.push(`password_expires_at = $${paramIndex++}`);
+            values.push(password_expires_at ? new Date(password_expires_at) : null);
         }
         if (role !== undefined) {
             updates.push(`role = $${paramIndex++}`);
@@ -134,7 +171,8 @@ const updateUser = async (id, { username, password, role, can_view_all, departme
         UPDATE users 
         SET ${updates.join(', ')}
         WHERE id = $${paramIndex}
-        RETURNING id, username, role, can_view_all, created_at, updated_at
+        RETURNING id, username, role, can_view_all, created_at, updated_at,
+                  password_changed_at, password_expires_at
       `;
             values.push(id);
             const result = await client.query(query, values);
@@ -145,7 +183,9 @@ const updateUser = async (id, { username, password, role, can_view_all, departme
         } else {
             // Если нечего обновлять, просто получаем пользователя
             const result = await client.query(
-                `SELECT id, username, role, can_view_all, created_at, updated_at FROM users WHERE id = $1`,
+                `SELECT id, username, role, can_view_all, created_at, updated_at,
+                        password_changed_at, password_expires_at
+                   FROM users WHERE id = $1`,
                 [id]
             );
             if (!result.rows.length) {

@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const pool = require('../db/pool');
 const { generateToken } = require('../utils/jwt');
+const securityService = require('./securityService');
 
 const SALT_ROUNDS = 10;
 
@@ -93,6 +94,54 @@ const createSession = async (userId) => {
 };
 
 /**
+ * Смена собственного пароля: проверяет текущий пароль, применяет политику
+ * сложности и пересчитывает срок действия.
+ * Возвращает { id, username }.
+ */
+const changeOwnPassword = async (userId, currentPassword, newPassword) => {
+    const res = await pool.query(
+        'SELECT id, username, password_hash FROM users WHERE id = $1',
+        [userId]
+    );
+    const user = res.rows[0];
+    if (!user) {
+        const err = new Error('Пользователь не найден');
+        err.code = 'USER_NOT_FOUND';
+        throw err;
+    }
+
+    const match = await bcrypt.compare(currentPassword || '', user.password_hash);
+    if (!match) {
+        const err = new Error('Неверный текущий пароль');
+        err.code = 'BAD_CURRENT_PASSWORD';
+        throw err;
+    }
+
+    const policyKey = await securityService.getPolicyKey();
+    const policyCheck = securityService.validatePassword(newPassword, policyKey);
+    if (!policyCheck.ok) {
+        const err = new Error(policyCheck.error);
+        err.code = 'WEAK_PASSWORD';
+        throw err;
+    }
+
+    const hashed = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    const expiresAt = securityService.computeExpiresAt(await securityService.getExpiryDays());
+
+    await pool.query(
+        `UPDATE users
+            SET password_hash = $1,
+                password_changed_at = NOW(),
+                password_expires_at = $2,
+                updated_at = NOW()
+          WHERE id = $3`,
+        [hashed, expiresAt, userId]
+    );
+
+    return { id: user.id, username: user.username };
+};
+
+/**
  * Удаляет сессию по токену (выход)
  */
 const deleteSessionByToken = async (token) => {
@@ -116,6 +165,7 @@ module.exports = {
     findUserByUsername,
     createUser,
     authenticateUser,
+    changeOwnPassword,
     createSession,
     deleteSessionByToken,
     touchSession,

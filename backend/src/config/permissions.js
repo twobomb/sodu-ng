@@ -84,6 +84,11 @@ const PERMISSIONS_CATALOG = [
             { key: 'users.delete', name: 'Удаление', description: 'Удалять пользователей' },
             { key: 'users.block', name: 'Блокировка', description: 'Блокировать и разблокировать' },
             { key: 'users.login_history', name: 'История входов', description: 'Просматривать историю входов пользователей' },
+            {
+                key: 'users.password_never_expires',
+                name: 'Бессрочный пароль',
+                description: 'Пользователь может входить в систему даже с просроченным паролем',
+            },
         ],
     },
     {

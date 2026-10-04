@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import ChatWidget from '../components/chat/ChatWidget';
 import SystemBroadcastModal from '../components/SystemBroadcastModal';
+import PasswordExpiryNotice from '../components/PasswordExpiryNotice';
 const Layout = () => {
     const { user } = useAuth();
     const token = localStorage.getItem('token');
@@ -17,6 +18,8 @@ const Layout = () => {
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200">
             <NavBar />
             <div className="px-8 py-6 max-w-full">
+                {/* Предупреждение о сроке действия пароля (если скоро истекает) */}
+                <PasswordExpiryNotice />
                 <Outlet />
             </div>
             {user && <ChatWidget />}

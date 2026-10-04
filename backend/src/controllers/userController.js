@@ -60,7 +60,9 @@ const validateRoleExists = async (roleCode) => {
 // ============================================================
 const createUserSchema = Joi.object({
     username: Joi.string().min(3).max(50).required(),
-    password: Joi.string().min(6).required(),
+    // Минимальную длину и состав пароля проверяет политика пароля
+    // (см. utils/passwordPolicy + services/securityService)
+    password: Joi.string().min(1).max(200).required(),
     role: Joi.string().max(50).required(),
     can_view_all: Joi.boolean().default(false),
     departmentIds: Joi.array().items(Joi.string().uuid()).default([]),
@@ -68,10 +70,13 @@ const createUserSchema = Joi.object({
 
 const updateUserSchema = Joi.object({
     username: Joi.string().min(3).max(50),
-    password: Joi.string().min(6),
+    password: Joi.string().min(1).max(200),
     role: Joi.string().max(50),
     can_view_all: Joi.boolean(),
     departmentIds: Joi.array().items(Joi.string().uuid()),
+    // Дата истечения пароля, задаваемая администратором вручную
+    // (пустая строка / null — бессрочно по дате)
+    password_expires_at: Joi.string().allow('', null),
 });
 
 // ============================================================
@@ -154,6 +159,9 @@ const createUser = asyncHandler(async (req, res) => {
             user: req.user?.id,
         });
 
+        if (err.code === 'WEAK_PASSWORD') {
+            return res.status(400).json({ error: err.message });
+        }
         if (err.code === '23505' && err.constraint === 'users_username_key') {
             return res.status(400).json({ error: 'Имя пользователя уже занято' });
         }
@@ -229,6 +237,9 @@ const updateUser = asyncHandler(async (req, res) => {
             user: req.user?.id,
         });
 
+        if (err.code === 'WEAK_PASSWORD') {
+            return res.status(400).json({ error: err.message });
+        }
         if (err.code === '23505' && err.constraint === 'users_username_key') {
             return res.status(400).json({ error: 'Имя пользователя уже занято' });
         }

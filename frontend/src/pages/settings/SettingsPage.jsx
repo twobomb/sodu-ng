@@ -19,15 +19,19 @@ import {
     HardDrive,
     Volume2,
     MessageSquareMore,
+    ShieldCheck,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
 import SystemTab from './SystemTab';
 import FilesTab from './FilesTab';
 import SoundsTab from './SoundsTab';
 import SoduTab from './SoduTab';
+import SecurityTab from './SecurityTab';
 
 const SettingsPage = () => {
     const { isDeveloper, has } = usePermissions();
+    const [searchParams] = useSearchParams();
 
     // «Системные» — только для разработчика
     const showSystem = isDeveloper;
@@ -35,18 +39,34 @@ const SettingsPage = () => {
     const showFiles = has('settings.files');
     // «Звуки» — доступны всем пользователям
     const showSounds = true;
+    // «Безопасность» — доступна всем (смена собственного пароля)
+    const showSecurity = true;
     // «Настройки чата» — только если есть доступ к чату
     const showChatSettings = has('chat.use');
     // «Настройки СОДУ» — только по праву sodu.settings
     const showSodu = has('sodu.settings');
 
-    const defaultTab = showSystem
+    const availableTabs = [];
+    if (showSystem) availableTabs.push('system');
+    if (showFiles) availableTabs.push('files');
+    if (showSounds) availableTabs.push('sounds');
+    if (showSecurity) availableTabs.push('security');
+    if (showChatSettings) availableTabs.push('chat-settings');
+    if (showSodu) availableTabs.push('sodu');
+
+    // Вкладка по умолчанию (как было) — либо вкладка из ссылки (?tab=security)
+    const preferredDefault = showSystem
         ? 'system'
         : showFiles
             ? 'files'
             : showSodu
                 ? 'sodu'
                 : 'sounds';
+    const requestedTab = searchParams.get('tab');
+    const defaultTab =
+        requestedTab && availableTabs.includes(requestedTab)
+            ? requestedTab
+            : preferredDefault;
 
     // Открыть чат сразу на странице настроек в чате
     const openChatSettings = () =>
@@ -60,7 +80,7 @@ const SettingsPage = () => {
                     Настройки
                 </h2>
                 <p className="text-sm text-slate-500 mt-1">
-                    Системные настройки, управление файлами и звуки
+                    Системные настройки, управление файлами, звуки и безопасность
                 </p>
             </div>
 
@@ -91,6 +111,15 @@ const SettingsPage = () => {
                         >
                             <Volume2 className="h-4 w-4 mr-2" />
                             Звуки
+                        </TabsTrigger>
+                    )}
+                    {showSecurity && (
+                        <TabsTrigger
+                            value="security"
+                            className="rounded-lg data-[state=active]:bg-orange-500 data-[state=active]:text-white px-4"
+                        >
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                            Безопасность
                         </TabsTrigger>
                     )}
                     {showChatSettings && (
@@ -129,6 +158,12 @@ const SettingsPage = () => {
                 {showSounds && (
                     <TabsContent value="sounds" className="mt-4">
                         <SoundsTab />
+                    </TabsContent>
+                )}
+
+                {showSecurity && (
+                    <TabsContent value="security" className="mt-4">
+                        <SecurityTab />
                     </TabsContent>
                 )}
 

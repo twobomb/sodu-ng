@@ -8,6 +8,11 @@ export const getSoduSettings = () => apiClient.get('/settings/sodu');
 export const updateSoduSettings = (data) =>
     apiClient.put('/settings/sodu', data);
 
+// Безопасность паролей: чтение — всем, изменение — только разработчику
+export const getSecuritySettings = () => apiClient.get('/settings/security');
+export const updateSecuritySettings = (data) =>
+    apiClient.put('/settings/security', data);
+
 export const sendBroadcast = (data) =>
     apiClient.post('/settings/broadcast', data);
 

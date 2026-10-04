@@ -9,6 +9,8 @@ const {
     getUploadDisk,
     getSoduSettings,
     updateSoduSettings,
+    getSecuritySettings,
+    updateSecuritySettings,
     updateSettings,
     sendBroadcast,
     getLatestBroadcast,
@@ -39,6 +41,11 @@ router.post('/files/delete', requirePermission('settings.files'), deleteFiles);
 // изменение — только по праву sodu.settings.
 router.get('/sodu', getSoduSettings);
 router.put('/sodu', requirePermission('sodu.settings'), updateSoduSettings);
+
+// Безопасность паролей: чтение — всем авторизованным (требования к паролю
+// нужны в интерфейсе), изменение — только разработчику.
+router.get('/security', getSecuritySettings);
+router.put('/security', requireDeveloper, updateSecuritySettings);
 
 // Системные настройки — только developer
 router.use(requireDeveloper);
