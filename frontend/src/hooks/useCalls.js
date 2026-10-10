@@ -15,7 +15,7 @@ const invalidateCalls = (queryClient) =>
 // ============================================================
 export const useCalls = (filters = {}) => {
     const clean = {};
-    for (const k of ['status', 'type', 'municipality', 'search', 'date_from', 'date_to', 'created_from', 'created_to', 'page', 'pageSize', 'sample', 'sample_id']) {
+    for (const k of ['status', 'type', 'municipality', 'search', 'date_from', 'date_to', 'created_from', 'created_to', 'received_from', 'received_to', 'carryover_fire', 'false_call', 'page', 'pageSize', 'sample', 'sample_id']) {
         if (filters[k] !== undefined && filters[k] !== '' && filters[k] !== null) {
             clean[k] = filters[k];
         }

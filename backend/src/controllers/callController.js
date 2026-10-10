@@ -183,6 +183,11 @@ const getCalls = asyncHandler(async (req, res) => {
             date_to: req.query.date_to || null,
             created_from: req.query.created_from || null,
             created_to: req.query.created_to || null,
+            received_from: req.query.received_from || null,
+            received_to: req.query.received_to || null,
+            // Признаки: 'true' | 'false' | иначе не фильтруем
+            carryover_fire: req.query.carryover_fire || null,
+            false_call: req.query.false_call || null,
             page: req.query.page,
             pageSize: req.query.pageSize,
         };

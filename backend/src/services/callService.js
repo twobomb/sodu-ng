@@ -179,6 +179,28 @@ const getCalls = async (filters = {}, opts = {}) => {
         i++;
     }
 
+    // Фильтр по времени получения сообщения (message_received_at) — диапазон по датам
+    if (filters.received_from) {
+        conds.push(`c.message_received_at >= $${i}::date`);
+        params.push(filters.received_from);
+        i++;
+    }
+    if (filters.received_to) {
+        conds.push(`c.message_received_at < ($${i}::date + interval '1 day')`);
+        params.push(filters.received_to);
+        i++;
+    }
+
+    // Признаки «Переходящий пожар» и «Ложный вызов» ('true' | 'false')
+    if (filters.carryover_fire === 'true' || filters.carryover_fire === 'false') {
+        conds.push(`c.carryover_fire = $${i++}`);
+        params.push(filters.carryover_fire === 'true');
+    }
+    if (filters.false_call === 'true' || filters.false_call === 'false') {
+        conds.push(`c.false_call = $${i++}`);
+        params.push(filters.false_call === 'true');
+    }
+
     // Дополнительный фильтр по определению выборки (конструктор запросов).
     // Определение приходит строкой JSON (или объектом) и строится безопасным
     // построителем: поля/операторы — только из белого списка, значения — через параметры.

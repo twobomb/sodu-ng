@@ -17,7 +17,7 @@ const Layout = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200">
             <NavBar />
-            <div className="px-8 py-6 max-w-full">
+            <div className="px-8 pt-6 pb-24 max-w-full">
                 {/* Предупреждение о сроке действия пароля (если скоро истекает) */}
                 <PasswordExpiryNotice />
                 <Outlet />
