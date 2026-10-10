@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate, useObjectTemplates, useCreateObjectTemplate, useDeleteObjectTemplate } from '../../hooks/useCalls';
+import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate, useObjectTemplates, useCreateObjectTemplate, useDeleteObjectTemplate, useCallHistory } from '../../hooks/useCalls';
 import { useUnits, useUnitStatuses, useChangeUnitStatus, useAvailableCalls } from '../../hooks/useUnits';
 import { useDepartments } from '../../hooks/useDepartments';
 import { useAuth } from '../../context/AuthContext';
@@ -37,7 +37,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search, Map as MapIcon, Globe } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Loader2, Siren, User, ChevronDown, Shield, Search, Map as MapIcon, Globe, History } from 'lucide-react';
 
 // Поля-даты вызова (в БД — timestamptz)
 const DATETIME_FIELDS = [
@@ -62,6 +62,16 @@ const FIRE_MEANS_PRESETS = [
     { id: 'svp', label: 'СВП', qty: true },
     { id: 'other', label: 'Иные', text: true },
 ];
+
+// Подписи и оформление типов действий в истории вызова
+const HISTORY_ACTION_META = {
+    created: { label: 'Создание', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    updated: { label: 'Сохранение', cls: 'bg-orange-100 text-orange-700 border-orange-200' },
+    status: { label: 'Статус', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+    units: { label: 'Техника', cls: 'bg-sky-100 text-sky-700 border-sky-200' },
+    events: { label: 'Ход событий', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
+    access: { label: 'Доступ', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+};
 
 // Поля-числа пострадавших
 const VICTIM_NUMBER_FIELDS = [
@@ -109,6 +119,7 @@ const EMPTY_FORM = {
     dtp_vehicle_marks: [],
     dtp_work_description: '',
     involved_staff: [],
+    involved_other_means: [],
     fire_leaders: [],
     fire_extinguishing_means: [],
 };
@@ -138,6 +149,7 @@ const fromServer = (call) => {
     f.dtp_vehicle_marks = Array.isArray(call?.dtp_vehicle_marks) ? call.dtp_vehicle_marks : [];
     f.dtp_work_description = call?.dtp_work_description || '';
     f.involved_staff = Array.isArray(call?.involved_staff) ? call.involved_staff : [];
+    f.involved_other_means = Array.isArray(call?.involved_other_means) ? call.involved_other_means : [];
     f.fire_leaders = Array.isArray(call?.fire_leaders) ? call.fire_leaders : [];
     f.fire_extinguishing_means = Array.isArray(call?.fire_extinguishing_means) ? call.fire_extinguishing_means : [];
     return f;
@@ -365,6 +377,8 @@ const CallDetail = () => {
     const setCallDepts = useSetCallDepartments();
 
     const [accessOpen, setAccessOpen] = useState(false);
+    // Диалог истории редактирования вызова
+    const [historyOpen, setHistoryOpen] = useState(false);
     const [accessSearch, setAccessSearch] = useState('');
     const [accessSelected, setAccessSelected] = useState([]);
     // Ошибка сохранения статуса/дат — точечно для конкретной техники
@@ -398,6 +412,9 @@ const CallDetail = () => {
     const objectTemplatesQuery = useObjectTemplates();
     const createObjectTemplate = useCreateObjectTemplate();
     const deleteObjectTemplate = useDeleteObjectTemplate();
+    // История редактирования — грузим только когда открыт диалог
+    const historyQuery = useCallHistory(id, historyOpen);
+    const historyRows = Array.isArray(historyQuery.data) ? historyQuery.data : [];
 
     const call = callQuery.data;
     const callStatus = call?.status;
@@ -564,6 +581,11 @@ const CallDetail = () => {
         payload.dtp_work_description = formData.dtp_work_description || '';
         payload.involved_staff = (formData.involved_staff || []).map((row) => ({
             department_id: row.department_id || null,
+            uid: row.uid || null,
+            name: row.name || '',
+            count: row.count === '' || row.count == null ? 0 : Number(row.count) || 0,
+        }));
+        payload.involved_other_means = (formData.involved_other_means || []).map((row) => ({
             uid: row.uid || null,
             name: row.name || '',
             count: row.count === '' || row.count == null ? 0 : Number(row.count) || 0,
@@ -761,6 +783,9 @@ const CallDetail = () => {
     const [pendingStaffDelete, setPendingStaffDelete] = useState(null);
     // Ввод названия произвольного «поля» в личном составе + подтверждение удаления РТП
     const [staffCustomName, setStaffCustomName] = useState('');
+    // Привлечённые технические средства других ведомств
+    const [otherMeansName, setOtherMeansName] = useState('');
+    const [pendingOtherMeanDelete, setPendingOtherMeanDelete] = useState(null);
     const [leaderToDelete, setLeaderToDelete] = useState(null);
     // Подтверждение удаления средства пожаротушения
     const [fireMeansToDelete, setFireMeansToDelete] = useState(null);
@@ -979,6 +1004,42 @@ const CallDetail = () => {
     };
     const totalStaff = staffRows.reduce((sum, r) => sum + (Number(r.count) || 0), 0);
 
+    // ---------- Привлечённые технические средства других ведомств ----------
+    const otherMeansRows = Array.isArray(formData.involved_other_means)
+        ? formData.involved_other_means
+        : [];
+    const otherMeanKey = (row) => (row?.uid ? `u${row.uid}` : `n${row?.name || ''}`);
+
+    const setOtherMeanName = (key, name) => {
+        setField('involved_other_means', otherMeansRows.map((r) =>
+            otherMeanKey(r) === key ? { ...r, name } : r
+        ));
+    };
+    const setOtherMeanCount = (key, val) => {
+        const valNum = val === '' || val == null ? 0 : Number(val);
+        setField('involved_other_means', otherMeansRows.map((r) =>
+            otherMeanKey(r) === key ? { ...r, count: isNaN(valNum) ? 0 : valNum } : r
+        ));
+    };
+    const addOtherMean = () => {
+        const name = (otherMeansName || '').trim();
+        if (!name) return;
+        // Уникальный ключ, который переживает сохранение/перезагрузку
+        const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        setField('involved_other_means', [...otherMeansRows, { uid, name, count: 1 }]);
+        setOtherMeansName('');
+    };
+    const confirmRemoveOtherMean = () => {
+        if (!pendingOtherMeanDelete) return;
+        setField('involved_other_means', otherMeansRows.filter((r) => otherMeanKey(r) !== pendingOtherMeanDelete));
+        setPendingOtherMeanDelete(null);
+    };
+    const otherMeanDisplayName = (key) => {
+        const row = otherMeansRows.find((r) => otherMeanKey(r) === key);
+        return row?.name || 'Без наименования';
+    };
+    const totalOtherMeans = otherMeansRows.reduce((sum, r) => sum + (Number(r.count) || 0), 0);
+
     // ---------- Руководители тушения пожара (РТП) ----------
     const fireLeaders = Array.isArray(formData.fire_leaders) ? formData.fire_leaders : [];
     const addFireLeader = () => {
@@ -1060,6 +1121,9 @@ const CallDetail = () => {
                         )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                        <Button variant="outline" onClick={() => setHistoryOpen(true)} className="rounded-lg border-slate-200 h-9 w-9 p-0 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" title="История редактирования вызова">
+                            <History className="h-4 w-4" />
+                        </Button>
                         <Button variant="outline" onClick={() => setAccessOpen(true)} className="rounded-lg border-slate-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" title="Настроить доступ к вызову">
                             <Shield className="h-4 w-4 mr-2" /> Доступ
                         </Button>
@@ -1094,7 +1158,7 @@ const CallDetail = () => {
                 <div className="lg:col-span-2 space-y-4">
                     {/* Привлекаемая техника — в самом верху */}
                     <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
-                        <h2 className="text-base font-semibold text-slate-700 mb-3">Привлекаемая техника</h2>
+                        <h2 className="text-base font-semibold text-slate-700 mb-3">Привлекаемая техника МЧС</h2>
                         {canEdit && (
                             <SearchableSelect groups={unitOptionGroups} value="" onChange={handleAddUnit} placeholder="Добавить технику..." emptyText="Нет доступной техники" renderOption={(o) => (
                                 <div className="flex flex-col min-w-0"><span className="text-sm truncate">{o.label}</span>{o.extra && <span className="text-[11px] text-slate-400 truncate">{o.extra}</span>}</div>
@@ -1369,6 +1433,67 @@ const CallDetail = () => {
                             <div className="flex items-center justify-between rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 mt-1">
                                 <span className="text-sm font-medium text-slate-700">Общее количество привлеченного л/с</span>
                                 <span className="text-base font-bold text-orange-700">{totalStaff} чел.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Привлечённые технические средства других ведомств */}
+                    <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                        <h2 className="text-base font-semibold text-slate-700 mb-3">Привлечённые технические средства других ведомств</h2>
+                        <div className="space-y-2">
+                            {otherMeansRows.length === 0 && !canEdit && (
+                                <p className="text-sm text-slate-400">Средства других ведомств не привлекались</p>
+                            )}
+                            {otherMeansRows.map((row) => (
+                                <div key={otherMeanKey(row)} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                                    <Input
+                                        value={row.name || ''}
+                                        disabled={!canEdit}
+                                        onChange={(e) => setOtherMeanName(otherMeanKey(row), e.target.value)}
+                                        placeholder="Наименование (например, Скорая помощь)"
+                                        className="flex-1 min-w-0 rounded-lg"
+                                    />
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <Label className="text-xs text-slate-500 whitespace-nowrap">Кол-во</Label>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            value={row.count ?? 0}
+                                            disabled={!canEdit}
+                                            onChange={(e) => setOtherMeanCount(otherMeanKey(row), e.target.value)}
+                                            className="w-24 rounded-lg"
+                                        />
+                                        {canEdit && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setPendingOtherMeanDelete(otherMeanKey(row))}
+                                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                                                title="Удалить"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {canEdit && (
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        value={otherMeansName}
+                                        onChange={(e) => setOtherMeansName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') addOtherMean(); }}
+                                        placeholder="Произвольное наименование..."
+                                        className="flex-1 rounded-lg"
+                                    />
+                                    <Button type="button" onClick={addOtherMean} disabled={!otherMeansName.trim()} className="rounded-lg" title="Добавить средство другого ведомства">
+                                        <Plus className="h-4 w-4 mr-1" /> Добавить
+                                    </Button>
+                                </div>
+                            )}
+                            <div className="flex items-center justify-between rounded-lg bg-orange-50 border border-orange-200 px-3 py-2 mt-1">
+                                <span className="text-sm font-medium text-slate-700">Общее количество средств других ведомств</span>
+                                <span className="text-base font-bold text-orange-700">{totalOtherMeans}</span>
                             </div>
                         </div>
                     </div>
@@ -1688,6 +1813,27 @@ const CallDetail = () => {
                 </div>
             </div>
 
+            {/* Подтверждение удаления средства другого ведомства */}
+            <AlertDialog open={!!pendingOtherMeanDelete} onOpenChange={(o) => { if (!o) setPendingOtherMeanDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удаление технического средства</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Вы уверены, что хотите удалить «{pendingOtherMeanDelete ? otherMeanDisplayName(pendingOtherMeanDelete) : ''}» из привлечённых технических средств других ведомств? Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveOtherMean}
+                            className="bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Подтверждение удаления элемента из личного состава */}
             <AlertDialog open={!!pendingStaffDelete} onOpenChange={(o) => { if (!o) setPendingStaffDelete(null); }}>
                 <AlertDialogContent className="rounded-2xl">
@@ -1936,6 +2082,61 @@ const CallDetail = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Диалог: история редактирования вызова */}
+            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+                <DialogContent className="sm:max-w-2xl rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl flex items-center gap-2">
+                            <History className="h-5 w-5 text-orange-500" /> История редактирования
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-2">
+                        {historyQuery.isLoading ? (
+                            <div className="py-12 flex items-center justify-center gap-2 text-slate-400">
+                                <Loader2 className="h-5 w-5 animate-spin" /> Загрузка...
+                            </div>
+                        ) : historyQuery.isError ? (
+                            <p className="py-10 text-center text-sm text-red-600">Не удалось загрузить историю</p>
+                        ) : historyRows.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-slate-400">Записей пока нет</p>
+                        ) : (
+                            <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+                                {historyRows.map((h) => {
+                                    const meta = HISTORY_ACTION_META[h.action] || {
+                                        label: 'Изменение',
+                                        cls: 'bg-slate-100 text-slate-600 border-slate-200',
+                                    };
+                                    return (
+                                        <div key={h.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+                                                    {formatDateTime(h.created_at)}
+                                                </span>
+                                                <span className="inline-flex items-center gap-1 text-xs text-slate-500 min-w-0">
+                                                    <User className="h-3 w-3 shrink-0 text-slate-400" />
+                                                    <span className="truncate">{h.username || '—'}</span>
+                                                </span>
+                                            </div>
+                                            <div className="mt-1.5 flex items-start gap-2">
+                                                <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}>
+                                                    {meta.label}
+                                                </span>
+                                                <span className="text-sm text-slate-700 break-words">
+                                                    {h.note || 'Изменения'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setHistoryOpen(false)} className="rounded-lg">Закрыть</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Диалог: доступ к вызову */}
             <Dialog open={accessOpen} onOpenChange={setAccessOpen}>

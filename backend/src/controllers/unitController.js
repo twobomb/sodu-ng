@@ -1,9 +1,27 @@
 const unitService = require('../services/unitService');
+const callHistoryService = require('../services/callHistoryService');
 const pool = require('../db/pool');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
 const { emitForceRefresh } = require('../utils/socketEvents');
 const Joi = require('joi');
+
+// Сравнение моментов времени: из БД приходит Date, из запроса — ISO-строка.
+// Допуск в 1 секунду — чтобы миллисекундные расхождения не считались
+// изменением (поле ввода всё равно имеет точность до минуты).
+const sameMoment = (a, b) => {
+    const ta = a ? new Date(a).getTime() : null;
+    const tb = b ? new Date(b).getTime() : null;
+    if (ta === null || tb === null) return ta === tb;
+    return Math.abs(ta - tb) < 1000;
+};
+
+// Поля дат техники: ключ запроса + формы слова для записи в историю
+const UNIT_DATE_FIELDS = [
+    { key: 'dispatch_at', single: 'выезда', many: 'выезд' },
+    { key: 'arrival_at', single: 'прибытия', many: 'прибытие' },
+    { key: 'return_at', single: 'возвращения', many: 'возвращение' },
+];
 
 // ============================================================
 // СХЕМЫ
@@ -260,6 +278,18 @@ const changeStatus = asyncHandler(async (req, res) => {
             }
         }
 
+        // Предыдущие даты техники по этому вызову — нужны, чтобы понять,
+        // что именно изменилось (для журнала истории вызова)
+        let prevDates = null;
+        if (value.call_id) {
+            const prevRes = await pool.query(
+                `SELECT dispatch_at, arrival_at, return_at
+                   FROM call_units WHERE call_id = $1 AND unit_id = $2`,
+                [value.call_id, id]
+            );
+            prevDates = prevRes.rows[0] || null;
+        }
+
         const result = await unitService.changeStatus(
             id,
             value.status_id,
@@ -281,6 +311,26 @@ const changeStatus = asyncHandler(async (req, res) => {
             };
             const status = result.reason === 'not_found' ? 404 : 400;
             return res.status(status).json({ error: messages[result.reason] });
+        }
+
+        // Журнал вызова: изменение времени выезда / прибытия / возвращения техники
+        if (value.call_id) {
+            const changed = UNIT_DATE_FIELDS.filter(
+                (f) => value[f.key] && !sameMoment(prevDates?.[f.key], value[f.key])
+            );
+            if (changed.length) {
+                const unitName = result.unit?.name || existing.name;
+                const note = changed.length === 1
+                    ? `Изменено время ${changed[0].single} техники: ${unitName}`
+                    : `Изменено время техники (${changed.map((f) => f.many).join(', ')}): ${unitName}`;
+                await callHistoryService.addEntry({
+                    callId: value.call_id,
+                    userId: user.id,
+                    username: user.username,
+                    action: callHistoryService.ACTIONS.UNITS,
+                    note,
+                });
+            }
         }
 
         const io = req.app.get('io');

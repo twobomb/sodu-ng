@@ -6,7 +6,7 @@ const invalidateCalls = (queryClient) =>
     queryClient.invalidateQueries({
         predicate: (query) => {
             const key = query.queryKey[0];
-            return key === 'calls' || key === 'call';
+            return key === 'calls' || key === 'call' || key === 'call-history';
         },
     });
 
@@ -176,6 +176,20 @@ export const useDeleteEventTemplate = () => {
         },
     });
 };
+
+// ============================================================
+// ИСТОРИЯ РЕДАКТИРОВАНИЯ ВЫЗОВА
+// ============================================================
+// Загружается по требованию (когда открыт диалог истории) и всегда
+// берёт свежие данные с сервера.
+export const useCallHistory = (id, enabled = true) =>
+    useQuery({
+        queryKey: ['call-history', id],
+        queryFn: () => api.getCallHistory(id).then((r) => r.data),
+        enabled: !!id && enabled,
+        staleTime: 0,
+        refetchOnMount: 'always',
+    });
 
 // ============================================================
 // СПРАВОЧНИК ЗНАЧЕНИЙ ПОЛЯ «ОБЪЕКТ»

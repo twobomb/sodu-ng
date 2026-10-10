@@ -1,5 +1,6 @@
 const callService = require('../services/callService');
 const callSampleService = require('../services/callSampleService');
+const callHistoryService = require('../services/callHistoryService');
 const pool = require('../db/pool');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
@@ -78,6 +79,13 @@ const updateCallSchema = Joi.object({
     involved_staff: Joi.array()
         .items(Joi.object({
             department_id: Joi.string().uuid().allow('', null),
+            uid: Joi.string().max(64).allow('', null),
+            name: Joi.string().max(500).allow('', null),
+            count: intField.default(0),
+        }))
+        .default([]),
+    involved_other_means: Joi.array()
+        .items(Joi.object({
             uid: Joi.string().max(64).allow('', null),
             name: Joi.string().max(500).allow('', null),
             count: intField.default(0),
@@ -279,6 +287,16 @@ const getCallById = asyncHandler(async (req, res) => {
 const createCall = asyncHandler(async (req, res) => {
     try {
         const call = await callService.createCall(req.user.id, req.user.can_view_all);
+
+        // Первая запись истории — кто и когда создал карточку
+        await callHistoryService.addEntry({
+            callId: call.id,
+            userId: req.user.id,
+            username: req.user.username,
+            action: callHistoryService.ACTIONS.CREATED,
+            note: 'Карточка вызова создана',
+        });
+
         const io = req.app.get('io');
         emitNewCall(io, call);
         emitForceRefresh(io, 'calls');
@@ -315,6 +333,15 @@ const updateCall = asyncHandler(async (req, res) => {
         }
 
         const updated = await callService.updateCall(id, value);
+
+        await callHistoryService.addEntry({
+            callId: id,
+            userId: req.user.id,
+            username: req.user.username,
+            action: callHistoryService.ACTIONS.UPDATED,
+            note: 'Информация или параметры полей были изменены',
+        });
+
         const io = req.app.get('io');
         emitForceRefresh(io, 'calls');
         res.json(updated);
@@ -358,6 +385,16 @@ const setCallStatus = asyncHandler(async (req, res) => {
         }
 
         const updated = await callService.setCallStatus(id, value.status);
+
+        // История: кто и когда сменил статус (Закрыт / Ошибочный / …)
+        await callHistoryService.addEntry({
+            callId: id,
+            userId: req.user.id,
+            username: req.user.username,
+            action: callHistoryService.ACTIONS.STATUS,
+            note: callHistoryService.statusNote(value.status),
+        });
+
         const io = req.app.get('io');
         emitForceRefresh(io, 'calls');
         res.json(updated);
@@ -416,6 +453,45 @@ const setCallUnits = asyncHandler(async (req, res) => {
         await callService.setCallUnits(id, uniqueIds);
         const updated = await callService.getCallById(id);
 
+        // История: добавление и удаление техники — отдельными записями,
+        // с краткими названиями единиц техники.
+        const removedIds = currentUnitIds.filter((uid) => !uniqueIds.includes(uid));
+        if (addedIds.length || removedIds.length) {
+            const nameRes = await pool.query(
+                'SELECT id, name FROM units WHERE id = ANY($1)',
+                [[...addedIds, ...removedIds]]
+            );
+            const nameById = new Map(nameRes.rows.map((r) => [r.id, r.name]));
+            const namesOf = (ids) => ids.map((uid) => nameById.get(uid)).filter(Boolean);
+
+            if (addedIds.length) {
+                const names = callHistoryService.joinNames(namesOf(addedIds));
+                await callHistoryService.addEntry({
+                    callId: id,
+                    userId: req.user.id,
+                    username: req.user.username,
+                    action: callHistoryService.ACTIONS.UNITS,
+                    note: (addedIds.length === 1
+                        ? 'Добавлена единица техники'
+                        : 'Добавлены единицы техники')
+                        + (names ? `: ${names}` : ''),
+                });
+            }
+            if (removedIds.length) {
+                const names = callHistoryService.joinNames(namesOf(removedIds));
+                await callHistoryService.addEntry({
+                    callId: id,
+                    userId: req.user.id,
+                    username: req.user.username,
+                    action: callHistoryService.ACTIONS.UNITS,
+                    note: (removedIds.length === 1
+                        ? 'Удалена единица техники'
+                        : 'Удалены единицы техники')
+                        + (names ? `: ${names}` : ''),
+                });
+            }
+        }
+
         const io = req.app.get('io');
         emitForceRefresh(io, 'calls');
         res.json(updated);
@@ -454,6 +530,15 @@ const addCallEvent = asyncHandler(async (req, res) => {
         }
 
         const event = await callService.addCallEvent(id, req.user.id, value);
+
+        await callHistoryService.addEntry({
+            callId: id,
+            userId: req.user.id,
+            username: req.user.username,
+            action: callHistoryService.ACTIONS.EVENTS,
+            note: 'Добавлен элемент хода событий',
+        });
+
         const io = req.app.get('io');
         emitForceRefresh(io, 'calls');
         res.status(201).json(event);
@@ -486,6 +571,15 @@ const deleteCallEvent = asyncHandler(async (req, res) => {
 
         const deleted = await callService.deleteCallEvent(id, eventId);
         if (!deleted) return res.status(404).json({ error: 'Событие не найдено' });
+
+        // История: удаление элемента хода событий (без подробностей)
+        await callHistoryService.addEntry({
+            callId: id,
+            userId: req.user.id,
+            username: req.user.username,
+            action: callHistoryService.ACTIONS.EVENTS,
+            note: 'Удалён элемент хода событий',
+        });
 
         const io = req.app.get('io');
         emitForceRefresh(io, 'calls');
@@ -546,6 +640,15 @@ const setCallDepartments = asyncHandler(async (req, res) => {
         }
 
         await callService.setCallDepartments(id, unique);
+
+        await callHistoryService.addEntry({
+            callId: id,
+            userId: req.user.id,
+            username: req.user.username,
+            action: callHistoryService.ACTIONS.ACCESS,
+            note: 'Изменены параметры доступа к карточке',
+        });
+
         const io = req.app.get('io');
         emitForceRefresh(io, 'calls');
         res.json(await callService.getCallDepartments(id));
@@ -559,11 +662,45 @@ const setCallDepartments = asyncHandler(async (req, res) => {
     }
 });
 
+// ============================================================
+// GET /api/calls/:id/history — история редактирования карточки
+// ============================================================
+const getCallHistory = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+        const call = await callService.getCallById(id);
+        if (!call) return res.status(404).json({ error: 'Вызов не найден' });
+
+        // Доступ к карточке проверяем так же, как в getCallById
+        if (!req.user.can_view_all) {
+            const depts = await callService.getUserDepartmentIds(req.user.id);
+            const vis = await pool.query(
+                `SELECT 1 FROM call_departments
+                 WHERE call_id = $1 AND department_id = ANY($2) LIMIT 1`,
+                [id, depts]
+            );
+            if (!vis.rows.length) {
+                return res.status(403).json({ error: 'Нет доступа к этому вызову' });
+            }
+        }
+
+        const rows = await callHistoryService.listByCall(id);
+        res.json(rows);
+    } catch (err) {
+        logger.error(`Ошибка получения истории вызова ${id}: ` + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: 'Ошибка получения истории вызова' });
+    }
+});
+
 module.exports = {
     getCalls,
     getMonitorCalls,
     getMunicipalities,
     getCallById,
+    getCallHistory,
     createCall,
     updateCall,
     setCallStatus,

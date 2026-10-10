@@ -7,6 +7,7 @@ const {
     getMonitorCalls,
     getMunicipalities,
     getCallById,
+    getCallHistory,
     createCall,
     updateCall,
     setCallStatus,
@@ -65,6 +66,8 @@ router.post('/', requirePermission('calls.create'), createCall);
 // ----- Редактирование -----
 router.put('/:id', requireCallUpdate, updateCall);
 router.get('/:id/departments', requirePermission('calls.view'), getCallDepartments);
+// История редактирования карточки — только просмотр
+router.get('/:id/history', requirePermission('calls.view'), getCallHistory);
 router.put('/:id/departments', requireCallUpdate, setCallDepartments);
 router.put('/:id/status', requirePermission('calls.update_status'), setCallStatus);
 router.put('/:id/units', requireCallUpdate, setCallUnits);

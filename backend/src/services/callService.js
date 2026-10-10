@@ -25,6 +25,7 @@ const SELECT_CALL_BASE = `
   c.victims_evacuated_total, c.victims_evacuated_children,
   c.dtp_circumstances, c.dtp_vehicle_marks, c.dtp_work_description,
   c.involved_staff,
+  c.involved_other_means,
   c.fire_leaders,
   c.fire_extinguishing_means,
   u.username AS creator_username,
@@ -401,6 +402,7 @@ const UPDATE_COLUMNS = [
     'dtp_vehicle_marks',
     'dtp_work_description',
     'involved_staff',
+    'involved_other_means',
     'fire_leaders',
     'fire_extinguishing_means',
 ];
@@ -419,6 +421,7 @@ const updateCall = async (id, data) => {
                 col.endsWith('_data') ||
                 col === 'dtp_vehicle_marks' ||
                 col === 'involved_staff' ||
+                col === 'involved_other_means' ||
                 col === 'fire_leaders' ||
                 col === 'fire_extinguishing_means'
             ) {
