@@ -25,6 +25,7 @@ import {
     FileSpreadsheet,
     History,
     Download,
+    Users,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -126,6 +127,21 @@ const NavBar = () => {
                             >
                                 <Truck className="h-4 w-4 mr-2" />
                                 Техника
+                            </Button>
+                        )}
+
+                        {has('personnel.view') && (
+                            <Button
+                                variant="ghost"
+                                onClick={() => navigate('/personnel')}
+                                className={`rounded-lg transition-all ${
+                                    isActive('/personnel')
+                                        ? 'bg-gradient-to-r from-orange-50 to-red-50 text-orange-600 hover:from-orange-100 hover:to-red-100 dark:from-orange-500/20 dark:to-red-500/20 dark:text-orange-300 dark:hover:from-orange-500/30 dark:hover:to-red-500/30'
+                                        : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                            >
+                                <Users className="h-4 w-4 mr-2" />
+                                Л/С
                             </Button>
                         )}
 

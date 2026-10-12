@@ -224,3 +224,59 @@ export const useDeleteObjectTemplate = () => {
         },
     });
 };
+
+// ============================================================
+// СПРАВОЧНИКИ ПАРАМЕТРОВ И ЗНАЧЕНИЙ БЛОКА «ОБЪЕКТЫ»
+// ============================================================
+export const useObjectParams = () =>
+    useQuery({
+        queryKey: ['calls', 'object-params'],
+        queryFn: () => api.getObjectParams().then((r) => r.data),
+        refetchOnWindowFocus: false,
+    });
+
+export const useCreateObjectParam = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => api.createObjectParam(data),
+        onSuccess: () => qc.invalidateQueries(['calls', 'object-params']),
+    });
+};
+
+export const useDeleteObjectParam = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (paramId) => api.deleteObjectParam(paramId),
+        onSuccess: () => qc.invalidateQueries(['calls', 'object-params']),
+        onError: (e) => {
+            if (e?.response?.status === 404) {
+                qc.invalidateQueries(['calls', 'object-params']);
+                return;
+            }
+            throw e;
+        },
+    });
+};
+
+export const useCreateObjectParamValue = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data) => api.createObjectParamValue(data),
+        onSuccess: () => qc.invalidateQueries(['calls', 'object-params']),
+    });
+};
+
+export const useDeleteObjectParamValue = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (valueId) => api.deleteObjectParamValue(valueId),
+        onSuccess: () => qc.invalidateQueries(['calls', 'object-params']),
+        onError: (e) => {
+            if (e?.response?.status === 404) {
+                qc.invalidateQueries(['calls', 'object-params']);
+                return;
+            }
+            throw e;
+        },
+    });
+};

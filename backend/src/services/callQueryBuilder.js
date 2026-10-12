@@ -56,6 +56,7 @@ const OPS_BY_TYPE = {
     ref: ['eq', 'neq', 'in', 'not_in', 'is_null', 'is_not_null'],
     boolean: ['eq', 'is_null', 'is_not_null'],
     means_qty: ['eq', 'gt', 'gte', 'lt', 'lte'],
+    obj_param_value: ['eq', 'neq', 'contains', 'not_contains'],
 };
 
 // Значения справочника «Средства пожаротушения» (совпадают с карточкой вызова)
@@ -76,12 +77,14 @@ const GROUP_GENERAL = 'Общая информация';
 const GROUP_UNITS = 'Привлекаемая техника';
 const GROUP_STAFF = 'Привлекаемый личный состав';
 const GROUP_RTP = 'Руководители тушения пожара';
+const GROUP_GDZS = 'ГДЗС';
 const GROUP_TACTICS = 'Оперативно-тактическая обстановка и объекты пожара';
 const GROUP_MEANS = 'Средства пожаротушения';
 const GROUP_CATEGORY = 'Категорирование пожара';
 const GROUP_CAUSE = 'Причина пожара';
 const GROUP_NONACCOUNT = 'Пожар не подлежит учёту';
 const GROUP_VICTIMS = 'Пострадавшие';
+const GROUP_OBJECTS = 'Объекты';
 
 // Поле-колонка напрямую из таблицы calls
 const col = (key, label, group, type, sql, extra = {}) => ({
@@ -141,6 +144,13 @@ const FIELD_LIST = [
     jsonbField('rtp_position', 'Должность РТП', GROUP_RTP,
         'c.fire_leaders', "el->>'position'", 'text'),
 
+    // ---- ГДЗС (газодымозащитная служба) ----
+    col('gdzs_used', 'Использование ГДЗС', GROUP_GDZS, 'boolean', 'c.gdzs_used'),
+    col('gdzs_people_total', 'Общее количество человек ГДЗС, чел.', GROUP_GDZS, 'number',
+        "COALESCE((SELECT SUM(NULLIF(el->>'people', '')::numeric) FROM jsonb_array_elements(COALESCE(c.gdzs_units, '[]'::jsonb)) el), 0)"),
+    col('gdzs_minutes_total', 'Общее время работы ГДЗС, мин.', GROUP_GDZS, 'number',
+        "COALESCE((SELECT SUM(NULLIF(el->>'minutes', '')::numeric) FROM jsonb_array_elements(COALESCE(c.gdzs_units, '[]'::jsonb)) el), 0)"),
+
     // ---- Оперативно-тактическая обстановка и объекты пожара ----
     { key: 'rank', label: 'Ранг вызова', group: GROUP_TACTICS, type: 'enum', options: CALL_RANKS.map((r) => ({ value: r, label: r })), sql: 'c.rank' },
     col('fire_area', 'Площадь пожара, м²', GROUP_TACTICS, 'number', 'c.fire_area'),
@@ -189,6 +199,16 @@ const FIELD_LIST = [
     col('victims_rescued_children', 'Спасено детей', GROUP_VICTIMS, 'number', 'c.victims_rescued_children'),
     col('victims_evacuated_total', 'Эвакуировано людей, всего', GROUP_VICTIMS, 'number', 'c.victims_evacuated_total'),
     col('victims_evacuated_children', 'Эвакуировано детей', GROUP_VICTIMS, 'number', 'c.victims_evacuated_children'),
+
+    // ---- Объекты ----
+    // Составное условие «параметр + значение»: ищем вызов, у которого есть объект
+    // с параметром (и значением) блока «Объекты». Значение поля: { param, value }.
+    {
+        key: 'object_param_value',
+        label: 'Параметр и значение объекта',
+        group: GROUP_OBJECTS,
+        type: 'obj_param_value',
+    },
 ];
 
 const FIELD_MAP = FIELD_LIST.reduce((acc, f) => {
@@ -198,8 +218,8 @@ const FIELD_MAP = FIELD_LIST.reduce((acc, f) => {
 
 // Каталог полей для фронтенда (сгруппированный по блокам карточки вызова)
 const FIELD_GROUPS_ORDER = [
-    GROUP_GENERAL, GROUP_UNITS, GROUP_STAFF, GROUP_RTP, GROUP_TACTICS,
-    GROUP_MEANS, GROUP_CATEGORY, GROUP_CAUSE, GROUP_NONACCOUNT, GROUP_VICTIMS,
+    GROUP_GENERAL, GROUP_UNITS, GROUP_STAFF, GROUP_RTP, GROUP_GDZS, GROUP_TACTICS,
+    GROUP_MEANS, GROUP_CATEGORY, GROUP_CAUSE, GROUP_NONACCOUNT, GROUP_VICTIMS, GROUP_OBJECTS,
 ];
 
 const getFieldCatalog = () => ({
@@ -315,6 +335,43 @@ const buildMeansQty = (cond, ctx) => {
         `AND (el->>'qty')::numeric ${opDef.sql} ${pQty})`;
 };
 
+// Специальное условие «Параметр + значение объекта».
+// Значение: { param: 'размер', value: '10x20' } →
+//   EXISTS(объект, у которого есть параметр (и значение)).
+// param обязателен; value необязателен — тогда ищем любой объект с таким параметром.
+const buildObjParamValue = (cond, ctx) => {
+    const param = cond.value?.param;
+    if (!param || !String(param).trim()) return null;
+
+    const opDef = OP_KINDS[cond.op];
+    if (!opDef) throw new QueryBuildError('Неизвестный оператор');
+
+    const pParam = ctx.push(String(param).trim());
+    const parts = [`lower(el->>'param') = lower(${pParam})`];
+
+    const rawVal = cond.value?.value;
+    if (rawVal != null && String(rawVal).trim() !== '') {
+        const v = String(rawVal).trim();
+        if (opDef.kind === 'like') {
+            const p = ctx.push(`%${v}%`);
+            parts.push(`el->>'value' ILIKE ${p}`);
+        } else if (opDef.kind === 'not_like') {
+            const p = ctx.push(`%${v}%`);
+            parts.push(`el->>'value' NOT ILIKE ${p}`);
+        } else if (opDef.sql === '<>') {
+            const p = ctx.push(v);
+            parts.push(`lower(el->>'value') <> lower(${p})`);
+        } else {
+            const p = ctx.push(v);
+            parts.push(`lower(el->>'value') = lower(${p})`);
+        }
+    }
+
+    return `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(c.objects, '[]'::jsonb)) o ` +
+        `CROSS JOIN jsonb_array_elements(COALESCE(o->'items', '[]'::jsonb)) el ` +
+        `WHERE ${parts.join(' AND ')})`;
+};
+
 // Одно условие
 const buildCond = (cond, ctx) => {
     const def = FIELD_MAP[cond.field];
@@ -333,6 +390,8 @@ const buildCond = (cond, ctx) => {
 
     if (def.type === 'means_qty') {
         sql = buildMeansQty(cond, ctx);
+    } else if (def.type === 'obj_param_value') {
+        sql = buildObjParamValue(cond, ctx);
     } else if (def.exists) {
         const inner = buildValueCondition(def.exists.value, def.exists.type, op, cond.value, ctx);
         if (inner) {

@@ -20,6 +20,7 @@ import { useSoduSettings } from '../../hooks/useSettings';
 import { buildMapUrl } from '../../lib/mapLink';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import VictimsGroup from '../../components/calls/VictimsGroup';
+import ObjectParamsBlock from '../../components/calls/ObjectParamsBlock';
 import {
     Dialog,
     DialogContent,
@@ -122,6 +123,9 @@ const EMPTY_FORM = {
     involved_other_means: [],
     fire_leaders: [],
     fire_extinguishing_means: [],
+    gdzs_used: false,
+    gdzs_units: [],
+    objects: [],
 };
 
 // Перевод данных с сервера (ISO) в значения формы (datetime-local / строки)
@@ -152,6 +156,9 @@ const fromServer = (call) => {
     f.involved_other_means = Array.isArray(call?.involved_other_means) ? call.involved_other_means : [];
     f.fire_leaders = Array.isArray(call?.fire_leaders) ? call.fire_leaders : [];
     f.fire_extinguishing_means = Array.isArray(call?.fire_extinguishing_means) ? call.fire_extinguishing_means : [];
+    f.gdzs_used = !!call?.gdzs_used;
+    f.gdzs_units = Array.isArray(call?.gdzs_units) ? call.gdzs_units : [];
+    f.objects = Array.isArray(call?.objects) ? call.objects : [];
     return f;
 };
 
@@ -425,6 +432,9 @@ const CallDetail = () => {
         ? has('calls.update_closed')
         : has('calls.update');
 
+    // Право управлять справочником параметров/значений блока «Объекты»
+    const canManageObjectParams = isDeveloper || has('calls.manage_object_params');
+
     // ---------- Форма (локальное редактирование) ----------
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [dirty, setDirty] = useState(false);
@@ -599,6 +609,17 @@ const CallDetail = () => {
             name: row.name || '',
             qty: row.qty === '' || row.qty == null ? null : (Number(row.qty) || null),
             text: row.text || '',
+        }));
+        payload.gdzs_used = !!formData.gdzs_used;
+        payload.gdzs_units = (formData.gdzs_units || []).map((row) => ({
+            people: row.people === '' || row.people == null ? 0 : Number(row.people) || 0,
+            minutes: row.minutes === '' || row.minutes == null ? 0 : Number(row.minutes) || 0,
+        }));
+        payload.objects = (formData.objects || []).map((obj) => ({
+            items: (obj.items || []).map((it) => ({
+                param: (it.param || '').trim(),
+                value: (it.value || '').trim(),
+            })),
         }));
 
         updateCall.mutate(
@@ -789,6 +810,8 @@ const CallDetail = () => {
     const [leaderToDelete, setLeaderToDelete] = useState(null);
     // Подтверждение удаления средства пожаротушения
     const [fireMeansToDelete, setFireMeansToDelete] = useState(null);
+    // Подтверждение удаления звена ГДЗС
+    const [gdzsToDelete, setGdzsToDelete] = useState(null);
 
     const openEventDialog = () => {
         setEventAt(nowLocalInput());
@@ -1053,6 +1076,22 @@ const CallDetail = () => {
         setField('fire_leaders', fireLeaders.filter((_, i) => i !== leaderToDelete));
         setLeaderToDelete(null);
     };
+
+    // ---------- ГДЗС (газодымозащитная служба) ----------
+    const gdzsUnits = Array.isArray(formData.gdzs_units) ? formData.gdzs_units : [];
+    const addGdzsUnit = () => {
+        setField('gdzs_units', [...gdzsUnits, { people: '', minutes: '' }]);
+    };
+    const setGdzsUnit = (idx, field, value) => {
+        setField('gdzs_units', gdzsUnits.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
+    };
+    const confirmRemoveGdzsUnit = () => {
+        if (gdzsToDelete == null) return;
+        setField('gdzs_units', gdzsUnits.filter((_, i) => i !== gdzsToDelete));
+        setGdzsToDelete(null);
+    };
+    const totalGdzsPeople = gdzsUnits.reduce((sum, r) => sum + (Number(r.people) || 0), 0);
+    const totalGdzsMinutes = gdzsUnits.reduce((sum, r) => sum + (Number(r.minutes) || 0), 0);
 
     // ---------- Средства пожаротушения ----------
     const meansRows = Array.isArray(formData.fire_extinguishing_means) ? formData.fire_extinguishing_means : [];
@@ -1547,6 +1586,89 @@ const CallDetail = () => {
                         </div>
                     )}
 
+                    {/* ГДЗС (газодымозащитная служба) */}
+                    {isFire && (
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <h2 className="text-base font-semibold text-slate-700">ГДЗС</h2>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-slate-700">Использование ГДЗС</span>
+                                    <Switch
+                                        checked={!!formData.gdzs_used}
+                                        disabled={!canEdit}
+                                        onCheckedChange={(v) => setField('gdzs_used', v)}
+                                        aria-label="Использование ГДЗС"
+                                    />
+                                </div>
+                            </div>
+                            {formData.gdzs_used && (
+                                <div className="space-y-2">
+                                    {gdzsUnits.length === 0 && !canEdit && (
+                                        <p className="text-sm text-slate-400">Звенья не указаны</p>
+                                    )}
+                                    {gdzsUnits.map((row, idx) => (
+                                        <div key={idx} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                                            <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1.5 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                                                Звено {idx + 1}
+                                            </span>
+                                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    value={row.people ?? ''}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => setGdzsUnit(idx, 'people', e.target.value)}
+                                                    placeholder="Количество человек"
+                                                    className="w-full rounded-lg"
+                                                />
+                                                <span className="text-xs text-slate-500 whitespace-nowrap">чел.</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    value={row.minutes ?? ''}
+                                                    disabled={!canEdit}
+                                                    onChange={(e) => setGdzsUnit(idx, 'minutes', e.target.value)}
+                                                    placeholder="Время работы"
+                                                    className="w-full rounded-lg"
+                                                />
+                                                <span className="text-xs text-slate-500 whitespace-nowrap">мин.</span>
+                                            </div>
+                                            {canEdit && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setGdzsToDelete(idx)}
+                                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                                                    title="Удалить"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {canEdit && (
+                                        <Button type="button" variant="outline" size="sm" onClick={addGdzsUnit} className="rounded-lg">
+                                            <Plus className="h-4 w-4 mr-1" /> Добавить звено
+                                        </Button>
+                                    )}
+                                    {gdzsUnits.length > 0 && (
+                                        <div className="grid gap-2 sm:grid-cols-2 mt-1">
+                                            <div className="flex items-center justify-between rounded-lg bg-sky-50 border border-sky-200 px-3 py-2">
+                                                <span className="text-sm font-medium text-slate-700">Общее количество человек ГДЗС</span>
+                                                <span className="text-base font-bold text-sky-700">{totalGdzsPeople}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between rounded-lg bg-sky-50 border border-sky-200 px-3 py-2">
+                                                <span className="text-sm font-medium text-slate-700">Общее время работы ГДЗС</span>
+                                                <span className="text-base font-bold text-sky-700">{totalGdzsMinutes} мин.</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {/* Оперативно-тактическая обстановка и объекты пожара */}
                     {isFire && (
                         <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
@@ -1779,6 +1901,17 @@ const CallDetail = () => {
                         </div>
                     )}
 
+                    {/* Объекты */}
+                    <div className="rounded-xl border border-slate-200 bg-white shadow-[3px_5px_11px_1px_#0000002e] p-4">
+                        <h2 className="text-base font-semibold text-slate-700 mb-3">Объекты</h2>
+                        <ObjectParamsBlock
+                            objects={formData.objects || []}
+                            onChange={(next) => setField('objects', next)}
+                            disabled={!canEdit}
+                            canManage={canManageObjectParams}
+                        />
+                    </div>
+
                 </div>
 
                 {/* ---------- Правая колонка: ход событий (фиксированная) ---------- */}
@@ -1889,6 +2022,27 @@ const CallDetail = () => {
                         <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmRemoveFireMeans}
+                            className="bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                            Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Подтверждение удаления звена ГДЗС */}
+            <AlertDialog open={gdzsToDelete != null} onOpenChange={(o) => { if (!o) setGdzsToDelete(null); }}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удаление звена ГДЗС</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Удалить Звено {gdzsToDelete != null ? gdzsToDelete + 1 : ''} из списка? Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg">Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveGdzsUnit}
                             className="bg-red-600 hover:bg-red-700 rounded-lg"
                         >
                             Удалить

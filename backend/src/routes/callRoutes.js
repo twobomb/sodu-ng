@@ -27,6 +27,13 @@ const {
     createObjectTemplate,
     deleteObjectTemplate,
 } = require('../controllers/callObjectTemplateController');
+const {
+    getObjectParams,
+    createObjectParam,
+    deleteObjectParam,
+    createObjectParamValue,
+    deleteObjectParamValue,
+} = require('../controllers/callObjectParamController');
 
 // Все маршруты требуют аутентификации
 router.use(authenticate);
@@ -58,6 +65,14 @@ router.delete('/event-templates/:templateId', requireCallUpdate, deleteEventTemp
 router.get('/object-templates', requirePermission('calls.view'), getObjectTemplates);
 router.post('/object-templates', requireCallUpdate, createObjectTemplate);
 router.delete('/object-templates/:templateId', requireCallUpdate, deleteObjectTemplate);
+// ----- Справочники параметров и значений блока «Объекты» (до /:id) -----
+// Просмотр — всем, у кого есть доступ к вызовам; добавление/удаление — только
+// пользователям с правом calls.manage_object_params (проверяется в контроллере).
+router.get('/object-params', requirePermission('calls.view'), getObjectParams);
+router.post('/object-params', requirePermission('calls.view'), createObjectParam);
+router.delete('/object-params/:paramId', requirePermission('calls.view'), deleteObjectParam);
+router.post('/object-param-values', requirePermission('calls.view'), createObjectParamValue);
+router.delete('/object-param-values/:valueId', requirePermission('calls.view'), deleteObjectParamValue);
 router.get('/:id', requirePermission('calls.view'), getCallById);
 
 // ----- Создание -----

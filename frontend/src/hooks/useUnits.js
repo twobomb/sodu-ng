@@ -5,10 +5,11 @@ import * as api from '../api/units';
 // ============================================================
 // ТЕХНИКА
 // ============================================================
-export const useUnits = () =>
+export const useUnits = (options = {}) =>
     useQuery({
         queryKey: ['units'],
         queryFn: () => api.getUnits().then((r) => r.data),   // ← уже .data
+        enabled: options.enabled !== false,
     });
 export const useUnit = (unitId, options = {}) =>
     useQuery({

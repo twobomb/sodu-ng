@@ -10,7 +10,7 @@ import {
 import { usePermissions } from '../../hooks/usePermissions';
 import { useDepartments } from '../../hooks/useDepartments';
 import { useUnits, useUnitTypes } from '../../hooks/useUnits';
-import { useMunicipalities } from '../../hooks/useCalls';
+import { useMunicipalities, useObjectParams } from '../../hooks/useCalls';
 import {
     useFireCategories,
     useFireCauses,
@@ -94,6 +94,7 @@ const hasAnyCondition = (items = []) =>
         if (!it.field || !it.op) return false;
         if (it.op === 'is_null' || it.op === 'is_not_null') return true;
         if (it.field === 'means_qty') return !!it.value?.name;
+        if (it.field === 'object_param_value') return !!(it.value?.param && String(it.value.param).trim());
         if (it.op === 'in' || it.op === 'not_in') return Array.isArray(it.value) && it.value.length > 0;
         if (it.op === 'between') return !!(it.value?.from || it.value?.to);
         return it.value !== '' && it.value !== null && it.value !== undefined;
@@ -184,6 +185,32 @@ const ValueInput = ({ def, op, value, onChange, refOptions, disabled }) => {
                     onChange={(e) => onChange({ ...v, qty: e.target.value })}
                     placeholder="Кол-во"
                     className="w-full rounded-lg sm:w-28"
+                />
+            </div>
+        );
+    }
+
+    if (def.type === 'obj_param_value') {
+        const v = value && typeof value === 'object' && !Array.isArray(value) ? value : { param: '', value: '' };
+        return (
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                <Input
+                    value={v.param ?? ''}
+                    disabled={disabled}
+                    onChange={(e) => onChange({ ...v, param: e.target.value })}
+                    placeholder="Параметр..."
+                    list="sample-object-param-list"
+                    autoComplete="off"
+                    className="flex-1 rounded-lg"
+                />
+                <Input
+                    value={v.value ?? ''}
+                    disabled={disabled}
+                    onChange={(e) => onChange({ ...v, value: e.target.value })}
+                    placeholder="Значение..."
+                    list="sample-object-value-list"
+                    autoComplete="off"
+                    className="flex-1 rounded-lg"
                 />
             </div>
         );
@@ -485,6 +512,16 @@ const CallSamplePage = () => {
     const catsQuery = useFireCategories();
     const causesQuery = useFireCauses();
     const nonAccQuery = useFireNonaccountReasons();
+    // Справочники параметров/значений блока «Объекты» — для автодополнения поля
+    const objectCatalogQuery = useObjectParams();
+    const objectParamNames = useMemo(
+        () => (objectCatalogQuery.data?.params || []).map((p) => p.name),
+        [objectCatalogQuery.data]
+    );
+    const objectValueNames = useMemo(
+        () => [...new Set((objectCatalogQuery.data?.values || []).map((v) => v.value))],
+        [objectCatalogQuery.data]
+    );
 
     const [definition, setDefinition] = useState({ items: [newCondition('AND')] });
     const [sampleName, setSampleName] = useState('');
@@ -653,6 +690,13 @@ const CallSamplePage = () => {
 
     return (
         <div className="space-y-4">
+            {/* Подсказки для поля «Параметр и значение объекта» (блок «Объекты») */}
+            <datalist id="sample-object-param-list">
+                {objectParamNames.map((n) => <option key={n} value={n} />)}
+            </datalist>
+            <datalist id="sample-object-value-list">
+                {objectValueNames.map((n) => <option key={n} value={n} />)}
+            </datalist>
             {/* Заголовок */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

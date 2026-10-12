@@ -18,6 +18,7 @@ const {
     getGlobalHistory,
     getGridData
 } = require('../controllers/unitController');
+const { setUnitPersonnel } = require('../controllers/personnelController');
 
 router.use(authenticate);
 
@@ -69,5 +70,7 @@ router.post(
     changeStatus
 );
 router.delete('/:id', requirePermission('units.delete'), deleteUnit);
+// Привязка людей к технике (личный состав того же подразделения)
+router.put('/:id/personnel', requirePermission('personnel.update'), setUnitPersonnel);
 
 module.exports = router;

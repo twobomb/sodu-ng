@@ -28,6 +28,8 @@ const SELECT_CALL_BASE = `
   c.involved_other_means,
   c.fire_leaders,
   c.fire_extinguishing_means,
+  c.gdzs_used, c.gdzs_units,
+  c.objects,
   u.username AS creator_username,
   c.number, c.call_code, c.color,
   d.name AS department_name,
@@ -427,6 +429,9 @@ const UPDATE_COLUMNS = [
     'involved_other_means',
     'fire_leaders',
     'fire_extinguishing_means',
+    'gdzs_used',
+    'gdzs_units',
+    'objects',
 ];
 
 const updateCall = async (id, data) => {
@@ -445,7 +450,9 @@ const updateCall = async (id, data) => {
                 col === 'involved_staff' ||
                 col === 'involved_other_means' ||
                 col === 'fire_leaders' ||
-                col === 'fire_extinguishing_means'
+                col === 'fire_extinguishing_means' ||
+                col === 'gdzs_units' ||
+                col === 'objects'
             ) {
                 val = val == null ? null : JSON.stringify(val);
             }

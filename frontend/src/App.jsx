@@ -12,6 +12,7 @@ import CallsList from './pages/calls/CallsList';
 import CallDetail from './pages/calls/CallDetail';
 import CallMonitor from './pages/calls/CallMonitor';
 import UnitsList from './pages/units/UnitsList';
+import PersonnelList from './pages/personnel/PersonnelList';
 import UsersList from './pages/users/UsersList';
 import OnlineUsers from './pages/users/OnlineUsers';
 import LoginHistoryPage from './pages/users/LoginHistoryPage';
@@ -141,6 +142,14 @@ const router = createBrowserRouter([
                 element: (
                     <PermissionRoute permission="units.view">
                         <UnitsList />
+                    </PermissionRoute>
+                ),
+            },
+            {
+                path: 'personnel',
+                element: (
+                    <PermissionRoute permission="personnel.view">
+                        <PersonnelList />
                     </PermissionRoute>
                 ),
             },

@@ -102,6 +102,23 @@ const updateCallSchema = Joi.object({
             text: Joi.string().max(1000).allow('', null),
         }))
         .default([]),
+    gdzs_used: Joi.boolean().allow('', null),
+    gdzs_units: Joi.array()
+        .items(Joi.object({
+            people: intField.default(0),
+            minutes: intField.default(0),
+        }))
+        .default([]),
+    objects: Joi.array()
+        .items(Joi.object({
+            items: Joi.array()
+                .items(Joi.object({
+                    param: Joi.string().max(300).allow('', null),
+                    value: Joi.string().max(1000).allow('', null),
+                }))
+                .default([]),
+        }))
+        .default([]),
 }).min(1);
 
 const setStatusSchema = Joi.object({

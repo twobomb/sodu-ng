@@ -35,7 +35,7 @@ const MONITOR_FIELDS = [
     'fire_eliminated_at', 'first_barrel_at', 'fire_category_name', 'fire_cause_name',
     'fire_cause_other', 'not_accounted_reason_name', 'type', 'rank',
     'municipality_name', 'area_type', 'carryover_fire', 'involved_staff', 'fire_leaders',
-    'object_name', 'false_call',
+    'object_name', 'false_call', 'gdzs_used', 'gdzs_units',
 ];
 
 // Подпись значения для сравнения «было/стало». Массивы и объекты (jsonb-поля
@@ -219,6 +219,42 @@ const CallFireLeaders = ({ call, f = () => false }) => {
                             </div>
                         );
                     })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ГДЗС (газодымозащитная служба) — только для «пожарных» типов вызова
+const CallGdzs = ({ call, f = () => false }) => {
+    const rows = Array.isArray(call.gdzs_units) ? call.gdzs_units : [];
+    const totalPeople = rows.reduce((s, r) => s + (Number(r?.people) || 0), 0);
+    const totalMinutes = rows.reduce((s, r) => s + (Number(r?.minutes) || 0), 0);
+    return (
+        <div className={`rounded-lg border border-slate-200 bg-white/60 p-2 ${
+            f('gdzs_units') ? 'ring-2 ring-amber-400 animate-pulse' : ''
+        }`}>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                ГДЗС
+            </div>
+            {!rows.length ? (
+                <div className="text-xs text-slate-400 italic mt-1">Звенья не указаны</div>
+            ) : (
+                <div className="mt-1 space-y-0.5">
+                    {rows.map((row, idx) => (
+                        <div key={idx} className="flex items-baseline gap-2 text-xs">
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                Звено {idx + 1}
+                            </span>
+                            <span className="text-slate-700 font-medium">{Number(row?.people) || 0} чел.</span>
+                            <span className="text-slate-500">{Number(row?.minutes) || 0} мин.</span>
+                        </div>
+                    ))}
+                    <div className="flex items-baseline gap-2 text-xs pt-0.5">
+                        <span className="text-slate-500">Итого:</span>
+                        <span className="font-semibold text-slate-700">{totalPeople} чел.</span>
+                        <span className="font-semibold text-slate-700">{totalMinutes} мин.</span>
+                    </div>
                 </div>
             )}
         </div>
@@ -478,6 +514,9 @@ const CallMonitor = () => {
                                         <CallStaff call={call} f={f} />
                                         {FIRE_TYPES.includes(call.type) && (
                                             <CallFireLeaders call={call} f={f} />
+                                        )}
+                                        {FIRE_TYPES.includes(call.type) && call.gdzs_used && (
+                                            <CallGdzs call={call} f={f} />
                                         )}
                                     </div>
                                     <div className="border border-slate-200 rounded-lg bg-white/70 flex flex-col max-h-64">

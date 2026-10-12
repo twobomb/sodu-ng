@@ -1,12 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, X, Truck, Clock, ExternalLink } from 'lucide-react';
+import { Loader2, X, Truck, Clock, ExternalLink, Phone, Users } from 'lucide-react';
 import {
     useUnitHistory,
     useUnitStatuses,
     useChangeUnitStatus,
     useAvailableCalls,
 } from '../../hooks/useUnits';
+import { usePersonnel } from '../../hooks/usePersonnel';
 import { usePermissions } from '../../hooks/usePermissions';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -18,6 +19,8 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
     const { data: statuses } = useUnitStatuses();
     const changeStatus = useChangeUnitStatus();
     const { data: availableCalls } = useAvailableCalls();
+    const canViewPersonnel = has('personnel.view');
+    const { data: personnelData } = usePersonnel({ enabled: canViewPersonnel });
     const [statusDialogOpen, setStatusDialogOpen] = useState(false);
     const [statusError, setStatusError] = useState('');
 
@@ -34,6 +37,12 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
         if (!historyData?.pages) return [];
         return historyData.pages.flatMap((page) => page.rows || []);
     }, [historyData]);
+
+    // Люди, привязанные к этой единице техники
+    const attachedPersonnel = useMemo(() => {
+        const list = Array.isArray(personnelData) ? personnelData : [];
+        return list.filter((p) => p.unit_id === unit?.id);
+    }, [personnelData, unit?.id]);
 
     const scrollRef = useRef(null);
 
@@ -194,6 +203,39 @@ const UnitDetailsPanel = ({ unit, onClose }) => {
                 </div>
             )}
         </div>
+
+            {/* Личный состав, привязанный к технике */}
+            {canViewPersonnel && (
+                <div className="p-4 border-b border-slate-100 min-h-0 max-h-56 overflow-y-auto">
+                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1.5">
+                        <Users className="h-3 w-3" />
+                        Личный состав
+                    </div>
+                    {attachedPersonnel.length === 0 ? (
+                        <div className="text-xs text-slate-400">Люди не привязаны</div>
+                    ) : (
+                        <div className="space-y-2">
+                            {attachedPersonnel.map((p) => (
+                                <div key={p.id} className="text-xs">
+                                    <div className="font-medium text-slate-800 truncate">
+                                        {p.full_name}
+                                    </div>
+                                    <div className="text-slate-500 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                        {p.rank_name && <span>{p.rank_name}</span>}
+                                        {p.position && <span>· {p.position}</span>}
+                                        {p.phone && (
+                                            <span className="inline-flex items-center gap-1">
+                                                <Phone className="h-3 w-3" />
+                                                {p.phone}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* История — здесь скролл и бесконечная подгрузка */}
             <div

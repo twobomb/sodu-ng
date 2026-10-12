@@ -211,7 +211,7 @@ const UnitsGrid = () => {
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-65px)] -mx-8 -my-6">
+        <div className="flex flex-col h-[calc(100vh-65px)] -mx-8 -mt-6 -mb-24">
             {/* Верхняя панель */}
             <div className="bg-white border-b border-slate-200 px-8 py-4 flex flex-wrap items-center gap-3 flex-shrink-0">
                 <div className="flex-1 min-w-[200px]">

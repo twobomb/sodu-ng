@@ -29,3 +29,9 @@ export const createObjectTemplate = (data) =>
     apiClient.post('/calls/object-templates', data);
 export const deleteObjectTemplate = (templateId) =>
     apiClient.delete(`/calls/object-templates/${templateId}`);
+// Справочники параметров и значений блока «Объекты»
+export const getObjectParams = () => apiClient.get('/calls/object-params');
+export const createObjectParam = (data) => apiClient.post('/calls/object-params', data);
+export const deleteObjectParam = (paramId) => apiClient.delete(`/calls/object-params/${paramId}`);
+export const createObjectParamValue = (data) => apiClient.post('/calls/object-param-values', data);
+export const deleteObjectParamValue = (valueId) => apiClient.delete(`/calls/object-param-values/${valueId}`);

@@ -46,12 +46,15 @@ import {
     Gauge,
     GripVertical,
     MousePointer2,
+    Users,
 } from 'lucide-react';
 import UnitForm from '../../components/UnitForm';
 import SearchableSelect from '@/components/ui/searchable-select';
 import UnitMetricsHistoryDialog from '../../components/units/UnitMetricsHistoryDialog';
 import UnitMetricsEditDialog from '../../components/units/UnitMetricsEditDialog';
 import UnitStatusDialog from '../../components/units/UnitStatusDialog';
+import UnitPersonnelDialog from '../../components/units/UnitPersonnelDialog';
+import { usePersonnel, useSetUnitPersonnel } from '../../hooks/usePersonnel';
 
 const asArray = (v) => {
     if (Array.isArray(v)) return v;
@@ -114,12 +117,16 @@ const UnitsList = () => {
     const canChangeStatus = has('units.update_status');
     const canViewHistory = has('units.view_history');
     const canEditMetrics = has('units.update_metrics');
+    const canViewPersonnel = has('personnel.view');
 
     const createUnit = useCreateUnit();
     const updateUnit = useUpdateUnit();
     const deleteUnit = useDeleteUnit();
     const changeStatus = useChangeUnitStatus();
     const reorderUnitsMut = useReorderUnits();
+    const setUnitPersonnel = useSetUnitPersonnel();
+    const { data: personnelData } = usePersonnel({ enabled: canViewPersonnel });
+    const personnel = asArray(personnelData);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -135,6 +142,8 @@ const UnitsList = () => {
     const [metricsEditUnit, setMetricsEditUnit] = useState(null);
     const [statusUnit, setStatusUnit] = useState(null);
     const [statusError, setStatusError] = useState('');
+    const [personnelUnit, setPersonnelUnit] = useState(null);
+    const [personnelError, setPersonnelError] = useState('');
 
     // Опции для SearchableSelect подразделений
     const deptOptions = useMemo(
@@ -202,6 +211,15 @@ const UnitsList = () => {
         }
         return [...map.values()];
     }, [localUnits]);
+
+    // Количество привязанного л/с по единицам техники
+    const personnelCountByUnit = useMemo(() => {
+        const m = {};
+        for (const p of personnel) {
+            if (p.unit_id) m[p.unit_id] = (m[p.unit_id] || 0) + 1;
+        }
+        return m;
+    }, [personnel]);
 
     const handleReorder = (dragId, overId) => {
         setLocalUnits((prev) => {
@@ -469,7 +487,26 @@ const UnitsList = () => {
                                                     ) : (
                                                         <span className="text-slate-400 text-sm">—</span>
                                                     )}
-{canEditMetrics && (
+{canViewPersonnel && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setPersonnelError('');
+                                                                setPersonnelUnit(unit);
+                                                            }}
+                                                            className="h-8 px-2 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50 inline-flex items-center gap-1"
+                                                            title="Личный состав техники"
+                                                        >
+                                                            <Users className="h-4 w-4" />
+                                                            {(personnelCountByUnit[unit.id] || 0) > 0 && (
+                                                                <span className="text-xs font-semibold">
+                                                                    {personnelCountByUnit[unit.id]}
+                                                                </span>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                    {canEditMetrics && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
@@ -595,6 +632,33 @@ const UnitsList = () => {
                 pending={changeStatus.isPending}
                 error={statusError || undefined}
             />
+
+            {personnelUnit && (
+                <UnitPersonnelDialog
+                    key={personnelUnit.id}
+                    unit={personnelUnit}
+                    personnel={personnel}
+                    pending={setUnitPersonnel.isPending}
+                    error={personnelError}
+                    onClose={() => {
+                        setPersonnelUnit(null);
+                        setPersonnelError('');
+                    }}
+                    onSubmit={(ids) => {
+                        setPersonnelError('');
+                        setUnitPersonnel.mutate(
+                            { unitId: personnelUnit.id, personnelIds: ids },
+                            {
+                                onSuccess: () => setPersonnelUnit(null),
+                                onError: (e) =>
+                                    setPersonnelError(
+                                        e?.response?.data?.error || 'Ошибка сохранения'
+                                    ),
+                            }
+                        );
+                    }}
+                />
+            )}
         </div>
     );
 };
