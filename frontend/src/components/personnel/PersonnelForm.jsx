@@ -13,6 +13,7 @@ import {
 import { Loader2 } from 'lucide-react';
 import { useUnits } from '../../hooks/useUnits';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../../context/AuthContext';
 import SearchableSelect from '@/components/ui/searchable-select';
 
 const asArray = (v) => {
@@ -37,9 +38,17 @@ const PersonnelForm = ({
     isEdit = false,
 }) => {
     const { has } = usePermissions();
+    const { user } = useAuth();
     const { data: unitsRaw } = useUnits({ enabled: has('units.view') });
     const units = asArray(unitsRaw);
-    const depts = asArray(departments);
+
+    // Показываем только те подразделения, к которым есть доступ у пользователя
+    const depts = useMemo(() => {
+        const all = asArray(departments);
+        if (user?.can_view_all) return all;
+        const ids = user?.department_ids || (user?.departments || []).map((d) => d.id);
+        return all.filter((d) => ids.includes(d.id));
+    }, [departments, user]);
 
     const [formData, setFormData] = useState({
         full_name: '',

@@ -10,6 +10,7 @@ import {
 } from '../../hooks/usePersonnel';
 import { useDepartments } from '../../hooks/useDepartments';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -86,11 +87,18 @@ const DraggablePerson = ({ person, deptId, onReorder, canDrag, children }) => {
 
 const PersonnelList = () => {
     const { has } = usePermissions();
+    const { user } = useAuth();
     const { data, isLoading, error } = usePersonnel();
     const { data: deptData } = useDepartments();
 
     const people = asArray(data);
-    const departments = asArray(deptData);
+    // Только доступные пользователю подразделения
+    const departments = useMemo(() => {
+        const all = asArray(deptData);
+        if (user?.can_view_all) return all;
+        const ids = user?.department_ids || (user?.departments || []).map((d) => d.id);
+        return all.filter((d) => ids.includes(d.id));
+    }, [deptData, user]);
 
     const canEdit = has('personnel.update');
     const canDelete = has('personnel.delete');
