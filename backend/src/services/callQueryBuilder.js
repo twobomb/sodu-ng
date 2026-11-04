@@ -14,7 +14,7 @@
  *  - все значения подставляются исключительно через параметры ($1, $2, ...);
  *  - глубина вложенности и общее число условий ограничены.
  */
-const { CALL_TYPES, CALL_RANKS, AREA_TYPES } = require('../config/callEnums');
+const { CALL_TYPES, CALL_RANKS, AREA_TYPES, FALSE_CALL_TYPES } = require('../config/callEnums');
 
 class QueryBuildError extends Error {
     constructor(message) {
@@ -58,6 +58,11 @@ const OPS_BY_TYPE = {
     means_qty: ['eq', 'gt', 'gte', 'lt', 'lte'],
     obj_param_value: ['eq', 'neq', 'contains', 'not_contains'],
 };
+
+// SQL-литерал массива «ложных» типов вызова (значения — константы)
+const FALSE_CALL_TYPES_SQL = `ARRAY[${FALSE_CALL_TYPES.map(
+    (t) => `'${t.replace(/'/g, "''")}'`
+).join(', ')}]::text[]`;
 
 // Значения справочника «Средства пожаротушения» (совпадают с карточкой вызова)
 const FIRE_MEANS_NAMES = [
@@ -116,7 +121,13 @@ const FIELD_LIST = [
     refField('municipality_id', 'Муниципальный / городской округ', GROUP_GENERAL, 'municipalities', 'c.municipality_id'),
     col('address', 'Адрес места происшествия', GROUP_GENERAL, 'text', 'c.address'),
     col('object_name', 'Объект', GROUP_GENERAL, 'text', 'c.object_name'),
-    col('false_call', 'Ложный вызов', GROUP_GENERAL, 'boolean', 'c.false_call'),
+    {
+        key: 'is_false_call',
+        label: 'Ложный вызов',
+        group: GROUP_GENERAL,
+        type: 'boolean',
+        sql: `(c.type = ANY(${FALSE_CALL_TYPES_SQL}))`,
+    },
     col('dispatch_at', 'Время высылки сил и средств', GROUP_GENERAL, 'date', 'c.dispatch_at'),
     col('arrival_at', 'Время прибытия', GROUP_GENERAL, 'date', 'c.arrival_at'),
     col('description', 'Описание', GROUP_GENERAL, 'text', 'c.description'),
@@ -158,7 +169,6 @@ const FIELD_LIST = [
     col('localization_at', 'Локализация пожара', GROUP_TACTICS, 'date', 'c.localization_at'),
     col('open_fire_eliminated_at', 'Ликвидация открытого горения', GROUP_TACTICS, 'date', 'c.open_fire_eliminated_at'),
     col('fire_eliminated_at', 'Ликвидация пожара', GROUP_TACTICS, 'date', 'c.fire_eliminated_at'),
-    { key: 'carryover_fire', label: 'Переходящий пожар', group: GROUP_TACTICS, type: 'boolean', sql: 'c.carryover_fire' },
 
     // ---- Средства пожаротушения ----
     // Название средства — селект по предустановленному перечню средств

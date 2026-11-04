@@ -6,17 +6,15 @@
 // ============================================================
 export const CALLS_COLUMNS = [
     { key: 'call_code', label: 'Идентификатор', default: true },
+    { key: 'status', label: 'Статус', default: true },
+    { key: 'address', label: 'Адрес', default: true },
     { key: 'incident_at', label: 'Дата и время возникновения события' },
     { key: 'message_received_at', label: 'Время получения сообщения' },
     { key: 'created_at', label: 'Создан', default: true },
-    { key: 'address', label: 'Адрес', default: true },
     { key: 'description', label: 'Описание (показывается начало)' },
     { key: 'municipality_name', label: 'Округ', default: true },
     { key: 'type', label: 'Тип вызова', default: true },
     { key: 'units_count', label: 'Техника', default: true },
-    { key: 'carryover_fire', label: 'Переходящий пожар' },
-    { key: 'false_call', label: 'ЛОЖНЫЙ ВЫЗОВ' },
-    { key: 'status', label: 'Статус', default: true },
 ];
 
 export const ALL_COLUMN_KEYS = CALLS_COLUMNS.map((c) => c.key);

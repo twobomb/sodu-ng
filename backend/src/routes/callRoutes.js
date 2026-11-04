@@ -10,6 +10,7 @@ const {
     getCallHistory,
     createCall,
     updateCall,
+    deleteCall,
     setCallStatus,
     setCallUnits,
     addCallEvent,
@@ -80,6 +81,8 @@ router.post('/', requirePermission('calls.create'), createCall);
 
 // ----- Редактирование -----
 router.put('/:id', requireCallUpdate, updateCall);
+// Удаление вызова — только с правом calls.delete
+router.delete('/:id', requirePermission('calls.delete'), deleteCall);
 router.get('/:id/departments', requirePermission('calls.view'), getCallDepartments);
 // История редактирования карточки — только просмотр
 router.get('/:id/history', requirePermission('calls.view'), getCallHistory);

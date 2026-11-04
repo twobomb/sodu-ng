@@ -21,7 +21,7 @@ import {
     VolumeX,
     Type,
 } from 'lucide-react';
-import { CALL_STATUS_META, FIRE_TYPES } from '../../lib/calls';
+import { CALL_STATUS_META, FIRE_TYPES, isFalseCallType } from '../../lib/calls';
 import UnitStatusDialog from '../../components/units/UnitStatusDialog';
 import {
     isCallSoundEnabled,
@@ -34,8 +34,8 @@ const MONITOR_FIELDS = [
     'description', 'fire_area', 'localization_at', 'open_fire_eliminated_at',
     'fire_eliminated_at', 'first_barrel_at', 'fire_category_name', 'fire_cause_name',
     'fire_cause_other', 'not_accounted_reason_name', 'type', 'rank',
-    'municipality_name', 'area_type', 'carryover_fire', 'involved_staff', 'fire_leaders',
-    'object_name', 'false_call', 'gdzs_used', 'gdzs_units',
+    'municipality_name', 'area_type', 'involved_staff', 'fire_leaders',
+    'object_name', 'gdzs_used', 'gdzs_units',
 ];
 
 // Подпись значения для сравнения «было/стало». Массивы и объекты (jsonb-поля
@@ -423,7 +423,7 @@ const CallMonitor = () => {
 {/* Список вызовов */}
             {calls.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm p-12 text-center text-slate-500">
-                    <p>Нет вызовов в обработке{muniFilter ? ' по выбранному округу' : ''}</p>
+                    <p>Нет открытых вызовов{muniFilter ? ' по выбранному округу' : ''}</p>
                 </div>
             ) : (
                 <div className="space-y-3" style={{ zoom: `${zoom / 100}` }}>
@@ -431,28 +431,19 @@ const CallMonitor = () => {
                         const units = Array.isArray(call.units) ? call.units : [];
                         const events = Array.isArray(call.events) ? call.events : [];
                         const sm = CALL_STATUS_META[call.status] || { label: call.status, badge: 'bg-slate-500 dark:bg-slate-500/40' };
-                        const rowBg = call.status === 'error' ? 'bg-red-50' : call.status === 'closed' ? 'bg-green-50' : 'bg-orange-50/40';
+                        const rowBg = call.status === 'report_preparation'
+                            ? 'bg-blue-50'
+                            : call.status === 'closed'
+                                ? 'bg-slate-50'
+                                : 'bg-red-50/40';
                         const f = (field) => flash.has(`${call.id}|${field}`);
                         return (
                             <div key={call.id} className={`rounded-xl border border-slate-200 overflow-hidden ${rowBg} dark:bg-[#1717179e]`} style={{ boxShadow: '4px 11px 20px #00000030' }}>
                                 <div className="px-4 py-2 flex flex-wrap items-center gap-2">
                                     <CallPanelHeader call={call} />
                                     <Badge className={`${sm.badge} text-white`}>{sm.label}</Badge>
-                                    {call.carryover_fire && (
-                                        <Badge
-                                            className={`bg-amber-500 text-white hover:bg-amber-500 ${
-                                                f('carryover_fire') ? 'ring-2 ring-amber-300 animate-pulse' : ''
-                                            }`}
-                                        >
-                                            Переходящий пожар
-                                        </Badge>
-                                    )}
-                                    {call.false_call && (
-                                        <Badge
-                                            className={`bg-rose-600 text-white hover:bg-rose-600 ${
-                                                f('false_call') ? 'ring-2 ring-rose-300 animate-pulse' : ''
-                                            }`}
-                                        >
+                                    {isFalseCallType(call.type) && (
+                                        <Badge className="bg-rose-600 text-white hover:bg-rose-600">
                                             ЛОЖНЫЙ ВЫЗОВ
                                         </Badge>
                                     )}

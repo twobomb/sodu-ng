@@ -11,14 +11,13 @@ const SELECT_CALL_BASE = `
   c.id, c.status, c.type, c.rank,
   c.incident_at, c.message_received_at,
   c.department_id, c.municipality_id, c.address,
-  c.object_name, c.false_call,
+  c.object_name,
   c.dispatch_at, c.arrival_at,
   c.localization_at, c.open_fire_eliminated_at, c.fire_eliminated_at, c.first_barrel_at,
   c.description, c.created_by, c.created_at, c.updated_at,
   c.fire_area, c.area_type,
   c.fire_category_id, c.fire_cause_id, c.fire_cause_other,
   c.not_accounted_fire, c.not_accounted_reason_id,
-  c.carryover_fire,
   c.victims_dead_total, c.victims_dead_children, c.victims_dead_data,
   c.victims_injured_total, c.victims_injured_children, c.victims_injured_data,
   c.victims_rescued_total, c.victims_rescued_children, c.victims_rescued_data,
@@ -191,16 +190,6 @@ const getCalls = async (filters = {}, opts = {}) => {
         conds.push(`c.message_received_at < ($${i}::date + interval '1 day')`);
         params.push(filters.received_to);
         i++;
-    }
-
-    // Признаки «Переходящий пожар» и «Ложный вызов» ('true' | 'false')
-    if (filters.carryover_fire === 'true' || filters.carryover_fire === 'false') {
-        conds.push(`c.carryover_fire = $${i++}`);
-        params.push(filters.carryover_fire === 'true');
-    }
-    if (filters.false_call === 'true' || filters.false_call === 'false') {
-        conds.push(`c.false_call = $${i++}`);
-        params.push(filters.false_call === 'true');
     }
 
     // Дополнительный фильтр по определению выборки (конструктор запросов).
@@ -396,7 +385,6 @@ const UPDATE_COLUMNS = [
     'municipality_id',
     'address',
     'object_name',
-    'false_call',
     'dispatch_at',
     'arrival_at',
     'localization_at',
@@ -411,7 +399,6 @@ const UPDATE_COLUMNS = [
     'fire_cause_other',
     'not_accounted_fire',
     'not_accounted_reason_id',
-    'carryover_fire',
     'victims_dead_total',
     'victims_dead_children',
     'victims_dead_data',
@@ -590,6 +577,14 @@ const setCallDepartments = async (callId, deptIds) => {
     }
 };
 
+// ============================================================
+// УДАЛЕНИЕ ВЫЗОВА
+// ============================================================
+const deleteCall = async (id) => {
+    const res = await pool.query('DELETE FROM calls WHERE id = $1 RETURNING id', [id]);
+    return res.rows.length > 0;
+};
+
 module.exports = {
     CALL_TYPES,
     CALL_RANKS,
@@ -603,6 +598,7 @@ module.exports = {
     getCallEvents,
     createCall,
     updateCall,
+    deleteCall,
     setCallStatus,
     setCallUnits,
     addCallEvent,

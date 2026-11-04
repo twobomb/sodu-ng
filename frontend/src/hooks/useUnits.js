@@ -177,6 +177,9 @@ export const useAvailableCalls = () =>
         queryKey: ['units-calls-available'],
         queryFn: () => api.getAvailableCalls().then((r) => r.data),
         staleTime: 30 * 1000,
+        // Список мог устареть (например, изменили адрес в карточке вызова) —
+        // при каждом открытии диалога берём свежие данные с сервера.
+        refetchOnMount: 'always',
     });
 
 // Показатели техники (топливо/пена/порошок/пробег)

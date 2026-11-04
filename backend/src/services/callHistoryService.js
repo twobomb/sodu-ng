@@ -18,9 +18,9 @@ const ACTIONS = {
 
 // Названия статусов вызова (совпадают с подписями в интерфейсе)
 const STATUS_LABELS = {
-    processing: 'Обрабатывается',
+    processing: 'Открытый',
     closed: 'Закрыт',
-    error: 'Ошибочный',
+    report_preparation: 'Подготовка отчёта',
 };
 
 const statusNote = (status) =>

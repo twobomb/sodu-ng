@@ -31,7 +31,8 @@ const DOMAIN_PREDICATES = {
         q.queryKey[0] === 'calls' ||
         q.queryKey[0] === 'call' ||
         q.queryKey[0] === 'call-departments' ||
-        q.queryKey[0] === 'call-history',
+        q.queryKey[0] === 'call-history' ||
+        q.queryKey[0] === 'units-calls-available',
     users: (q) => q.queryKey[0] === 'users',
     roles: (q) => q.queryKey[0] === 'roles' || q.queryKey[0] === 'permissionsCatalog',
     departments: (q) => q.queryKey[0] === 'departments',

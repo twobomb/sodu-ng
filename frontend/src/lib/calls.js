@@ -11,13 +11,28 @@ export const CALL_TYPES = [
     'ДТП',
     'Помощь',
     'ЛОХ',
+    'Ложное сообщение',
+    'Ложное срабатывание АПС',
     'ПСП',
     'ПТУ',
     'Хоз. Работы',
 ];
 
+// Типы вызова, которые считаются «ложными»
+export const FALSE_CALL_TYPES = ['Ложное сообщение', 'Ложное срабатывание АПС'];
+
+// Является ли вызов ложным (по типу вызова)
+export const isFalseCallType = (type) => FALSE_CALL_TYPES.includes(type);
+
 // Типы вызовов, для которых в карточке открываются все «пожарные» блоки
-export const FIRE_TYPES = ['Пожар', 'ЛОХ', 'АПС', 'ПТУ'];
+export const FIRE_TYPES = [
+    'Пожар',
+    'ЛОХ',
+    'АПС',
+    'ПТУ',
+    'Ложное сообщение',
+    'Ложное срабатывание АПС',
+];
 
 export const CALL_RANKS = [
     'Ранг №1',
@@ -37,23 +52,24 @@ export const AREA_TYPE_LABEL = (v) =>
     (AREA_TYPES.find((a) => a.value === v) || {}).label || '—';
 
 export const CALL_STATUS_META = {
-    processing: { label: 'Обрабатывается', badge: 'bg-blue-500 dark:bg-blue-500/40' },
-    closed: { label: 'Закрыт', badge: 'bg-green-600 dark:bg-green-600/40' },
-    error: { label: 'Ошибочный', badge: 'bg-red-600 dark:bg-red-600/40' },
+    processing: { label: 'Открытый', badge: 'bg-red-600 dark:bg-red-600/40' },
+    report_preparation: { label: 'Подготовка отчёта', badge: 'bg-blue-600 dark:bg-blue-600/40' },
+    closed: { label: 'Закрыт', badge: 'bg-slate-500 dark:bg-slate-500/40' },
 };
 
 // Возможные переходы статуса (для кнопок смены с подтверждением)
 export const CALL_STATUS_TRANSITIONS = {
     processing: [
         { value: 'closed', label: 'Закрыть вызов', description: 'Вызов будет переведён в статус «Закрыт». Редактировать поля после этого смогут только пользователи с особым правом.' },
-        { value: 'error', label: 'Ошибочный', description: 'Вызов будет помечен как «Ошибочный» и больше нигде не будет учитываться (аналог удаления).' },
+        { value: 'report_preparation', label: 'Подготовка отчёта', description: 'Вызов будет переведён в статус «Подготовка отчёта». Карточку по-прежнему можно редактировать.' },
+    ],
+    report_preparation: [
+        { value: 'processing', label: 'Вернуть в работу', description: 'Вызов снова станет «Открытый».' },
+        { value: 'closed', label: 'Закрыть вызов', description: 'Вызов будет переведён в статус «Закрыт». Редактировать поля после этого смогут только пользователи с особым правом.' },
     ],
     closed: [
-        { value: 'processing', label: 'Вернуть в обработку', description: 'Вызов снова станет «Обрабатывается».' },
-        { value: 'error', label: 'Ошибочный', description: 'Вызов будет помечен как «Ошибочный» и больше нигде не будет учитываться (аналог удаления).' },
-    ],
-    error: [
-        { value: 'processing', label: 'Вернуть в обработку', description: 'Вызов снова станет «Обрабатывается».' },
+        { value: 'processing', label: 'Вернуть в работу', description: 'Вызов снова станет «Открытый».' },
+        { value: 'report_preparation', label: 'Подготовка отчёта', description: 'Вызов будет переведён в статус «Подготовка отчёта».' },
     ],
 };
 

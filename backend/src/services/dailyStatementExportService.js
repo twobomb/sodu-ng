@@ -45,11 +45,10 @@ const isoBoundary = (iso, end = false) => {
 const loadCalls = async (startUtc, endUtc) => {
     const res = await pool.query(
         `SELECT c.id, c.message_received_at, c.address, c.object_name, c.description,
-                c.type, c.false_call, c.not_accounted_fire,
+                c.type, c.not_accounted_fire,
                 c.localization_at, c.fire_eliminated_at, c.fire_extinguishing_means
          FROM calls c
          WHERE c.message_received_at >= $1 AND c.message_received_at < $2
-           AND c.status <> 'error'
          ORDER BY c.message_received_at ASC`,
         [startUtc, endUtc]
     );
@@ -112,11 +111,9 @@ const typeOrder = (t) => {
 
 // Группировка вызовов. Каждый вызов попадает ровно в одну группу:
 //   1) not_accounted_fire → «Пожаров, не подлежащих учету» (только сюда);
-//   2) false_call         → «Ложный <Тип>»;
-//   3) иначе              → группа по типу.
+//   2) иначе              → группа по типу вызова (в т.ч. «ложные» типы).
 const buildGroups = (calls) => {
-    const normalByType = new Map();
-    const falseByType = new Map();
+    const byType = new Map();
     const nonAccounted = [];
 
     for (const c of calls) {
@@ -125,22 +122,17 @@ const buildGroups = (calls) => {
             continue;
         }
         const type = c.type || 'Без типа';
-        const map = c.false_call ? falseByType : normalByType;
-        if (!map.has(type)) map.set(type, []);
-        map.get(type).push(c);
+        if (!byType.has(type)) byType.set(type, []);
+        byType.get(type).push(c);
     }
 
     const groups = [];
-    const pushByType = (map, prefix) => {
-        [...map.keys()]
-            .sort((a, b) => typeOrder(a) - typeOrder(b) || String(a).localeCompare(String(b)))
-            .forEach((type) => {
-                const list = map.get(type);
-                groups.push({ title: `${prefix}${type}: ${list.length}`, calls: list });
-            });
-    };
-    pushByType(normalByType, '');
-    pushByType(falseByType, 'Ложный ');
+    [...byType.keys()]
+        .sort((a, b) => typeOrder(a) - typeOrder(b) || String(a).localeCompare(String(b)))
+        .forEach((type) => {
+            const list = byType.get(type);
+            groups.push({ title: `${type}: ${list.length}`, calls: list });
+        });
     if (nonAccounted.length) {
         groups.push({
             title: `Пожаров, не подлежащих учету: ${nonAccounted.length}`,

@@ -8,6 +8,7 @@ import {
     CALL_TYPES,
     CALL_STATUS_META,
     formatDateTime,
+    isFalseCallType,
 } from '../../lib/calls';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,19 +57,14 @@ const EMPTY_FILTERS = {
     createdTo: '',
     receivedFrom: '',
     receivedTo: '',
-    carryover: 'all',
-    falseCall: 'all',
 };
 
 // «Расширенные» фильтры — если задан любой из них, панель раскрывается
 const ADVANCED_KEYS = [
-    'status',
     'createdFrom',
     'createdTo',
     'receivedFrom',
     'receivedTo',
-    'carryover',
-    'falseCall',
 ];
 
 const hasAdvancedFilters = (f) => ADVANCED_KEYS.some((k) => f[k] !== EMPTY_FILTERS[k]);
@@ -125,7 +121,7 @@ const CallsList = () => {
     // Персональные настройки храним отдельно для каждого пользователя
     const storageSuffix = user?.id || 'anonymous';
     const filtersKey = `callsFilters:${storageSuffix}`;
-    const columnsKey = `callsColumns:${storageSuffix}`;
+    const columnsKey = `callsColumns:v3:${storageSuffix}`;
 
     // Фильтр по выборке (из конструктора «Отчёты → Выборка вызовов»):
     //  - sample_id (+ sample_name) — сохранённая выборка;
@@ -200,8 +196,6 @@ const CallsList = () => {
         created_to: filters.createdTo || undefined,
         received_from: filters.receivedFrom || undefined,
         received_to: filters.receivedTo || undefined,
-        carryover_fire: filters.carryover === 'all' ? undefined : filters.carryover,
-        false_call: filters.falseCall === 'all' ? undefined : filters.falseCall,
         page,
         pageSize,
         sample_id: sampleId || undefined,
@@ -254,14 +248,20 @@ const CallsList = () => {
         setPage(1);
     };
 
-    // Классы ячеек для отдельных колонок
-    const cellClass = (key) => {
-        if (['call_code', 'incident_at', 'message_received_at', 'created_at'].includes(key)) {
-            return 'whitespace-nowrap';
-        }
-        if (key === 'description') return 'max-w-[320px]';
-        return '';
+    // Классы ячеек для отдельных колонок (фиксированные ширины; таблица table-fixed)
+    const COL_WIDTH = {
+        call_code: 'w-[120px] whitespace-nowrap',
+        status: 'w-[160px]',
+        address: 'w-[320px]',
+        incident_at: 'w-[140px] whitespace-nowrap',
+        message_received_at: 'w-[140px] whitespace-nowrap',
+        created_at: 'w-[140px] whitespace-nowrap',
+        description: 'w-[240px]',
+        municipality_name: 'w-[170px]',
+        type: 'w-[170px]',
+        units_count: 'w-[90px]',
     };
+    const cellClass = (key) => COL_WIDTH[key] || '';
 
     // Ячейка таблицы по ключу колонки
     const renderCell = (call, key) => {
@@ -294,21 +294,17 @@ const CallsList = () => {
             case 'municipality_name':
                 return call.municipality_name || '—';
             case 'type':
-                return call.type || '—';
+                if (!call.type) return '—';
+                return (
+                    <span className="inline-flex items-center gap-2">
+                        {call.type}
+                        {isFalseCallType(call.type) && (
+                            <Badge className="bg-rose-600 text-white">ЛОЖНЫЙ</Badge>
+                        )}
+                    </span>
+                );
             case 'units_count':
                 return call.units_count || 0;
-            case 'carryover_fire':
-                return call.carryover_fire ? (
-                    <Badge className="bg-amber-500 text-white">переходящий</Badge>
-                ) : (
-                    <span className="text-slate-300">—</span>
-                );
-            case 'false_call':
-                return call.false_call ? (
-                    <Badge className="bg-rose-600 text-white">ЛОЖНЫЙ</Badge>
-                ) : (
-                    <span className="text-slate-300">—</span>
-                );
             case 'status': {
                 const meta = CALL_STATUS_META[call.status] || {
                     label: call.status,
@@ -408,7 +404,7 @@ const CallsList = () => {
                 </div>
 
                 {/* Базовые фильтры */}
-                <div className="grid gap-2 sm:grid-cols-3 items-end">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 items-end">
                     <div className="space-y-2">
                         <Label>Поиск</Label>
                         <div className="relative">
@@ -445,28 +441,27 @@ const CallsList = () => {
                             ))}
                         </NativeSelect>
                     </div>
+                    <div className="space-y-2">
+                        <Label>Статус</Label>
+                        <NativeSelect
+                            value={filters.status}
+                            onChange={(e) => setFilter({ status: e.target.value })}
+                            className="w-full"
+                        >
+                            <NativeSelectOption value="all">Все статусы</NativeSelectOption>
+                            {Object.entries(CALL_STATUS_META).map(([value, meta]) => (
+                                <NativeSelectOption key={value} value={value}>
+                                    {meta.label}
+                                </NativeSelectOption>
+                            ))}
+                        </NativeSelect>
+                    </div>
                 </div>
 
 
                 {/* Расширенные фильтры */}
                 {advancedOpen && (
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 items-end border-t border-slate-100 pt-3">
-                        <div className="space-y-2">
-                            <Label>Статус</Label>
-                            <NativeSelect
-                                value={filters.status}
-                                onChange={(e) => setFilter({ status: e.target.value })}
-                                className="w-full"
-                            >
-                                <NativeSelectOption value="all">Все статусы</NativeSelectOption>
-                                {Object.entries(CALL_STATUS_META).map(([value, meta]) => (
-                                    <NativeSelectOption key={value} value={value}>
-                                        {meta.label}
-                                    </NativeSelectOption>
-                                ))}
-                            </NativeSelect>
-                        </div>
-
+                    <div className="grid gap-2 sm:grid-cols-2 items-end border-t border-slate-100 pt-3">
                         <DateRangeFilter
                             label="Создан"
                             value={{ from: filters.createdFrom, to: filters.createdTo }}
@@ -478,32 +473,6 @@ const CallsList = () => {
                             value={{ from: filters.receivedFrom, to: filters.receivedTo }}
                             onChange={({ from, to }) => setFilter({ receivedFrom: from, receivedTo: to })}
                         />
-
-                        <div className="space-y-2">
-                            <Label>Переходящий пожар</Label>
-                            <NativeSelect
-                                value={filters.carryover}
-                                onChange={(e) => setFilter({ carryover: e.target.value })}
-                                className="w-full"
-                            >
-                                <NativeSelectOption value="all">Все</NativeSelectOption>
-                                <NativeSelectOption value="true">Только переходящие</NativeSelectOption>
-                                <NativeSelectOption value="false">Без переходящих</NativeSelectOption>
-                            </NativeSelect>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Ложный вызов</Label>
-                            <NativeSelect
-                                value={filters.falseCall}
-                                onChange={(e) => setFilter({ falseCall: e.target.value })}
-                                className="w-full"
-                            >
-                                <NativeSelectOption value="all">Все</NativeSelectOption>
-                                <NativeSelectOption value="true">Только ложные</NativeSelectOption>
-                                <NativeSelectOption value="false">Без ложных</NativeSelectOption>
-                            </NativeSelect>
-                        </div>
                     </div>
                 )}
 
@@ -561,12 +530,12 @@ const CallsList = () => {
                 </div>
             ) : (
                 <div>
-                    <div className="rounded-lg border border-slate-200 overflow-hidden">
-                        <Table>
+                    <div className="rounded-lg border border-slate-200 overflow-x-auto">
+                        <Table className="table-fixed">
                             <TableHeader>
                                 <TableRow>
                                     {orderedColumns.map((c) => (
-                                        <TableHead key={c.key}>{c.label}</TableHead>
+                                        <TableHead key={c.key} className={cellClass(c.key)}>{c.label}</TableHead>
                                     ))}
                                 </TableRow>
                             </TableHeader>
@@ -583,11 +552,11 @@ const CallsList = () => {
                                 )}
                                 {calls.map((call) => {
                                     const rowClass =
-                                        call.status === 'error'
-                                            ? 'bg-red-100 hover:bg-red-200 dark:bg-red-500/10 dark:hover:bg-red-500/20'
+                                        call.status === 'report_preparation'
+                                            ? 'call-status-report'
                                             : call.status === 'closed'
-                                                ? 'bg-green-100 hover:bg-green-200 dark:bg-green-500/10 dark:hover:bg-green-500/20'
-                                                : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-500/10 dark:hover:bg-blue-500/20';
+                                                ? 'call-status-closed'
+                                                : 'call-status-open';
                                     return (
                                         <TableRow
                                             key={call.id}

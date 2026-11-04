@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
-import { useCall, useMunicipalities, useUpdateCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate, useObjectTemplates, useCreateObjectTemplate, useDeleteObjectTemplate, useCallHistory } from '../../hooks/useCalls';
+import { useCall, useMunicipalities, useUpdateCall, useDeleteCall, useSetCallStatus, useSetCallUnits, useAddCallEvent, useDeleteCallEvent, useCallDepartments, useSetCallDepartments, useEventTemplates, useCreateEventTemplate, useDeleteEventTemplate, useObjectTemplates, useCreateObjectTemplate, useDeleteObjectTemplate, useCallHistory } from '../../hooks/useCalls';
 import { useUnits, useUnitStatuses, useChangeUnitStatus, useAvailableCalls } from '../../hooks/useUnits';
 import { useDepartments } from '../../hooks/useDepartments';
 import { useAuth } from '../../context/AuthContext';
@@ -109,9 +109,7 @@ const EMPTY_FORM = {
     fire_cause_other: '',
     not_accounted_fire: false,
     not_accounted_reason_id: '',
-    carryover_fire: false,
     object_name: '',
-    false_call: false,
     victims_dead_total: '', victims_dead_children: '', victims_dead_data: [],
     victims_injured_total: '', victims_injured_children: '', victims_injured_data: [],
     victims_rescued_total: '', victims_rescued_children: '', victims_rescued_data: [],
@@ -144,9 +142,7 @@ const fromServer = (call) => {
     f.fire_cause_other = call?.fire_cause_other || '';
     f.not_accounted_fire = !!call?.not_accounted_fire;
     f.not_accounted_reason_id = call?.not_accounted_reason_id || '';
-    f.carryover_fire = !!call?.carryover_fire;
     f.object_name = call?.object_name || '';
-    f.false_call = !!call?.false_call;
     for (const k of VICTIM_NUMBER_FIELDS) f[k] = call?.[k] ?? '';
     for (const k of VICTIM_DATA_FIELDS) f[k] = Array.isArray(call?.[k]) ? call[k] : [];
     f.dtp_circumstances = call?.dtp_circumstances || '';
@@ -409,6 +405,7 @@ const CallDetail = () => {
     const nonAccQuery = useFireNonaccountReasons();
 
     const updateCall = useUpdateCall();
+    const deleteCall = useDeleteCall();
     const setStatus = useSetCallStatus();
     const setUnits = useSetCallUnits();
     const addEvent = useAddCallEvent();
@@ -434,11 +431,15 @@ const CallDetail = () => {
 
     // Право управлять справочником параметров/значений блока «Объекты»
     const canManageObjectParams = isDeveloper || has('calls.manage_object_params');
+    // Право удаления вызовов
+    const canDeleteCall = has('calls.delete');
 
     // ---------- Форма (локальное редактирование) ----------
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [dirty, setDirty] = useState(false);
     const [formError, setFormError] = useState('');
+    // Подтверждение удаления вызова
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
     // Настройки СОДУ (глобальные): карта и автодополнение адреса
     const { data: soduSettings } = useSoduSettings();
@@ -577,9 +578,7 @@ const CallDetail = () => {
             fire_cause_other: formData.fire_cause_other || '',
             not_accounted_fire: !!formData.not_accounted_fire,
             not_accounted_reason_id: formData.not_accounted_reason_id || null,
-            carryover_fire: !!formData.carryover_fire,
             object_name: (formData.object_name || '').trim(),
-            false_call: !!formData.false_call,
         };
         for (const k of DATETIME_FIELDS) payload[k] = toIso(formData[k]);
         for (const k of VICTIM_NUMBER_FIELDS) {
@@ -1160,6 +1159,16 @@ const CallDetail = () => {
                         )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                        {canDeleteCall && (
+                            <Button
+                                variant="outline"
+                                onClick={() => setDeleteConfirmOpen(true)}
+                                className="rounded-lg border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                title="Удалить вызов"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" /> Удалить
+                            </Button>
+                        )}
                         <Button variant="outline" onClick={() => setHistoryOpen(true)} className="rounded-lg border-slate-200 h-9 w-9 p-0 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" title="История редактирования вызова">
                             <History className="h-4 w-4" />
                         </Button>
@@ -1169,8 +1178,8 @@ const CallDetail = () => {
                         {canChangeStatus && transitions.map((t) => {
                             const colorCls = t.value === 'closed'
                                 ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white hover:text-white border-transparent'
-                                : t.value === 'error'
-                                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white hover:text-white border-transparent'
+                                : t.value === 'report_preparation'
+                                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white hover:text-white border-transparent'
                                     : '';
                             return (
                                 <Button key={t.value} variant="outline" onClick={() => setStatusConfirm(t)} className={`rounded-lg ${colorCls}`}>{t.label}</Button>
@@ -1230,15 +1239,6 @@ const CallDetail = () => {
                                 <NativeSelect value={formData.type} onChange={(e) => setField('type', e.target.value)} disabled={!canEdit} className="w-full">
                                     {CALL_TYPES.map((t) => <NativeSelectOption key={t} value={t}>{t}</NativeSelectOption>)}
                                 </NativeSelect>
-                            </div>
-                            <div className="flex items-center gap-2 sm:mt-7">
-                                <span className="text-sm font-medium text-slate-700">ЛОЖНЫЙ ВЫЗОВ</span>
-                                <Switch
-                                    checked={!!formData.false_call}
-                                    disabled={!canEdit}
-                                    onCheckedChange={(v) => setField('false_call', v)}
-                                    aria-label="Ложный вызов"
-                                />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="object_name">Объект</Label>
@@ -1692,15 +1692,6 @@ const CallDetail = () => {
                                 <DateTimeField id="open_fire_eliminated_at" label="Ликвидация открытого горения" value={formData.open_fire_eliminated_at} onChange={(v) => setField('open_fire_eliminated_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('open_fire_eliminated_at')} />
                                 <DateTimeField id="fire_eliminated_at" label="Ликвидация пожара" value={formData.fire_eliminated_at} onChange={(v) => setField('fire_eliminated_at', v)} disabled={!canEdit} onFocusSetNow={() => setFieldNow('fire_eliminated_at')} />
                             </div>
-                            <div className="flex items-center gap-2 mt-3">
-                                <span className="text-sm font-medium text-slate-700">Переходящий пожар</span>
-                                <Switch
-                                    checked={!!formData.carryover_fire}
-                                    disabled={!canEdit}
-                                    onCheckedChange={(v) => setField('carryover_fire', v)}
-                                    aria-label="Переходящий пожар"
-                                />
-                            </div>
                         </div>
                     )}
 
@@ -2025,6 +2016,41 @@ const CallDetail = () => {
                             className="bg-red-600 hover:bg-red-700 rounded-lg"
                         >
                             Удалить
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Подтверждение удаления вызова */}
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Удаление вызова</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Удалить вызов {call.type || ''} {call.call_code || ''}? Действие необратимо: будут
+                            удалены карточка, привязанная техника, события и история. Сообщение об удалении
+                            будет отправлено в общий чат.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-lg" disabled={deleteCall.isPending}>
+                            Отмена
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                deleteCall.mutate(call.id, {
+                                    onSuccess: () => navigate('/calls'),
+                                    onError: (err) =>
+                                        setFormError(
+                                            err?.response?.data?.error || 'Ошибка удаления вызова'
+                                        ),
+                                });
+                            }}
+                            disabled={deleteCall.isPending}
+                            className="bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                            {deleteCall.isPending ? 'Удаление...' : 'Удалить'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

@@ -10,10 +10,15 @@ const CALL_TYPES = [
     'ДТП',
     'Помощь',
     'ЛОХ',
+    'Ложное сообщение',
+    'Ложное срабатывание АПС',
     'ПСП',
     'ПТУ',
     'Хоз. Работы',
 ];
+
+// Типы вызова, которые считаются «ложными» (вместо старого признака false_call)
+const FALSE_CALL_TYPES = ['Ложное сообщение', 'Ложное срабатывание АПС'];
 
 const CALL_RANKS = [
     'Ранг №1',
@@ -24,7 +29,7 @@ const CALL_RANKS = [
     'Ранг №5',
 ];
 
-const CALL_STATUSES = ['processing', 'closed', 'error'];
+const CALL_STATUSES = ['processing', 'closed', 'report_preparation'];
 
 // Местность (категорирование пожара)
 const AREA_TYPES = [
@@ -32,4 +37,4 @@ const AREA_TYPES = [
     { value: 'rural', label: 'Сельская местность' },
 ];
 
-module.exports = { CALL_TYPES, CALL_RANKS, CALL_STATUSES, AREA_TYPES };
+module.exports = { CALL_TYPES, CALL_RANKS, CALL_STATUSES, AREA_TYPES, FALSE_CALL_TYPES };

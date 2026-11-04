@@ -258,32 +258,111 @@ function permute(x) {
     return L + R * H1;
 }
 
-/**
- * Детерминированный идентификатор вызова с обёрткой диапазона.
- * @param {number} num — целое ≥ 1, без верхней границы
- * @returns {string} например "тихая-лиса-42" или "тихая-лиса-42-1"
- */
-function generateCallId(num) {
-    if (!Number.isInteger(num) || num < 1) {
-        throw new RangeError('num должен быть целым положительным числом');
+// ============================================================
+// СТАРЫЙ СЛОВЕСНЫЙ ГЕНЕРАТОР (закомментирован, заменён новым ниже).
+// Оставлен для истории — больше не используется.
+// ============================================================
+// /**
+//  * Детерминированный идентификатор вызова с обёрткой диапазона.
+//  * @param {number} num — целое ≥ 1, без верхней границы
+//  * @returns {string} например "тихая-лиса-42" или "тихая-лиса-42-1"
+//  */
+// function generateCallId(num) {
+//     if (!Number.isInteger(num) || num < 1) {
+//         throw new RangeError('num должен быть целым положительным числом');
+//     }
+//
+//     const cycle = Math.floor((num - 1) / TOTAL); // 0, 1, 2, ...
+//     const base = ((num - 1) % TOTAL) + 1; // 1..TOTAL
+//
+//     const z = permute(base - 1);
+//
+//     const numIdx = z % N_NUM;
+//     const rest = (z - numIdx) / N_NUM;
+//     const nounIdx = rest % N_NOUN;
+//     const adjIdx = (rest - nounIdx) / N_NOUN;
+//
+//     const noun = NOUNS[nounIdx];
+//     const form = ADJ[adjIdx][GENDER_IDX[noun.g]];
+//
+//     const code = `${form}-${noun.w}-${10 + numIdx}`;
+//     return cycle === 0 ? code : `${code}${cycle}`;
+// }
+
+// ============================================================
+// НОВЫЙ ГЕНЕРАТОР УНИКАЛЬНЫХ КОДОВ ВЫЗОВА (Feistel-перестановка).
+// Первый символ — всегда буква, далее 5 символов (буквы/цифры).
+// ============================================================
+const generateCode = (() => {
+    // ---- Алфавит: буквы без плохо читаемых + цифры ----
+    const LETTERS = 'АГДЕЖИКЛМНПРСТУФХЧЯ';
+    const DIGITS = '0123456789';
+    const ALPHABET = LETTERS + DIGITS;
+    const BASE = ALPHABET.length;
+
+    const N_LETTERS = LETTERS.length;
+    const RANGE = N_LETTERS * BASE ** 5;
+
+    // ---- Feistel-перестановка на [0, RANGE) ----
+    function nearestFactor(N) {
+        const s = Math.floor(Math.sqrt(N));
+        for (let h = s; h >= 1; h--) if (N % h === 0) return h;
+        return 1;
+    }
+    const H1 = nearestFactor(RANGE);
+    const H2 = RANGE / H1;
+
+    function hashRound(x, i) {
+        let h = Math.imul((x + i * 0x9E3779B9) | 0, 0x85EBCA6B);
+        h ^= h >>> 13;
+        h = Math.imul(h, 0xC2B2AE35);
+        h ^= h >>> 16;
+        return h >>> 0;
     }
 
-    const cycle = Math.floor((num - 1) / TOTAL); // 0, 1, 2, ...
-    const base = ((num - 1) % TOTAL) + 1; // 1..TOTAL
+    function permute(x) {
+        let L = x % H1;
+        let R = (x - L) / H1;
+        for (let i = 0; i < 8; i++) {
+            if (i % 2 === 0) R = (R + (hashRound(L, i) % H2)) % H2;
+            else L = (L + (hashRound(R, i) % H1)) % H1;
+        }
+        return L + R * H1;
+    }
 
-    const z = permute(base - 1);
+    /**
+     * Уникальный 6-символьный код по числу.
+     * Первый символ — всегда буква.
+     * Если num > RANGE — идёт по кругу с суффиксом -1, -2, …
+     * @param {number} num — целое ≥ 1, без верхней границы
+     * @returns {string} например "ДК456М" или "ДК456М1"
+     */
+    return function generateCode(num) {
+        if (!Number.isInteger(num) || num < 1) {
+            throw new RangeError('num должен быть целым положительным числом');
+        }
 
-    const numIdx = z % N_NUM;
-    const rest = (z - numIdx) / N_NUM;
-    const nounIdx = rest % N_NOUN;
-    const adjIdx = (rest - nounIdx) / N_NOUN;
+        const cycle = Math.floor((num - 1) / RANGE); // 0, 1, 2, …
+        const base = ((num - 1) % RANGE) + 1; // 1..RANGE
 
-    const noun = NOUNS[nounIdx];
-    const form = ADJ[adjIdx][GENDER_IDX[noun.g]];
+        const z = permute(base - 1);
 
-    const code = `${form}-${noun.w}-${10 + numIdx}`;
-    return cycle === 0 ? code : `${code}${cycle}`;
-}
+        const first = z % N_LETTERS;
+        let rest = (z - first) / N_LETTERS;
+
+        let tail = '';
+        for (let i = 0; i < 5; i++) {
+            tail = ALPHABET[rest % BASE] + tail;
+            rest = Math.floor(rest / BASE);
+        }
+
+        const code = LETTERS[first] + tail;
+        return cycle === 0 ? code : code + cycle;
+    };
+})();
+
+// Совместимость: существующие импорты используют имя generateCallId
+const generateCallId = generateCode;
 
 // ============================================================
 // Гарантируем словесный идентификатор и цвет для вызова.
@@ -303,5 +382,6 @@ const decorateCall = (call) => {
 module.exports = {
     colorFor,
     generateCallId,
+    generateCode,
     decorateCall,
 };

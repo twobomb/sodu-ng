@@ -149,3 +149,32 @@
 .dark .bg-white\/80 { background-color: hsl(var(--card) / 0.8) !important; }
 .dark .bg-white\/70 { background-color: hsl(var(--card) / 0.7) !important; }
 .dark .bg-white\/60 { background-color: hsl(var(--card) / 0.6) !important; }
+
+/* ============================================================
+   Фоны строк списка вызовов по статусу
+   ============================================================ */
+.call-status-open {
+  background-color: oklch(0.87 0.09 18.86);
+}
+.call-status-report {
+  background-color: oklch(0.79 0.12 253.94);
+}
+.call-status-closed {
+  background-color: oklch(0.81 0 0);
+}
+.call-status-open:hover,
+.call-status-report:hover,
+.call-status-closed:hover {
+  filter: brightness(0.96);
+}
+
+/* Тёмная тема — приглушённые оттенки тех же статусов */
+.dark .call-status-open {
+  background-color: oklch(0.38 0.07 18.86);
+}
+.dark .call-status-report {
+  background-color: oklch(0.35 0.08 253.94);
+}
+.dark .call-status-closed {
+  background-color: oklch(0.40 0 0);
+}

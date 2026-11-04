@@ -6,6 +6,7 @@ export const getMunicipalities = () => apiClient.get('/calls/municipalities');
 export const getCall = (id) => apiClient.get(`/calls/${id}`);
 export const createCall = () => apiClient.post('/calls');
 export const updateCall = (id, data) => apiClient.put(`/calls/${id}`, data);
+export const deleteCall = (id) => apiClient.delete(`/calls/${id}`);
 export const setCallStatus = (id, status) =>
     apiClient.put(`/calls/${id}/status`, { status });
 export const setCallUnits = (id, unitIds) =>

@@ -1,6 +1,7 @@
 const callService = require('../services/callService');
 const callSampleService = require('../services/callSampleService');
 const callHistoryService = require('../services/callHistoryService');
+const messageService = require('../services/messageService');
 const pool = require('../db/pool');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/logger');
@@ -58,8 +59,6 @@ const updateCallSchema = Joi.object({
     fire_cause_other: Joi.string().max(1000).allow('', null),
     not_accounted_fire: Joi.boolean().allow('', null),
     not_accounted_reason_id: Joi.string().uuid().allow('', null),
-    carryover_fire: Joi.boolean().allow('', null),
-    false_call: Joi.boolean().allow('', null),
     victims_dead_total: intField,
     victims_dead_children: intField,
     victims_dead_data: Joi.array().items(personDead).default([]),
@@ -149,7 +148,7 @@ const callExistsPermission = (req, permission) => {
 };
 
 // Можно ли редактировать поля вызова:
-//  - обработка / ошибка → нужно calls.update
+//  - открыт / подготовка отчёта → нужно calls.update
 //  - закрыт → нужно calls.update_closed
 const canEditCall = (req, call) => {
     if (call.status === 'closed') {
@@ -202,9 +201,6 @@ const getCalls = asyncHandler(async (req, res) => {
             created_to: req.query.created_to || null,
             received_from: req.query.received_from || null,
             received_to: req.query.received_to || null,
-            // Признаки: 'true' | 'false' | иначе не фильтруем
-            carryover_fire: req.query.carryover_fire || null,
-            false_call: req.query.false_call || null,
             page: req.query.page,
             pageSize: req.query.pageSize,
         };
@@ -408,7 +404,7 @@ const setCallStatus = asyncHandler(async (req, res) => {
 
         const updated = await callService.setCallStatus(id, value.status);
 
-        // История: кто и когда сменил статус (Закрыт / Ошибочный / …)
+        // История: кто и когда сменил статус (Открытый / Закрыт / Подготовка отчёта)
         await callHistoryService.addEntry({
             callId: id,
             userId: req.user.id,
@@ -717,6 +713,87 @@ const getCallHistory = asyncHandler(async (req, res) => {
     }
 });
 
+// ============================================================
+// DELETE /api/calls/:id — удаление вызова (право calls.delete).
+// После удаления пишем системное сообщение в «Общий» чат.
+// ============================================================
+const CALL_TZ_OFFSET_MS = 3 * 3600 * 1000;
+const fmtCallCreatedAt = (ts) => {
+    if (!ts) return '';
+    const d = new Date(new Date(ts).getTime() + CALL_TZ_OFFSET_MS);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getUTCDate())}.${p(d.getUTCMonth() + 1)}.${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+};
+
+const deleteCall = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    try {
+        const call = await callService.getCallById(id);
+        if (!call) return res.status(404).json({ error: 'Вызов не найден' });
+
+        // Доступ к карточке — как в getCallById
+        if (!req.user.can_view_all) {
+            const depts = await callService.getUserDepartmentIds(req.user.id);
+            const vis = await pool.query(
+                `SELECT 1 FROM call_departments
+                 WHERE call_id = $1 AND department_id = ANY($2) LIMIT 1`,
+                [id, depts]
+            );
+            if (!vis.rows.length) {
+                return res.status(403).json({ error: 'Нет доступа к этому вызову' });
+            }
+        }
+
+        await callService.deleteCall(id);
+
+        const io = req.app.get('io');
+
+        // Системное сообщение в «Общий» чат — не должно ломать удаление
+        try {
+            const generalRes = await pool.query(
+                `SELECT id FROM conversations WHERE system_key = 'general' LIMIT 1`
+            );
+            const generalId = generalRes.rows[0]?.id;
+            if (generalId) {
+                await pool.query(
+                    `INSERT INTO conversation_members (conversation_id, user_id, role)
+                     VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+                    [generalId, req.user.id]
+                );
+
+                const address = String(call.address || '').trim();
+                let content = `Пользователь ${req.user.username} удалил вызов`;
+                if (call.type) content += ` ${call.type}`;
+                if (call.call_code) content += ` ${call.call_code}`;
+                const created = fmtCallCreatedAt(call.created_at);
+                if (created) content += `, создан ${created}`;
+                if (address) content += `, (${address})`;
+
+                const msg = await messageService.createSystemMessage({
+                    conversationId: generalId,
+                    actorId: req.user.id,
+                    content,
+                });
+                const full = await messageService.getMessageById(msg.id);
+                if (io && full) io.emit('chat:message', full);
+            }
+        } catch (chatErr) {
+            logger.error(`Ошибка сообщения в чат при удалении вызова ${id}: ` + chatErr.message, {
+                stack: chatErr.stack,
+            });
+        }
+
+        emitForceRefresh(io, 'calls');
+        res.json({ ok: true });
+    } catch (err) {
+        logger.error(`Ошибка удаления вызова ${id}: ` + err.message, {
+            stack: err.stack,
+            user: req.user?.id,
+        });
+        res.status(500).json({ error: err.message || 'Ошибка удаления вызова' });
+    }
+});
+
 module.exports = {
     getCalls,
     getMonitorCalls,
@@ -725,6 +802,7 @@ module.exports = {
     getCallHistory,
     createCall,
     updateCall,
+    deleteCall,
     setCallStatus,
     setCallUnits,
     addCallEvent,

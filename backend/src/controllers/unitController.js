@@ -262,7 +262,7 @@ const changeStatus = asyncHandler(async (req, res) => {
             }
             const call = callRes.rows[0];
             if (call.status !== 'processing') {
-                return res.status(400).json({ error: 'Вызов должен быть в статусе «Обрабатывается»' });
+                return res.status(400).json({ error: 'Вызов должен быть в статусе «Открытый»' });
             }
             // Доступ проверяем по привязанным подразделениям (call_departments)
             if (!user.can_view_all) {

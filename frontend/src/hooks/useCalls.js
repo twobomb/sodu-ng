@@ -6,7 +6,13 @@ const invalidateCalls = (queryClient) =>
     queryClient.invalidateQueries({
         predicate: (query) => {
             const key = query.queryKey[0];
-            return key === 'calls' || key === 'call' || key === 'call-history';
+            return (
+                key === 'calls' ||
+                key === 'call' ||
+                key === 'call-history' ||
+                // Список доступных вызовов (диалог смены статуса техники)
+                key === 'units-calls-available'
+            );
         },
     });
 
@@ -15,7 +21,7 @@ const invalidateCalls = (queryClient) =>
 // ============================================================
 export const useCalls = (filters = {}) => {
     const clean = {};
-    for (const k of ['status', 'type', 'municipality', 'search', 'date_from', 'date_to', 'created_from', 'created_to', 'received_from', 'received_to', 'carryover_fire', 'false_call', 'page', 'pageSize', 'sample', 'sample_id']) {
+    for (const k of ['status', 'type', 'municipality', 'search', 'date_from', 'date_to', 'created_from', 'created_to', 'received_from', 'received_to', 'page', 'pageSize', 'sample', 'sample_id']) {
         if (filters[k] !== undefined && filters[k] !== '' && filters[k] !== null) {
             clean[k] = filters[k];
         }
@@ -24,6 +30,11 @@ export const useCalls = (filters = {}) => {
         queryKey: ['calls', clean],
         queryFn: () => api.getCalls(clean).then((r) => r.data),
         refetchOnWindowFocus: false,
+        // Всегда обновляем список при возврате на страницу: после смены статуса
+        // вызова, редактирования адреса, смены статуса техники и т.п. кеш мог
+        // устареть, а глобально refetchOnMount выключен. Без этого список
+        // показывал старые данные до полной перезагрузки страницы.
+        refetchOnMount: 'always',
         // keepPreviousData: держим данные последней успешной страницы/фильтра на
         // экране, пока грузится новая. Это важно и при смене queryKey (разные страницы):
         // placeholderData: (prev)=>prev здесь БЕСПОЛЕЗЕН, т.к. для нового ключа prev
@@ -84,6 +95,14 @@ export const useUpdateCall = () => {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ id, data }) => api.updateCall(id, data),
+        onSuccess: () => invalidateCalls(qc),
+    });
+};
+
+export const useDeleteCall = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => api.deleteCall(id),
         onSuccess: () => invalidateCalls(qc),
     });
 };
